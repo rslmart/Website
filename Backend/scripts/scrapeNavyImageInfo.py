@@ -1,7 +1,7 @@
-import csv
-import requests
-import re
 from bs4 import BeautifulSoup
+import csv
+import re
+import requests
 
 baseURL = 'https://www.nrlmry.navy.mil/tcdat/'
 
