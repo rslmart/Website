@@ -4,6 +4,8 @@ import re
 import requests
 import scrapy
 
+# scrapy crawl navy_spider -o file.csv -t csv
+
 class NavySpider(scrapy.Spider):
     name = "navy_spider"
 
@@ -17,7 +19,7 @@ class NavySpider(scrapy.Spider):
             # Season
             #if re.match(r'\w\w\d\d/', a.text):
                 #seasonUrls.append(baseURL + a.text)
-        seasonUrls = [baseURL + "tc97/"]
+        seasonUrls = [baseURL + "tc11/"]
         for seasonUrl in seasonUrls:
             yield scrapy.Request(url=seasonUrl, callback=self.parseSeason)
 
