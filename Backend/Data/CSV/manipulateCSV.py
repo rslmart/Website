@@ -11,7 +11,8 @@ def printCSV(csvPath):
 def combineCSVs():
     mypath = './tcXX'
     onlyfiles = [f for f in os.listdir(mypath) if isfile(join(mypath, f))]
-    os.remove('tcdat.csv')
+    if (isfile('tcdat.csv')):
+        os.remove('tcdat.csv')
     for file in onlyfiles:
         print(file)
         with open(os.path.join(mypath, file)) as csvFile:
