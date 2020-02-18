@@ -7,7 +7,7 @@ import scrapy
 # scrapy crawl navy_spider -o file.csv -t csv
 
 class NavySpider(scrapy.Spider):
-    name = "navy_spider"
+    name = "navy__image_spider"
 
     def start_requests(self):
         baseURL = 'https://www.nrlmry.navy.mil/tcdat/'
