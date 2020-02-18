@@ -1,42 +1,62 @@
 import csv
 import os
-#import pymongo
+import pymongo
 
-#myclient = pymongo.MongoClient("mongodb://localhost:27017/")
-#mydb = myclient["mydatabase"]
-#mycol = mydb["imageUrls"]
+myclient = pymongo.MongoClient("mongodb://localhost:27017/")
+mydb = myclient["mydatabase"]
+mycol = mydb["ibtracs"]
+filePath = os.path.join('..', 'Data', 'ibtracs', 'ibtracs.ALL.list.v04r00.csv')
+
+def isInt(s):
+    try:
+        int(s)
+        return True
+    except ValueError:
+        return False
+
+def isFloat(s):
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False
 
 def parseRow(header, row):
     rowDict = {}
     for i in range(len(header)):
-        rowDict[header[i]] = row[i]
-    print(rowDict)
+        if isInt(row[i]):
+            rowDict[header[i]] = int(row[i])
+        elif isFloat(row[i]):
+            rowDict[header[i]] = float(row[i])
+        else:
+            if row[i].strip():
+                rowDict[header[i]] = row[i]
+    return rowDict
 
-with open(os.path.join('..','Data','ibtracs','ibtracs.csv'), 'r') as csvfile:
+print('Counting')
+totalSize = sum(1 for line in open(filePath))
+exit()
+
+print('Inserting %d records' % totalSize)
+with open(filePath, 'r') as csvfile:
     reader = csv.reader(csvfile)
-
-    batch_size = 100
-    batch = []
-    count = 0
-
-    header = next(reader)
+    header = next(reader)  # skip header
     units = next(reader)
 
-    print(header)
-    print(units)
+    batch_size = 10000
+    batch = []
+    count = 0
+    totalCount = 0
 
     for row in reader:
         if count >= batch_size:
-            # put in db
+            x = mycol.insert_many(batch)
+            totalCount += count
+            print('Inserted {:d} ({:.2f} %)'.format(totalCount, (totalCount / totalSize) * 100))
             batch = []
             count = 0
         batch.append(parseRow(header, row))
         count += 1
-        break
     if batch:
+        x = mycol.insert_many(batch)
         pass
-
-# x = mycol.insert_many(mylist)
-
-#print list of the _id values of the inserted documents:
-#print(x.inserted_ids)
