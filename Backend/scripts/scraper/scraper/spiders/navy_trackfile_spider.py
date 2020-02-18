@@ -1,13 +1,14 @@
 from bs4 import BeautifulSoup
-import csv
+import os
 import re
 import requests
 import scrapy
 
 # scrapy crawl navy_spider -o file.csv -t csv
 
+# many storms don't have this outside ATL, so not really useful :(
 class NavySpider(scrapy.Spider):
-    name = "navy__trackfile_spider"
+    name = "navy_trackfile_spider"
 
     def start_requests(self):
         baseURL = 'https://www.nrlmry.navy.mil/tcdat/'
@@ -56,19 +57,15 @@ class NavySpider(scrapy.Spider):
         for trackfileUrl in trackfileUrls:
             yield scrapy.Request(url=trackfileUrl, callback=self.parseTrackfileUrl)
 
-    #actually scrape the trackfile info
     def parseTrackfileUrl(self, response):
-        fields = trackfileUrl.split('/')[4:]
+        fields = response.request.url.split('/')[4:]
         trackfileDict = {
             "season": fields[0],
             "basin": fields[1],
             "storm": fields[2],
-            "trackfile": fields[3]
+            "trackCSV": response.text
         }
-        if len(fields) ==6:
-            trackfileDict["resolution"] = "none"
-            trackfileDict["trackfile"] = fields[5]
-        if len(fields) == 7:
-            trackfileDict["resolution"] = fields[5]
-            trackfileDict["trackfile"] = fields[6]
+        with open(os.path.join('trackfiles', '.'.join(fields[:3])+'.csv'), 'w') as csvfile:
+            csvfile.write(response.text)
+
         return trackfileDict
