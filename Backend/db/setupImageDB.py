@@ -1,6 +1,7 @@
 import csv
 import os
 import pymongo
+import re
 
 myclient = pymongo.MongoClient("mongodb://localhost:27017/")
 mydb = myclient["mydatabase"]
@@ -48,6 +49,8 @@ def parseRow(row):
                     rowDict['second'] = int(image[1][4:])
         if len(image[2]) > 0:
             rowDict['satellite'] = image[2]
+            if re.fullmatch('[\d]{8}$', image[2]):
+                rowDict['satellite'] = image[4]
         rowDict['extension'] = image[-1]
         return rowDict
     except Exception as e:

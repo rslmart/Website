@@ -1,27 +1,15 @@
 from bs4 import BeautifulSoup
-import csv
 import re
-import requests
 import scrapy
 
-# scrapy crawl navy_spider -o file.csv -t csv
+# scrapy crawl navy_image_spider -a seasonUrl=tc97 -o tc97.csv -t csv
 
 class NavySpider(scrapy.Spider):
-    name = "navy__image_spider"
+    name = "navy_image_spider"
 
     def start_requests(self):
         baseURL = 'https://www.nrlmry.navy.mil/tcdat/'
-        page = requests.get(baseURL)
-        soup = BeautifulSoup(page.text, 'html.parser')
-        allAs = soup.find_all('a', href=True)
-        seasonUrls = []
-        #for a in allAs:
-            # Season
-            #if re.match(r'\w\w\d\d/', a.text):
-                #seasonUrls.append(baseURL + a.text)
-        seasonUrls = [baseURL + "tc19/"]
-        for seasonUrl in seasonUrls:
-            yield scrapy.Request(url=seasonUrl, callback=self.parseSeason)
+        yield scrapy.Request(url=baseURL + self.seasonUrl+'/', callback=self.parseSeason)
 
     def parseSeason(self, response):
         soup = BeautifulSoup(response.text, 'html.parser')

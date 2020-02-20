@@ -5,7 +5,7 @@ import pymongo
 myclient = pymongo.MongoClient("mongodb://localhost:27017/")
 mydb = myclient["mydatabase"]
 mycol = mydb["ibtracs"]
-filePath = os.path.join('..', 'Data', 'ibtracs', 'ibtracs.ALL.list.v04r00.csv')
+filePath = os.path.join('..', 'Data', 'ibtracs', 'ibtracs.ALL.csv')
 
 def isInt(s):
     try:

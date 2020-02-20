@@ -1,7 +1,5 @@
 from pathlib import Path
-from contextlib import closing
-import csv
-import requests
+import urllib.request
 import os
 
 def createFilePath(filePath):
@@ -10,10 +8,5 @@ def createFilePath(filePath):
 
 def downloadCSV(url, filePath, fileName):
     createFilePath(filePath)
-    # https://stackoverflow.com/questions/35371043/use-python-requests-to-download-csv\
-    with open(os.path.join(filePath,fileName), 'w') as file:
-        writer = csv.writer(file)
-        with closing(requests.get(url, stream=True)) as r:
-            reader = csv.reader(r.iter_lines(), delimiter=',', quotechar='"')
-            for row in reader:
-                writer.writerow(row)
+    # https://stackoverflow.com/questions/19602931/basic-http-file-downloading-and-saving-to-disk-in-python
+    urllib.request.urlretrieve(url, os.path.join(filePath, fileName))
