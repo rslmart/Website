@@ -33,7 +33,8 @@ def combineCSVs():
                     imageUrl = '/'.join(imageUrl)
                     imageUrl = 'https://www.nrlmry.navy.mil/tcdat/' + imageUrl
                     if len((','.join(toWrite) + ',' + imageUrl).split(',')) == 12:
-                        print(row)
+                        toWrite[-1] = toWrite[-1].replace(',', '.')
+                        imageUrl = imageUrl.replace(',', ':')
                     tcdatCSV.write(','.join(toWrite) + ',' + imageUrl + '\n')
 
 if __name__ == '__main__':

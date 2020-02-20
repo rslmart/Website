@@ -29,6 +29,8 @@ def parseRow(row):
             row[10] = row[10] + ',' + row[11]
             row = row[:9] + [row[10]]
         for i in range(len(row)):
+            if keys[i] == 'imageUrl':
+                row[i] = row[i].replace(':', ',')
             rowDict[keys[i]] = row[i]
         additionalKeys = ['year', 'month', 'day', 'hour', 'minute', 'second', 'satellite', 'extension']
         image = row[8].split('.')
