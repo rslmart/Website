@@ -35,12 +35,11 @@ def parseRow(header, row):
 
 print('Counting')
 totalSize = sum(1 for line in open(filePath))
-exit()
 
 print('Inserting %d records' % totalSize)
 with open(filePath, 'r') as csvfile:
     reader = csv.reader(csvfile)
-    header = next(reader)  # skip header
+    header = map(lambda h: h.lower(), next(reader))  # skip header
     units = next(reader)
 
     batch_size = 10000
