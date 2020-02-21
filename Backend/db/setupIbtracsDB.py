@@ -39,7 +39,9 @@ totalSize = sum(1 for line in open(filePath))
 print('Inserting %d records' % totalSize)
 with open(filePath, 'r') as csvfile:
     reader = csv.reader(csvfile)
-    header = map(lambda h: h.lower(), next(reader))  # skip header
+    header = next(reader)  # skip header
+    for i in range(len(header)):
+        header[i] = header[i].lower()
     units = next(reader)
 
     batch_size = 10000
