@@ -58,11 +58,11 @@ def parseRow(row):
                 if isInt(image[0][dateStart]):
                     break
                 dateStart += 1
-            if isInt(image[0][dateStart:dateStart+4]):
+            if isInt(image[0][dateStart:dateStart+4]) and int(image[0][dateStart:dateStart+4]) >= 1997 and int(image[0][dateStart:dateStart+4]) <= 2020:
                 rowDict['year'] = int(image[0][dateStart:dateStart+4])
-                if isInt(image[0][dateStart+4:dateStart+6]):
+                if isInt(image[0][dateStart+4:dateStart+6]) and int(image[0][dateStart+4:dateStart+6]) >= 1 and int(image[0][dateStart+4:dateStart+6]) <= 12:
                     rowDict['month'] = int(image[0][dateStart+4:dateStart+6])
-                    if isInt(image[0][dateStart+6:dateStart+8]):
+                    if isInt(image[0][dateStart+6:dateStart+8]) and int(image[0][dateStart+4:dateStart+6]) >= 1 and int(image[0][dateStart+4:dateStart+6]) <= 31 :
                         rowDict['day'] = int(image[0][dateStart+6:dateStart+8])
                         date = datetime.datetime(rowDict['year'], rowDict['month'], rowDict['day'])
                         if len(image[1]) >= 4:
