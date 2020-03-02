@@ -39,7 +39,8 @@ def parseRow(row):
         for i in range(len(row)):
             if keys[i] == 'image_url':
                 row[i] = row[i].replace('{replace}', ',')
-            rowDict[keys[i]] = row[i]
+            if not (keys[i] == 'resolution' and row[i] == 'none'):
+                rowDict[keys[i]] = row[i]
             if keys[i] == 'season':
                 if row[i][2] == '9':
                     rowDict[keys[i]] = int('19' + row[i][2:])
@@ -117,3 +118,4 @@ with open(os.path.join('..', 'Data', 'navy', 'tcdat.csv'), 'r') as csvfile:
     if batch:
         x = mycol.insert_many(batch)
         pass
+
