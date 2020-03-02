@@ -56,7 +56,7 @@ def parseRow(row):
         if len(image[0]) >= 8:
             dateStart = 0
             while dateStart < len(image[0]):
-                if isInt(image[0][dateStart]):
+                if isInt(image[0][dateStart:dateStart+4]) and int(image[0][dateStart:dateStart+4]) >= 1997 and int(image[0][dateStart:dateStart+4]) <= 2020:
                     break
                 dateStart += 1
             if isInt(image[0][dateStart:dateStart+4]) and int(image[0][dateStart:dateStart+4]) >= 1997 and int(image[0][dateStart:dateStart+4]) <= 2020:
