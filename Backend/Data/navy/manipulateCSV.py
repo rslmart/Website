@@ -14,7 +14,7 @@ def combineCSVs():
     if (isfile('tcdat.csv')):
         os.remove('tcdat.csv')
     for file in onlyfiles:
-        # print(file)
+        print(file)
         with open(os.path.join(mypath, file)) as csvFile:
             reader = csv.reader(csvFile)
             next(reader)
@@ -34,8 +34,9 @@ def combineCSVs():
                     imageUrl = 'https://www.nrlmry.navy.mil/tcdat/' + imageUrl
                     if len((','.join(toWrite) + ',' + imageUrl).split(',')) == 12:
                         toWrite[-1] = toWrite[-1].replace(',', '.')
-                        imageUrl = imageUrl.replace(',', ':')
-                    tcdatCSV.write(','.join(toWrite) + ',' + imageUrl + '\n')
+                        imageUrl = imageUrl.replace(',', '.')
+                    if 'LATEST' not in imageUrl:
+                        tcdatCSV.write(','.join(toWrite) + ',' + imageUrl + '\n')
 
 if __name__ == '__main__':
     try:

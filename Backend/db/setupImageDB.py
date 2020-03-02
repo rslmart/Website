@@ -59,22 +59,21 @@ def parseRow(row):
                     rowDict['month'] = int(image[0][-4:-2])
                     if isInt(image[0][-2:]):
                         rowDict['day'] = int(image[0][-2:])
-        if isInt(rowDict['day']):
-            date = datetime.datetime(rowDict['year'], rowDict['month'], rowDict['day'])
-            if len(image[1]) >= 4:
-                if isInt(image[1][:2]):
-                    rowDict['hour'] = int(image[1][:2])
-                    date = datetime.datetime(rowDict['year'], rowDict['month'], rowDict['day'], rowDict['hour'])
-                if isInt(image[1][2:4]):
-                    rowDict['minute'] = int(image[1][2:4])
-                    date = datetime.datetime(rowDict['year'], rowDict['month'], rowDict['day'], rowDict['hour'],
-                                             rowDict['minute'])
-                    if len(image[1]) >= 6:
-                        if isInt(image[1][4:]):
-                            rowDict['second'] = int(image[1][4:])
-                            date = datetime.datetime(rowDict['year'], rowDict['month'], rowDict['day'],
-                                                     rowDict['hour'], rowDict['minute'], rowDict['second'])
-            rowDict['date'] = date
+                        date = datetime.datetime(rowDict['year'], rowDict['month'], rowDict['day'])
+                        if len(image[1]) >= 4:
+                            if isInt(image[1][:2]):
+                                rowDict['hour'] = int(image[1][:2])
+                                date = datetime.datetime(rowDict['year'], rowDict['month'], rowDict['day'], rowDict['hour'])
+                            if isInt(image[1][2:4]):
+                                rowDict['minute'] = int(image[1][2:4])
+                                date = datetime.datetime(rowDict['year'], rowDict['month'], rowDict['day'], rowDict['hour'],
+                                                         rowDict['minute'])
+                                if len(image[1]) >= 6:
+                                    if isInt(image[1][4:]):
+                                        rowDict['second'] = int(image[1][4:])
+                                        date = datetime.datetime(rowDict['year'], rowDict['month'], rowDict['day'],
+                                                                 rowDict['hour'], rowDict['minute'], rowDict['second'])
+                        rowDict['date'] = date
         if len(image[2]) > 0:
             rowDict['satellite'] = image[2]
             if re.fullmatch('[\d]{8}$', image[2]):
@@ -83,6 +82,7 @@ def parseRow(row):
         return rowDict
     except Exception as e:
         print(e)
+        print(rowDict)
         print(row)
     # print(rowDict)
 
