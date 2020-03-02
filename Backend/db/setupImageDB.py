@@ -67,15 +67,15 @@ def parseRow(row):
                         rowDict['day'] = int(image[0][dateStart+6:dateStart+8])
                         date = datetime.datetime(rowDict['year'], rowDict['month'], rowDict['day'])
                         if len(image[1]) >= 4:
-                            if isInt(image[1][:2]):
+                            if isInt(image[1][:2]) and int(image[1][:2]) >= 0 and int(image[1][:2]) <= 23:
                                 rowDict['hour'] = int(image[1][:2])
                                 date = datetime.datetime(rowDict['year'], rowDict['month'], rowDict['day'], rowDict['hour'])
-                            if isInt(image[1][2:4]):
+                            if isInt(image[1][2:4]) and int(image[1][2:4]) >= 0 and int(image[1][2:4]) <= 60:
                                 rowDict['minute'] = int(image[1][2:4])
                                 date = datetime.datetime(rowDict['year'], rowDict['month'], rowDict['day'], rowDict['hour'],
                                                          rowDict['minute'])
                                 if len(image[1]) >= 6:
-                                    if isInt(image[1][4:]):
+                                    if isInt(image[1][4:]) and int(image[1][4:]) >= 0 and int(image[1][4:]) <= 60:
                                         rowDict['second'] = int(image[1][4:])
                                         date = datetime.datetime(rowDict['year'], rowDict['month'], rowDict['day'],
                                                                  rowDict['hour'], rowDict['minute'], rowDict['second'])
