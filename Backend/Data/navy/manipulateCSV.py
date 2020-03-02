@@ -34,7 +34,7 @@ def combineCSVs():
                     imageUrl = 'https://www.nrlmry.navy.mil/tcdat/' + imageUrl
                     if len((','.join(toWrite) + ',' + imageUrl).split(',')) == 12:
                         toWrite[-1] = toWrite[-1].replace(',', '.')
-                        imageUrl = imageUrl.replace(',', '.')
+                        imageUrl = imageUrl.replace(',', '{replace}')
                     if 'LATEST' not in imageUrl:
                         tcdatCSV.write(','.join(toWrite) + ',' + imageUrl + '\n')
 

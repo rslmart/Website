@@ -38,7 +38,7 @@ def parseRow(row):
             row = row[:9] + [row[10]]
         for i in range(len(row)):
             if keys[i] == 'image_url':
-                row[i] = row[i].replace(':', ',')
+                row[i] = row[i].replace('{replace}', ',')
             rowDict[keys[i]] = row[i]
             if keys[i] == 'season':
                 if row[i][2] == '9':
@@ -53,12 +53,17 @@ def parseRow(row):
         #     print(post)
         image = row[8].split('.')
         if len(image[0]) >= 8:
-            if isInt(image[0][-8:-4]):
-                rowDict['year'] = int(image[0][-8:-4])
-                if isInt(image[0][-4:-2]):
-                    rowDict['month'] = int(image[0][-4:-2])
-                    if isInt(image[0][-2:]):
-                        rowDict['day'] = int(image[0][-2:])
+            dateStart = 0
+            while dateStart < len(image[0]):
+                if isInt(image[0][dateStart]):
+                    break
+                dateStart += 1
+            if isInt(image[0][dateStart:dateStart+4]):
+                rowDict['year'] = int(image[0][dateStart:dateStart+4])
+                if isInt(image[0][dateStart+4:dateStart+6]):
+                    rowDict['month'] = int(image[0][dateStart+4:dateStart+6])
+                    if isInt(image[0][dateStart+6:dateStart+8]):
+                        rowDict['day'] = int(image[0][dateStart+6:dateStart+8])
                         date = datetime.datetime(rowDict['year'], rowDict['month'], rowDict['day'])
                         if len(image[1]) >= 4:
                             if isInt(image[1][:2]):
