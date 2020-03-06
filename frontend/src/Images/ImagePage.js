@@ -21,6 +21,7 @@ class ImagePage extends Component {
         satelliteSelections: [],
         extensionSelections: [],
         allImageOptions: {
+            season: [],
             basin: [],
             storm_name: [],
             type: [],
@@ -30,6 +31,7 @@ class ImagePage extends Component {
             extension: []
         },
         imageOptions: {
+            season: [],
             basin: [],
             storm_name: [],
             type: [],
@@ -88,6 +90,7 @@ class ImagePage extends Component {
         if (queryList.length > 0) {
             const query = {"$and": queryList};
             console.log(JSON.stringify(query));
+            this.fetchOptions(query, []);
             this.fetchImageCount(query);
         } else {
             this.fetchImageCount({});
@@ -138,8 +141,8 @@ class ImagePage extends Component {
         }).then((response) => {
             return response.json();
         }).then((data) => {
-            this.setState({ imageOptions: Object.assign(this.state.imageOptions, data.options) });
-            if (query === {}) {
+            this.setState({ imageOptions: data.options });
+            if (this.state.allImageOptions.season.length === 0) {
                 this.setState({ allImageOptions: data.options })
             }
         });
@@ -164,12 +167,19 @@ class ImagePage extends Component {
         });
     };
 
+    groupOptions = (options, allOptions) => {
+        options = allOptions.map(option => Object.assign(option, {
+            grouping: options.includes(option) ? "In Selection" : "Out of Selection"
+        }));
+        return options;
+    };
+
     render () {
         return (<div>
             <Autocomplete
                 multiple
                 id="season"
-                options={this.seasonsOptions}
+                options={this.state.imageOptions.season}
                 getOptionLabel={option => option}
                 style={{width: 300}}
                 renderInput={params => (
@@ -220,8 +230,8 @@ class ImagePage extends Component {
             <Autocomplete
                 multiple
                 id="type"
-                options={this.state.imageOptions.type}
-                groupBy={option => option.firstLetter}
+                options={this.groupOptions(this.state.imageOptions.type, this.state.allImageOptions.type)}
+                groupBy={option => option.grouping}
                 getOptionLabel={option => option}
                 style={{width: 300}}
                 renderInput={params => (
