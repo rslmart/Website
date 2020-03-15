@@ -49,6 +49,7 @@ class ImagePage extends Component {
     };
 
     inputChange = async (evt, value, id) => {
+        console.log(value);
         switch (id) {
             case "season":
                 await this.setState({ seasonSelections: value});
@@ -77,20 +78,20 @@ class ImagePage extends Component {
             default:
                 break;
         }
-        const seasonQuery = {"$or": this.state.seasonSelections.map(season => {return {"season":season}})};
-        const basinQuery = {"$or": this.state.basinSelections.map(basin => {return {"basin":basin}})};
-        const storm_nameQuery = {"$or": this.state.storm_nameSelections.map(storm_name => {return {"storm_name":storm_name}})};
-        const typeQuery = {"$or": this.state.typeSelections.map(type => {return {"type":type}})};
-        const sensorQuery = {"$or": this.state.sensorSelections.map(sensor => {return {"sensor":sensor}})};
-        const resolutionQuery = {"$or": this.state.resolutionSelections.map(resolution => {return {"resolution":resolution}})};
-        const satelliteQuery = {"$or": this.state.satelliteSelections.map(satellite => {return {"satellite":satellite}})};
-        const extensionQuery = {"$or": this.state.extensionSelections.map(extension => {return {"extension":extension}})};
+        const seasonQuery = {"$or": this.state.seasonSelections.map(season => {return {"season":season.label}})};
+        const basinQuery = {"$or": this.state.basinSelections.map(basin => {return {"basin":basin.label}})};
+        const storm_nameQuery = {"$or": this.state.storm_nameSelections.map(storm_name => {return {"storm_name":storm_name.label}})};
+        const typeQuery = {"$or": this.state.typeSelections.map(type => {return {"type":type.label}})};
+        const sensorQuery = {"$or": this.state.sensorSelections.map(sensor => {return {"sensor":sensor.label}})};
+        const resolutionQuery = {"$or": this.state.resolutionSelections.map(resolution => {return {"resolution":resolution.label}})};
+        const satelliteQuery = {"$or": this.state.satelliteSelections.map(satellite => {return {"satellite":satellite.label}})};
+        const extensionQuery = {"$or": this.state.extensionSelections.map(extension => {return {"extension":extension.label}})};
         const queryList = [seasonQuery, basinQuery, storm_nameQuery, typeQuery, sensorQuery, resolutionQuery,
-            satelliteQuery, extensionQuery].filter(query => query["$or"].length > 0)
+            satelliteQuery, extensionQuery].filter(query => query["$or"].length > 0);
         if (queryList.length > 0) {
             const query = {"$and": queryList};
             console.log(JSON.stringify(query));
-            this.fetchOptions(query, []);
+            this.fetchOptions(query, [id]);
             this.fetchImageCount(query);
         } else {
             this.fetchImageCount({});
@@ -141,7 +142,7 @@ class ImagePage extends Component {
         }).then((response) => {
             return response.json();
         }).then((data) => {
-            this.setState({ imageOptions: data.options });
+            this.setState({ imageOptions: Object.assign(this.state.imageOptions, data.options) });
             if (this.state.allImageOptions.season.length === 0) {
                 this.setState({ allImageOptions: data.options })
             }
@@ -168,10 +169,12 @@ class ImagePage extends Component {
     };
 
     groupOptions = (options, allOptions) => {
-        options = allOptions.map(option => Object.assign(option, {
-            grouping: options.includes(option) ? "In Selection" : "Out of Selection"
-        }));
-        return options;
+        return allOptions.map(value => {
+            return {
+                label: value,
+                grouping: options.includes(value) ? "In Selection" : "Out of Selection"
+            }
+        }).sort();
     };
 
     render () {
@@ -179,8 +182,9 @@ class ImagePage extends Component {
             <Autocomplete
                 multiple
                 id="season"
-                options={this.state.imageOptions.season}
-                getOptionLabel={option => option}
+                options={this.groupOptions(this.state.imageOptions.season, this.state.allImageOptions.season)}
+                groupBy={option => option.grouping}
+                getOptionLabel={option => option.label}
                 style={{width: 300}}
                 renderInput={params => (
                     <TextField
@@ -196,8 +200,9 @@ class ImagePage extends Component {
             <Autocomplete
                 multiple
                 id="basin"
-                options={this.state.imageOptions.basin}
-                getOptionLabel={option => option}
+                options={this.groupOptions(this.state.imageOptions.basin, this.state.allImageOptions.basin)}
+                groupBy={option => option.grouping}
+                getOptionLabel={option => option.label}
                 style={{width: 300}}
                 renderInput={params => (
                     <TextField
@@ -213,8 +218,9 @@ class ImagePage extends Component {
             <Autocomplete
                 multiple
                 id="storm_name"
-                options={this.state.imageOptions.storm_name}
-                getOptionLabel={option => option}
+                options={this.groupOptions(this.state.imageOptions.storm_name, this.state.allImageOptions.storm_name)}
+                groupBy={option => option.grouping}
+                getOptionLabel={option => option.label}
                 style={{width: 300}}
                 renderInput={params => (
                     <TextField
@@ -232,7 +238,7 @@ class ImagePage extends Component {
                 id="type"
                 options={this.groupOptions(this.state.imageOptions.type, this.state.allImageOptions.type)}
                 groupBy={option => option.grouping}
-                getOptionLabel={option => option}
+                getOptionLabel={option => option.label}
                 style={{width: 300}}
                 renderInput={params => (
                     <TextField
@@ -248,8 +254,9 @@ class ImagePage extends Component {
             <Autocomplete
                 multiple
                 id="sensor"
-                options={this.state.imageOptions.sensor}
-                getOptionLabel={option => option}
+                options={this.groupOptions(this.state.imageOptions.sensor, this.state.allImageOptions.sensor)}
+                groupBy={option => option.grouping}
+                getOptionLabel={option => option.label}
                 style={{width: 300}}
                 renderInput={params => (
                     <TextField
@@ -265,8 +272,9 @@ class ImagePage extends Component {
             <Autocomplete
                 multiple
                 id="resolution"
-                options={this.state.imageOptions.resolution}
-                getOptionLabel={option => option}
+                options={this.groupOptions(this.state.imageOptions.resolution, this.state.allImageOptions.resolution)}
+                groupBy={option => option.grouping}
+                getOptionLabel={option => option.label}
                 style={{width: 300}}
                 renderInput={params => (
                     <TextField
@@ -282,8 +290,9 @@ class ImagePage extends Component {
             <Autocomplete
                 multiple
                 id="satellite"
-                options={this.state.imageOptions.satellite}
-                getOptionLabel={option => option}
+                options={this.groupOptions(this.state.imageOptions.satellite, this.state.allImageOptions.satellite)}
+                groupBy={option => option.grouping}
+                getOptionLabel={option => option.label}
                 style={{width: 300}}
                 renderInput={params => (
                     <TextField
@@ -299,8 +308,9 @@ class ImagePage extends Component {
             <Autocomplete
                 multiple
                 id="extension"
-                options={this.state.imageOptions.extension}
-                getOptionLabel={option => option}
+                options={this.groupOptions(this.state.imageOptions.extension, this.state.allImageOptions.extension)}
+                groupBy={option => option.grouping}
+                getOptionLabel={option => option.label}
                 style={{width: 300}}
                 renderInput={params => (
                     <TextField
