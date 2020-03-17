@@ -171,9 +171,9 @@ class ImagePage extends Component {
         }).then((response) => {
             return response.json();
         }).then((data) => {
+            this.setState({ loadingOptions: false });
             return data;
         });
-        this.setState({ loadingOptions: false });
     };
 
     /**
@@ -486,7 +486,7 @@ class ImagePage extends Component {
             </Container>
             </Card>
 
-                {this.state.loadingOptions ? <CircularProgress/> : ""}
+            {this.state.loadingOptions ? <CircularProgress/> : <span></span>}
 
             {this.state.imageItems.length > 0 ?
             <Card>
