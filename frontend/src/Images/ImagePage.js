@@ -184,7 +184,7 @@ class ImagePage extends Component {
     fetchQuery = async () => {
         fetch(`${this.API_GATEWAY_ENDPOINT}/images/query`, {
             method: "POST",
-            body: JSON.stringify({"query": this.state.query, "limit": 1000}),
+            body: JSON.stringify({"query": this.state.query}),
             headers: {
                 "Content-Type": "application/json"
             }

@@ -67,7 +67,7 @@ def imageQuery():
         del s['date']
         output.append(s)
         count += 1
-        if count > requestJson["limit"]:
+        if count > 2000:
              break
     print(output)
     return jsonify({'imageItems': output})
