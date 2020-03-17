@@ -106,16 +106,21 @@ with open(os.path.join('..', 'Data', 'navy', 'tcdat.csv'), 'r') as csvfile:
     count = 0
     totalCount = 0
 
+    withDate = 0
+
     for row in reader:
         if count >= batch_size:
-            x = mycol.insert_many(batch)
+            mycol.insert_many(batch)
             totalCount += count
             print('Inserted {:d} ({:.2f} %)'.format(totalCount, (totalCount / totalSize) * 100))
             batch = []
             count = 0
-        batch.append(parseRow(row))
-        count += 1
+        rowDict = parseRow(row)
+        if 'date' in rowDict:
+            batch.append(rowDict)
+            count += 1
     if batch:
-        x = mycol.insert_many(batch)
-        pass
+        mycol.insert_many(batch)
+
+    print('Inserted {:d} ({:.2f} %)'.format(totalCount, (totalCount / totalSize) * 100))
 

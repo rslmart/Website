@@ -1,7 +1,8 @@
 from flask import Flask, jsonify, request
 import pymongo
 from flask_cors import CORS
-import json
+from multiprocessing import Pool
+import time
 
 app = Flask(__name__)
 CORS(app)
@@ -10,6 +11,11 @@ myclient = pymongo.MongoClient("mongodb://localhost:27017/")
 mydb = myclient["mydatabase"]
 imagesCol = mydb["images"]
 ibtracsCol = mydb["ibtracs"]
+
+
+def func(item):
+    a = pymongo.MongoClient("mongodb://localhost:27017/")["mydatabase"]["images"].find(item[1])
+    return a.distinct(item[0])
 
 @app.route('/')
 def hello_world():
@@ -35,11 +41,19 @@ def imageOptions():
     requestJson = request.get_json()
     print(requestJson)
     queryResult = imagesCol.find(requestJson["query"])
+    # Expensive, takes 7 secs with 1M records
+    beginDate = queryResult.sort([("date" , 1)]).limit(1)[0]['date']
+    endDate = queryResult.sort([("date" , -1)]).limit(1)[0]['date']
+    print(beginDate, endDate)
     options = {}
-    for key in keys:
-        if key not in requestJson["keys"]:
-            options[key] = queryResult.distinct(key)
-    return jsonify({'options': options})
+    arr = [(key, requestJson["query"]) for key in keys if key not in requestJson["keys"]]
+    with Pool(4) as p:
+        result = p.map(func, arr)
+    for i in range(len(arr)):
+        options[arr[i][0]] = result[i]
+    return jsonify({'options': options,
+                    'beginDate': str(beginDate),
+                    'endDate': str(endDate)})
 
 @app.route('/images/query', methods=['POST'])
 def imageQuery():
