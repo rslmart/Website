@@ -37,6 +37,7 @@ def imageAllOptions():
 
 @app.route('/images/options', methods=['POST'])
 def imageOptions():
+    requestTime = time.time()
     keys = ['season', 'basin', 'storm_number', 'storm_agency', 'storm_name', 'type', 'sensor', 'resolution', 'satellite', 'extension']
     requestJson = request.get_json()
     print(requestJson)
@@ -51,9 +52,12 @@ def imageOptions():
         result = p.map(func, arr)
     for i in range(len(arr)):
         options[arr[i][0]] = result[i]
-    return jsonify({'options': options,
-                    'beginDate': str(beginDate),
-                    'endDate': str(endDate)})
+    return jsonify({
+        'requestTime': requestTime,
+        'options': options,
+        'beginDate': str(beginDate),
+        'endDate': str(endDate)
+    })
 
 @app.route('/images/query', methods=['POST'])
 def imageQuery():

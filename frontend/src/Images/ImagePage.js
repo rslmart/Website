@@ -1,20 +1,12 @@
 import React, { Component } from "react";
-import TextField from "@material-ui/core/TextField";
-import Button from '@material-ui/core/Button';
-import CircularProgress from '@material-ui/core/CircularProgress';
-import Autocomplete from "@material-ui/lab/Autocomplete";
-import Slider from '@material-ui/core/Slider';
-import 'date-fns';
-import Grid from '@material-ui/core/Grid';
-import DateFnsUtils from '@date-io/date-fns';
 import {
-  MuiPickersUtilsProvider,
-  KeyboardTimePicker,
-  KeyboardDatePicker,
-} from '@material-ui/pickers';
-import Container from '@material-ui/core/Container';
-import Paper from '@material-ui/core/Paper';
-import Card from '@material-ui/core/Card';
+    Container,
+    Dropdown,
+    Form,
+    Loader,
+    Image,
+    Transition
+} from 'semantic-ui-react';
 
 class ImagePage extends Component {
     API_GATEWAY_ENDPOINT = "http://127.0.0.1:5000";
@@ -59,10 +51,13 @@ class ImagePage extends Component {
         imageItems: [],
         imageIndex: 0,
         imageElements: [],
+        imageElementsStatus: [],
         earliestDate: new Date(),
         latestDate: new Date(),
         beginDate: new Date(),
-        endDate: new Date()
+        endDate: new Date(),
+        selectedImage: (<div></div>),
+        requestTime: 0
     };
 
     componentDidMount = async () => {
@@ -76,8 +71,7 @@ class ImagePage extends Component {
         this.generateOptions(response);
     };
 
-    inputChange = async (evt, value, id) => {
-        console.log(value);
+    inputChange = async (evt, {id , value}) => {
         switch (id) {
             case "season":
                 await this.setState({ seasonSelections: value});
@@ -106,14 +100,15 @@ class ImagePage extends Component {
             default:
                 break;
         }
-        const seasonQuery = {"$or": this.state.seasonSelections.map(season => {return {"season":season.label}})};
-        const basinQuery = {"$or": this.state.basinSelections.map(basin => {return {"basin":basin.label}})};
-        const storm_nameQuery = {"$or": this.state.storm_nameSelections.map(storm_name => {return {"storm_name":storm_name.label}})};
-        const typeQuery = {"$or": this.state.typeSelections.map(type => {return {"type":type.label}})};
-        const sensorQuery = {"$or": this.state.sensorSelections.map(sensor => {return {"sensor":sensor.label}})};
-        const resolutionQuery = {"$or": this.state.resolutionSelections.map(resolution => {return {"resolution":resolution.label}})};
-        const satelliteQuery = {"$or": this.state.satelliteSelections.map(satellite => {return {"satellite":satellite.label}})};
-        const extensionQuery = {"$or": this.state.extensionSelections.map(extension => {return {"extension":extension.label}})};
+        // TODO: If removing value requery for that key (ie don't include it in generateOptions)
+        const seasonQuery = {"$or": this.state.seasonSelections.map(season => {return {"season":season}})};
+        const basinQuery = {"$or": this.state.basinSelections.map(basin => {return {"basin":basin}})};
+        const storm_nameQuery = {"$or": this.state.storm_nameSelections.map(storm_name => {return {"storm_name":storm_name}})};
+        const typeQuery = {"$or": this.state.typeSelections.map(type => {return {"type":type}})};
+        const sensorQuery = {"$or": this.state.sensorSelections.map(sensor => {return {"sensor":sensor}})};
+        const resolutionQuery = {"$or": this.state.resolutionSelections.map(resolution => {return {"resolution":resolution}})};
+        const satelliteQuery = {"$or": this.state.satelliteSelections.map(satellite => {return {"satellite":satellite}})};
+        const extensionQuery = {"$or": this.state.extensionSelections.map(extension => {return {"extension":extension}})};
         const queryList = [seasonQuery, basinQuery, storm_nameQuery, typeQuery, sensorQuery, resolutionQuery,
             satelliteQuery, extensionQuery].filter(query => query["$or"].length > 0);
         if (queryList.length > 0) {
@@ -198,44 +193,61 @@ class ImagePage extends Component {
     };
 
     fetchImages = async (imageItems) => {
-        const imageElements = imageItems.map(imageItem => (<img src={imageItem.image_url}/>))
+        const imageElementsStatus = imageItems.map(item => false);
+        imageElementsStatus[0] = true;
+        await this.setState({ imageElementsStatus });
+        const imageElements = imageItems.map(imageItem => (
+            <img
+                style={{ display: "none" }}
+                src={imageItem.image_url}
+                alt=""
+            />
+        ));
         this.setState({ imageElements });
+        this.selectImage({}, { value: "0" });
     };
 
     generateOptions = async (response) => {
-        const newOptions = response.options;
-        const allOptions = JSON.parse(JSON.stringify(this.state.allImageOptions));
-        const imageOptions = JSON.parse(JSON.stringify(this.state.imageOptions));
-        Object.keys(newOptions).forEach(key => {
-            const options = allOptions[key].map(value => {
-                return {
-                    label: value,
-                    grouping: newOptions[key].includes(value) ? "In Selection" : "Out of Selection"
-                }
-            }).sort((a,b) => {
-                if (a.grouping > b.grouping) {
-                    return 1;
-                }
-                if (a.grouping < b.grouping) {
-                    return -1;
-                } else {
-                    if (a.value > b.value) {
-                        return 1;
+        if (response.requestTime > this.state.requestTime) {
+            this.setState({ requestTime: response.requestTime });
+            const newOptions = response.options;
+            const allOptions = JSON.parse(JSON.stringify(this.state.allImageOptions));
+            const imageOptions = JSON.parse(JSON.stringify(this.state.imageOptions));
+            Object.keys(newOptions).forEach(key => {
+                const options = allOptions[key].map(value => {
+                    const group = newOptions[key].includes(value);
+                    return {
+                        key: value,
+                        text: value,
+                        value: value,
+                        icon: group ? "plus" : "minus",
                     }
-                    if (a.value < b.value) {
+                }).sort((a, b) => {
+                    if (a.icon === "plus" && b.icon !== "plus") {
                         return -1;
                     }
-                    return 0;
-                }
-                return 0;
+                    if (a.icon !== "plus" && b.icon === "plus") {
+                        return 1;
+                    } else {
+                        if (a.value > b.value) {
+                            return 1;
+                        }
+                        if (a.value < b.value) {
+                            return -1;
+                        }
+                        return 0;
+                    }
+                });
+                Object.assign(imageOptions, {[key]: options});
             });
-            Object.assign(imageOptions, { [key]: options });
-        });
-        this.setState({
-            imageOptions,
-            earliestDate: new Date(response.beginDate),
-            latestDate: new Date(response.endDate)
-        });
+            this.setState({
+                imageOptions,
+                earliestDate: new Date(response.beginDate),
+                latestDate: new Date(response.endDate)
+            });
+        } else {
+            console.log(`Bad Request Resposne:${response.requestTime} State:${this.state.requestTime}`)
+        }
     };
 
     handleDateChange = () => {
@@ -245,271 +257,165 @@ class ImagePage extends Component {
 
     render () {
         return (
-            <Paper>
-                <Card>
+            <Container>
+                <Form>
+                    <Form.Group widths={"equal"}>
+                        <Form.Field>
+                            <label>Season</label>
+                            <Form.Dropdown
+                                fluid
+                                id="season"
+                                placeholder='2001'
+                                multiple
+                                search
+                                options={this.state.imageOptions.season}
+                                onChange={this.inputChange}
+                            />
+                        </Form.Field>
+                        <Form.Field>
+                            <label>Season</label>
+                            <Form.Dropdown
+                                fluid
+                                id="basin"
+                                placeholder='ATL'
+                                multiple
+                                search
+                                options={this.state.imageOptions.basin}
+                                onChange={this.inputChange}
+                            />
+                        </Form.Field>
+                        <Form.Field>
+                            <label>Storm Name</label>
+                            <Form.Dropdown
+                                fluid
+                                id="storm_name"
+                                placeholder="Isabel"
+                                multiple
+                                search
+                                options={this.state.imageOptions.storm_name}
+                                onChange={this.inputChange}
+                            />
+                        </Form.Field>
+                        <Form.Field>
+                            <label>Type</label>
+                            <Form.Dropdown
+                                fluid
+                                id="type"
+                                placeholder="vis"
+                                multiple
+                                search
+                                options={this.state.imageOptions.type}
+                                onChange={this.inputChange}
+                            />
+                        </Form.Field>
+                    </Form.Group>
+                    <Form.Group widths={"equal"}>
+                        <Form.Field>
+                            <label>Sensor</label>
+                            <Form.Dropdown
+                                fluid
+                                id="sensor"
+                                placeholder="goesvis"
+                                multiple
+                                search
+                                options={this.state.imageOptions.sensor}
+                                onChange={this.inputChange}
+                            />
+                        </Form.Field>
+                        <Form.Field>
+                            <label>Resolution</label>
+                            <Form.Dropdown
+                                fluid
+                                id="resolution"
+                                placeholder="1km"
+                                multiple
+                                search
+                                options={this.state.imageOptions.resolution}
+                                onChange={this.inputChange}
+                            />
+                        </Form.Field>
+                        <Form.Field>
+                            <label>Satellite</label>
+                            <Form.Dropdown
+                                fluid
+                                id="satellite"
+                                placeholder="goes15"
+                                multiple
+                                search
+                                options={this.state.imageOptions.satellite}
+                                onChange={this.inputChange}
+                            />
+                        </Form.Field>
+                        <Form.Field>
+                            <label>Extension</label>
+                            <Form.Dropdown
+                                fluid
+                                id="extension"
+                                placeholder="jpg"
+                                multiple
+                                search
+                                options={this.state.imageOptions.extension}
+                                onChange={this.inputChange}
+                            />
+                        </Form.Field>
+                    </Form.Group>
+                    <Form.Group widths={"equal"}>
+                        <Form.Field>
+                            <label>Image Count</label>
+                            {this.state.count !== -1 ? this.state.count : "Loading"}
+                        </Form.Field>
+                        <Form.Field>
+                            <label>Query:</label>
+                            {JSON.stringify(this.state.query)}
+                        </Form.Field>
+                    </Form.Group>
+                    <Form.Button onClick={this.fetchQuery}>Get Images</Form.Button>
+                </Form>
                 <Container>
-                    <Grid
-                      container
-                      direction="row"
-                      justify="center"
-                      alignItems="center"
-                      spacing={3}
-                    >
-                    <Grid item xs={12} sm={3}>
-                        <Autocomplete
-                            multiple
-                            id="season"
-                            options={this.state.imageOptions.season}
-                            groupBy={option => option.grouping}
-                            getOptionLabel={option => option.label}
-                            style={{width: 300}}
-                            renderInput={params => (
-                                <TextField
-                                    {...params}
-                                    variant="standard"
-                                    label="Season"
-                                    placeholder="2001"
-                                    fullWidth
-                                />
-                            )}
-                            onChange={(evt, value) => this.inputChange(evt, value, "season")}
+                    {this.state.imageElements}
+                    {this.state.imageItems.length > 0 ?
+                        <DataViewer
+                            imageItems={this.state.imageItems}
                         />
-                    </Grid>
-                    <Grid item xs={12} sm={3}>
-                        <Autocomplete
-                            multiple
-                            id="basin"
-                            options={this.state.imageOptions.basin}
-                            groupBy={option => option.grouping}
-                            getOptionLabel={option => option.label}
-                            style={{width: 300}}
-                            renderInput={params => (
-                                <TextField
-                                    {...params}
-                                    variant="standard"
-                                    label="Basin"
-                                    placeholder="ATL"
-                                    fullWidth
-                                />
-                            )}
-                            onChange={(evt, value) => this.inputChange(evt, value, "basin")}
-                        />
-                    </Grid>
-                    <Grid item xs={12} sm={3}>
-                        <Autocomplete
-                            multiple
-                            id="storm_name"
-                            options={this.state.imageOptions.storm_name}
-                            groupBy={option => option.grouping}
-                            getOptionLabel={option => option.label}
-                            style={{width: 300}}
-                            renderInput={params => (
-                                <TextField
-                                    {...params}
-                                    variant="standard"
-                                    label="Storm Name"
-                                    placeholder="ISABEL"
-                                    fullWidth
-                                />
-                            )}
-                            onChange={(evt, value) => this.inputChange(evt, value, "storm_name")}
-                        />
-                    </Grid>
-                    <Grid item xs={12} sm={3}>
-                        <Autocomplete
-                            multiple
-                            id="type"
-                            options={this.state.imageOptions.type}
-                            groupBy={option => option.grouping}
-                            getOptionLabel={option => option.label}
-                            style={{width: 300}}
-                            renderInput={params => (
-                                <TextField
-                                    {...params}
-                                    variant="standard"
-                                    label="Type"
-                                    placeholder=""
-                                    fullWidth
-                                />
-                            )}
-                            onChange={(evt, value) => this.inputChange(evt, value, "type")}
-                        />
-                    </Grid>
-                    <Grid item xs={12} sm={3}>
-                        <Autocomplete
-                            multiple
-                            id="sensor"
-                            options={this.state.imageOptions.sensor}
-                            groupBy={option => option.grouping}
-                            getOptionLabel={option => option.label}
-                            style={{width: 300}}
-                            renderInput={params => (
-                                <TextField
-                                    {...params}
-                                    variant="standard"
-                                    label="Sensor"
-                                    placeholder=""
-                                    fullWidth
-                                />
-                            )}
-                            onChange={(evt, value) => this.inputChange(evt, value, "sensor")}
-                        />
-                    </Grid>
-                    <Grid item xs={12} sm={3}>
-                        <Autocomplete
-                            multiple
-                            id="resolution"
-                            options={this.state.imageOptions.resolution}
-                            groupBy={option => option.grouping}
-                            getOptionLabel={option => option.label}
-                            style={{width: 300}}
-                            renderInput={params => (
-                                <TextField
-                                    {...params}
-                                    variant="standard"
-                                    label="Resolution"
-                                    placeholder=""
-                                    fullWidth
-                                />
-                            )}
-                            onChange={(evt, value) => this.inputChange(evt, value, "resolution")}
-                        />
-                    </Grid>
-                    <Grid item xs={12} sm={3}>
-                        <Autocomplete
-                            multiple
-                            id="satellite"
-                            options={this.state.imageOptions.satellite}
-                            groupBy={option => option.grouping}
-                            getOptionLabel={option => option.label}
-                            style={{width: 300}}
-                            renderInput={params => (
-                                <TextField
-                                    {...params}
-                                    variant="standard"
-                                    label="Satellite"
-                                    placeholder=""
-                                    fullWidth
-                                />
-                            )}
-                            onChange={(evt, value) => this.inputChange(evt, value, "satellite")}
-                        />
-                    </Grid>
-                    <Grid item xs={12} sm={3}>
-                        <Autocomplete
-                            multiple
-                            id="extension"
-                            options={this.state.imageOptions.extension}
-                            groupBy={option => option.grouping}
-                            getOptionLabel={option => option.label}
-                            style={{width: 300}}
-                            renderInput={params => (
-                                <TextField
-                                    {...params}
-                                    variant="standard"
-                                    label="Extension"
-                                    placeholder="jpg, png"
-                                    fullWidth
-                                />
-                            )}
-                            onChange={(evt, value) => this.inputChange(evt, value, "extension")}
-                        />
-                    </Grid>
-                        <Grid container item xs={12} spacing={3}>
-                            <MuiPickersUtilsProvider utils={DateFnsUtils}>
-                                <Grid item xs={3}>
-                                    <KeyboardDatePicker
-                                      disableToolbar
-                                      variant="inline"
-                                      format="MM/dd/yyyy"
-                                      margin="normal"
-                                      id="startDate"
-                                      label="Pick start date"
-                                      value={this.state.beginDate}
-                                      onChange={this.handleDateChange}
-                                      KeyboardButtonProps={{
-                                        'aria-label': 'change date',
-                                      }}
-                                    />
-                                </Grid>
-                                <Grid item xs={3}>
-                                    <KeyboardTimePicker
-                                      margin="normal"
-                                      id="startTime"
-                                      label="Pick start time"
-                                      value={this.state.beginDate}
-                                      onChange={this.handleDateChange}
-                                      KeyboardButtonProps={{
-                                        'aria-label': 'change time',
-                                      }}
-                                    />
-                                </Grid>
-                                <Grid item xs={3}>
-                                    <KeyboardDatePicker
-                                      disableToolbar
-                                      variant="inline"
-                                      format="MM/dd/yyyy"
-                                      margin="normal"
-                                      id="endDate"
-                                      label="Pick end date"
-                                      value={this.state.endDate}
-                                      onChange={this.handleDateChange}
-                                      KeyboardButtonProps={{
-                                        'aria-label': 'change date',
-                                      }}
-                                    />
-                                </Grid>
-                                <Grid item xs={3}>
-                                    <KeyboardTimePicker
-                                      margin="normal"
-                                      id="endTime"
-                                      label="Pick end time"
-                                      value={this.state.endDate}
-                                      onChange={this.handleDateChange}
-                                      KeyboardButtonProps={{
-                                        'aria-label': 'change time',
-                                      }}
-                                    />
-                                </Grid>
-                            </MuiPickersUtilsProvider>
-                        </Grid>
-                    <Grid item xs={12} sm={4}>
-                        <span>Count: {this.state.count !== -1 ? this.state.count : <CircularProgress/>}</span>
-                    </Grid>
-                    <Grid item xs={12} sm={4}>
-                        <span>Query: {JSON.stringify(this.state.query)}</span>
-                    </Grid>
-                    <Grid item xs={12} sm={4}>
-                        <Button variant="contained" onClick={this.fetchQuery}>Get Images</Button>
-                    </Grid>
-                </Grid>
-            </Container>
-            </Card>
-
-            {this.state.loadingOptions ? <CircularProgress/> : <span></span>}
-
-            {this.state.imageItems.length > 0 ?
-            <Card>
-                <Container>
-                    <div style={{ display: "none" }}>
-                        {this.state.imageElements}
-                    </div>
-                        {this.state.imageElements[this.state.imageIndex]}
-                    <Slider
-                        defaultValue={0}
-                        aria-labelledby="discrete-slider-small-steps"
-                        step={1}
-                        marks
-                        min={0}
-                        max={this.state.imageItems.length - 1}
-                        valueLabelDisplay="auto"
-                        onChange={(evt, value) => {
-                            this.setState({ imageIndex: value})
-                        }}
-                      />
+                     : ""}
                 </Container>
-            </Card> : ""}
-        </Paper>);
+            </Container>
+        );
+    }
+}
+
+class DataViewer extends Component {
+
+    state = {
+        imageIndex: 0
+    };
+
+    selectImage = (e, { value }) => {
+        const imageIndex = parseInt(value);
+        this.setState({imageIndex});
+    };
+
+    render() {
+        return (
+            <Container>
+                <Image
+                    src={this.props.imageItems[this.state.imageIndex].image_url}
+                    alt=""
+                    bordered={true}
+                />
+                <Form.Input
+                    fluid
+                    label=''
+                    min={0}
+                    max={this.props.imageItems.length}
+                    name=''
+                    onChange={this.selectImage}
+                    step={1}
+                    type='range'
+                    value={this.state.imageIndex}
+                />
+            </Container>
+        );
     }
 }
 
