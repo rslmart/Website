@@ -5,7 +5,7 @@ import {
     Form,
     Loader,
     Image,
-    Transition
+    Placeholder
 } from 'semantic-ui-react';
 
 class ImagePage extends Component {
@@ -194,17 +194,23 @@ class ImagePage extends Component {
 
     fetchImages = async (imageItems) => {
         const imageElementsStatus = imageItems.map(item => false);
-        imageElementsStatus[0] = true;
         await this.setState({ imageElementsStatus });
-        const imageElements = imageItems.map(imageItem => (
-            <img
+        const imageElements = imageItems.map((imageItem, index) => {
+            return (<Image
                 style={{ display: "none" }}
                 src={imageItem.image_url}
-                alt=""
-            />
-        ));
+                alt={imageItem.image}
+                key={imageItem.image_url}
+                onLoad={(index) => {
+                this.setState(prevState => ({
+                    imageElementsStatus: [
+                      ...prevState.imageElementsStatus.slice(0, index),
+                      true,
+                      ...prevState.imageElementsStatus.slice(index + 1)
+                ]}))}}
+            />);
+        });
         this.setState({ imageElements });
-        this.selectImage({}, { value: "0" });
     };
 
     generateOptions = async (response) => {
@@ -373,9 +379,10 @@ class ImagePage extends Component {
                 </Form>
                 <Container>
                     {this.state.imageElements}
-                    {this.state.imageItems.length > 0 ?
+                    {this.state.imageElements.length > 0 ?
                         <DataViewer
                             imageItems={this.state.imageItems}
+                            imageElementsStatus={this.state.imageElementsStatus}
                         />
                      : ""}
                 </Container>
@@ -398,16 +405,20 @@ class DataViewer extends Component {
     render() {
         return (
             <Container>
-                <Image
-                    src={this.props.imageItems[this.state.imageIndex].image_url}
-                    alt=""
-                    bordered={true}
-                />
+                {this.props.imageElementsStatus[this.state.imageIndex] ?
+                    <Image
+                        src={this.props.imageItems[this.state.imageIndex].image_url}
+                        alt={this.props.imageItems[this.state.imageIndex].image}
+                    />
+                : <Placeholder>
+                    <Placeholder.Image />
+                  </Placeholder>}
+                  <span>{this.props.imageItems[this.state.imageIndex].date}</span>
                 <Form.Input
                     fluid
                     label=''
                     min={0}
-                    max={this.props.imageItems.length}
+                    max={this.props.imageItems.length-1}
                     name=''
                     onChange={this.selectImage}
                     step={1}

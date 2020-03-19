@@ -68,7 +68,7 @@ def imageQuery():
     count = 0
     for s in imagesCol.find(query):
         del s['_id']
-        del s['date']
+        s['date'] = str(s['date'])
         output.append(s)
         count += 1
         if count > 2000:
