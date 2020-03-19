@@ -38,7 +38,7 @@ def imageAllOptions():
 @app.route('/images/options', methods=['POST'])
 def imageOptions():
     requestTime = time.time()
-    keys = ['season', 'basin', 'storm_number', 'storm_agency', 'storm_name', 'type', 'sensor', 'resolution', 'satellite', 'extension']
+    keys = ['season', 'basin', 'storm_name', 'type', 'sensor', 'resolution', 'satellite', 'extension']
     requestJson = request.get_json()
     print(requestJson)
     queryResult = imagesCol.find(requestJson["query"])
