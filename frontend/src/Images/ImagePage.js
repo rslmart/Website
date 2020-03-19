@@ -9,7 +9,7 @@ import {
 } from 'semantic-ui-react';
 
 class ImagePage extends Component {
-    API_GATEWAY_ENDPOINT = "http://127.0.0.1:5000";
+    API_GATEWAY_ENDPOINT = "http://192.168.0.184:5000";
 
     keys = ['season', 'basin', 'storm_number', 'storm_agency', 'storm_name', 'type', 'sensor', 'resolution',
         'image_url', 'year', 'month', 'day', 'hour', 'minute', 'second', 'satellite', 'extension'];
@@ -136,8 +136,10 @@ class ImagePage extends Component {
                     fetch(`${this.API_GATEWAY_ENDPOINT}/images/imageCount`, {
             method: "POST",
             body: JSON.stringify(query),
+            mode: "cors",
             headers: {
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
             }
             }).then((response) => {
                 return response.json();
@@ -160,8 +162,10 @@ class ImagePage extends Component {
         return fetch(`${this.API_GATEWAY_ENDPOINT}/images/options`, {
             method: "POST",
             body: JSON.stringify(request),
+            mode: "cors",
             headers: {
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*"
             }
         }).then((response) => {
             return response.json();
@@ -180,8 +184,10 @@ class ImagePage extends Component {
         fetch(`${this.API_GATEWAY_ENDPOINT}/images/query`, {
             method: "POST",
             body: JSON.stringify({"query": this.state.query}),
+            mode: "cors",
             headers: {
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*"
             }
         }).then((response) => {
             return response.json();

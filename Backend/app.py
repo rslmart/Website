@@ -43,20 +43,22 @@ def imageOptions():
     print(requestJson)
     queryResult = imagesCol.find(requestJson["query"])
     # Expensive, takes 7 secs with 1M records
-    beginDate = queryResult.sort([("date" , 1)]).limit(1)[0]['date']
-    endDate = queryResult.sort([("date" , -1)]).limit(1)[0]['date']
-    print(beginDate, endDate)
+    beginDate = "1997-06-20 09:31:00"
+    endDate = "2019-12-30 12:40:00"
+    if queryResult.count() < 100000:
+        beginDate = str(queryResult.sort([("date", 1)]).limit(1)[0]['date'])
+        endDate = str(queryResult.sort([("date", -1)]).limit(1)[0]['date'])
     options = {}
     arr = [(key, requestJson["query"]) for key in keys if key not in requestJson["keys"]]
-    with Pool(4) as p:
+    with Pool(8) as p:
         result = p.map(func, arr)
     for i in range(len(arr)):
         options[arr[i][0]] = result[i]
     return jsonify({
         'requestTime': requestTime,
         'options': options,
-        'beginDate': str(beginDate),
-        'endDate': str(endDate)
+        'beginDate': beginDate,
+        'endDate': endDate
     })
 
 @app.route('/images/query', methods=['POST'])
