@@ -10,11 +10,12 @@ CORS(app)
 myclient = pymongo.MongoClient("mongodb://localhost:27017/")
 mydb = myclient["mydatabase"]
 imagesCol = mydb["images"]
+imageOptionsCol = mydb["imageOptions"]
 ibtracsCol = mydb["ibtracs"]
 
 
 def func(item):
-    a = pymongo.MongoClient("mongodb://localhost:27017/")["mydatabase"]["images"].find(item[1])
+    a = pymongo.MongoClient("mongodb://localhost:27017/")["mydatabase"]["imageOptions"].find(item[1])
     return a.distinct(item[0])
 
 @app.route('/')
@@ -32,7 +33,7 @@ def imageAllOptions():
     keys = ['season', 'basin', 'storm_number', 'storm_agency', 'storm_name', 'type', 'sensor', 'resolution', 'satellite', 'satellite']
     options = {}
     for key in keys:
-        options[key] = imagesCol.distinct(key)
+        options[key] = imageOptionsCol.distinct(key)
     return jsonify({'options': options})
 
 @app.route('/images/options', methods=['POST'])
@@ -41,16 +42,12 @@ def imageOptions():
     keys = ['season', 'basin', 'storm_name', 'type', 'sensor', 'resolution', 'satellite', 'extension']
     requestJson = request.get_json()
     print(requestJson)
-    queryResult = imagesCol.find(requestJson["query"])
-    # Expensive, takes 7 secs with 1M records
-    beginDate = "1997-06-20 09:31:00"
-    endDate = "2019-12-30 12:40:00"
-    if queryResult.count() < 100000:
-        beginDate = str(queryResult.sort([("date", 1)]).limit(1)[0]['date'])
-        endDate = str(queryResult.sort([("date", -1)]).limit(1)[0]['date'])
+    queryResult = imageOptionsCol.find(requestJson["query"])
+    beginDate = str(queryResult.sort([("beginDate", 1)]).limit(1)[0]['beginDate'])
+    endDate = str(queryResult.sort([("endDate", -1)]).limit(1)[0]['endDate'])
     options = {}
     arr = [(key, requestJson["query"]) for key in keys if key not in requestJson["keys"]]
-    with Pool(8) as p:
+    with Pool(4) as p:
         result = p.map(func, arr)
     for i in range(len(arr)):
         options[arr[i][0]] = result[i]
@@ -58,7 +55,8 @@ def imageOptions():
         'requestTime': requestTime,
         'options': options,
         'beginDate': beginDate,
-        'endDate': endDate
+        'endDate': endDate,
+        'imageCount': queryResult.count()
     })
 
 @app.route('/images/query', methods=['POST'])
@@ -75,7 +73,7 @@ def imageQuery():
         count += 1
         if count > 2000:
              break
-    print(output)
+    print(output[0])
     return jsonify({'imageItems': output})
 
 

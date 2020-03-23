@@ -24,11 +24,11 @@ def combineCSVs():
                         print(row)
                     storm = row[2].split('.')
                     stormNumber = storm[0][:2]
-                    stormType = ''
+                    stormAgency = ''
                     if len(storm[1]) > 0:
-                        stormType = storm[0][2:]
+                        stormAgency = storm[0][2:]
                     stormName = storm[1]
-                    toWrite = row[0:2] + [stormNumber, stormType, stormName] + row[3:]
+                    toWrite = row[0:2] + [stormNumber, stormAgency, stormName] + row[3:]
                     imageUrl = filter(lambda x: x != 'none', row)
                     imageUrl = '/'.join(imageUrl)
                     imageUrl = 'https://www.nrlmry.navy.mil/tcdat/' + imageUrl

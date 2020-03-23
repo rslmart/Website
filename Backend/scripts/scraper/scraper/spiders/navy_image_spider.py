@@ -47,15 +47,15 @@ class NavySpider(scrapy.Spider):
     def parseType(self, response):
         soup = BeautifulSoup(response.text, 'html.parser')
         allAs = soup.find_all('a', href=True)
-        satelliteUrls = []
+        sensorUrls = []
         for a in allAs:
-            # Satellite
+            # Sensor
             if re.match(r'\w+/', a.text):
-                satelliteUrls.append(response.url + a.text)
-        for satelliteUrl in satelliteUrls:
-            yield scrapy.Request(url=satelliteUrl, callback=self.parseSatellite)
+                sensorUrls.append(response.url + a.text)
+        for sensorUrl in sensorUrls:
+            yield scrapy.Request(url=sensorUrl, callback=self.parseSensor)
 
-    def parseSatellite(self, response):
+    def parseSensor(self, response):
         soup = BeautifulSoup(response.text, 'html.parser')
         allAs = soup.find_all('a', href=True)
         resolutionUrls = []
@@ -90,7 +90,7 @@ class NavySpider(scrapy.Spider):
             "basin": fields[1],
             "storm": fields[2],
             "type": fields[3],
-            "satellite": fields[4]
+            "sensor": fields[4]
         }
         if len(fields) ==6:
             imageDict["resolution"] = "none"
