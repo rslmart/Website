@@ -7,6 +7,11 @@ import {
     Image,
     Placeholder
 } from 'semantic-ui-react';
+import {
+    DateInput,
+    TimeInput,
+    DateTimeInput
+} from 'semantic-ui-calendar-react';
 
 class ImagePage extends Component {
     // API_GATEWAY_ENDPOINT = "http://192.168.0.184:5000";
@@ -16,8 +21,8 @@ class ImagePage extends Component {
         'image_url', 'year', 'month', 'day', 'hour', 'minute', 'second', 'satellite', 'extension'];
 
     startingResponse = {
-        beginDate:"1997-06-20 09:31:00",
-        endDate: "2019-12-30 12:40:00",
+        beginDate:"1997-06-20 09:31",
+        endDate: "2019-12-30 12:40",
         options: {
             season:[1997,1998,1999,2000,2001,2002,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019],
             basin: ["ATL","CPAC","EPAC","IO","SHEM","WPAC"],
@@ -69,16 +74,16 @@ class ImagePage extends Component {
         imageIndex: 0,
         imageElements: [],
         imageElementsStatus: [],
-        earliestDate: new Date(),
-        latestDate: new Date(),
-        beginDate: new Date(),
-        endDate: new Date(),
+        startTime: "1997-06-20 09:31",
+        endTime: "2019-12-30 12:40",
+        beginDate: "1997-06-20 09:31",
+        endDate: "2019-12-30 12:40",
         selectedImage: (<div></div>),
         requestTime: 0
     };
 
     componentDidMount = async () => {
-        this.fetchImageCount({});
+        // this.fetchImageCount({});
         const response = this.startingResponse;
         await this.setState({
             allImageOptions: response.options,
@@ -86,12 +91,40 @@ class ImagePage extends Component {
             endDate: new Date(response.endDate)
         });
         this.generateOptions(response);
+        const query = {
+            "$and": [],
+            "startTime": this.state.startTime,
+            "endTime": this.state.endTime
+        };
+        this.fetchImageCount(query);
     };
 
-    inputChange = async (evt, {id , value}) => {
-        await this.setState(prevState => ({
-            selections: Object.assign(prevState.selections, { [id]: value })
-        }));
+    handleInputChange = async (evt, {name, id, value}) => {
+        console.log(name);
+        console.log(id);
+        console.log(value);
+        // not date change
+        let removing = true;
+        if (id) {
+            removing = this.state.selections[id].length > value.length;
+            await this.setState(prevState => ({
+                selections: Object.assign(prevState.selections, { [id]: value })
+            }));
+        }
+        // date change
+        else if (name) {
+            if (value) {
+                await this.setState({ [name]: value });
+            }
+            else {
+                if (name == "startTime") {
+                    await this.setState({ [name]: "1997-06-20 09:31" });
+                }
+                if (name == "endTime") {
+                    await this.setState({ [name]: "2019-12-30 12:40" });
+                }
+            }
+        }
         // TODO: If removing value requery for that key (ie don't include it in generateOptions)
         const queryList = Object.keys(this.state.selections).map(key => (
             {"$or": this.state.selections[key].map(val => ({ [key]:val }))}
@@ -99,14 +132,15 @@ class ImagePage extends Component {
 
         // TODO: Only get options for dropdowns to the right
         // TODO: Potentially maintain mapping (at least for seasons/storms?)
-        if (queryList.length > 0) {
-            const query = {"$and": queryList};
-            this.fetchImageCount(query);
-            this.setState({ query });
-            this.generateOptions(await this.fetchOptions(query, [id]));
-        } else {
-            this.fetchImageCount({});
-        }
+        const query = {
+            "$and": queryList,
+            "startTime": this.state.startTime,
+            "endTime": this.state.endTime
+        };
+        const keys = removing ? [] : [id];
+        this.setState({query});
+        this.fetchImageCount(query);
+        this.generateOptions(await this.fetchOptions(query, keys));
     };
 
     /*
@@ -127,14 +161,13 @@ class ImagePage extends Component {
             mode: "cors",
             headers: {
                 "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Origin": "*"
             }
-            }).then((response) => {
-                return response.json();
-            }).then((data) => {
-                console.log(data);
-                this.setState({ count: data.count});
-            });
+        }).then((response) => {
+            return response.json();
+        }).then((data) => {
+            this.setState({ count: data.count });
+        });
     };
 
     /**
@@ -240,19 +273,27 @@ class ImagePage extends Component {
                 });
                 Object.assign(imageOptions, {[key]: options});
             });
+            // deal with times
+            /*
+            let startTime = this.state.startTime;
+            let endTime = this.state.endTime;
+            if (new Date(response.beginDate) > new Date(startTime)){
+                startTime = response.beginDate;
+            }
+            if (new Date(response.endDate) < new Date(endTime)){
+                endTime = response.endDate;
+            }
+             */
             this.setState({
                 imageOptions,
-                earliestDate: new Date(response.beginDate),
-                latestDate: new Date(response.endDate)
+                beginDate: response.beginDate,
+                endDate: response.endDate,
+                startTime: response.beginDate,
+                endTime: response.endDate
             });
         } else {
             console.log(`Bad Request Resposne:${response.requestTime} State:${this.state.requestTime}`)
         }
-    };
-
-    handleDateChange = () => {
-        // TODO: add this to query
-        return;
     };
 
     render () {
@@ -269,7 +310,7 @@ class ImagePage extends Component {
                                 multiple
                                 search
                                 options={this.state.imageOptions.season}
-                                onChange={this.inputChange}
+                                onChange={this.handleInputChange}
                             />
                         </Form.Field>
                         <Form.Field>
@@ -281,7 +322,7 @@ class ImagePage extends Component {
                                 multiple
                                 search
                                 options={this.state.imageOptions.basin}
-                                onChange={this.inputChange}
+                                onChange={this.handleInputChange}
                             />
                         </Form.Field>
                         <Form.Field>
@@ -293,7 +334,7 @@ class ImagePage extends Component {
                                 multiple
                                 search
                                 options={this.state.imageOptions.storm_name}
-                                onChange={this.inputChange}
+                                onChange={this.handleInputChange}
                             />
                         </Form.Field>
                         <Form.Field>
@@ -305,7 +346,7 @@ class ImagePage extends Component {
                                 multiple
                                 search
                                 options={this.state.imageOptions.type}
-                                onChange={this.inputChange}
+                                onChange={this.handleInputChange}
                             />
                         </Form.Field>
                     </Form.Group>
@@ -319,7 +360,7 @@ class ImagePage extends Component {
                                 multiple
                                 search
                                 options={this.state.imageOptions.sensor}
-                                onChange={this.inputChange}
+                                onChange={this.handleInputChange}
                             />
                         </Form.Field>
                         <Form.Field>
@@ -331,7 +372,7 @@ class ImagePage extends Component {
                                 multiple
                                 search
                                 options={this.state.imageOptions.resolution}
-                                onChange={this.inputChange}
+                                onChange={this.handleInputChange}
                             />
                         </Form.Field>
                         <Form.Field>
@@ -343,7 +384,7 @@ class ImagePage extends Component {
                                 multiple
                                 search
                                 options={this.state.imageOptions.satellite}
-                                onChange={this.inputChange}
+                                onChange={this.handleInputChange}
                             />
                         </Form.Field>
                         <Form.Field>
@@ -355,7 +396,39 @@ class ImagePage extends Component {
                                 multiple
                                 search
                                 options={this.state.imageOptions.extension}
-                                onChange={this.inputChange}
+                                onChange={this.handleInputChange}
+                            />
+                        </Form.Field>
+                    </Form.Group>
+                    <Form.Group>
+                        <Form.Field>
+                            <label>Start Date</label>
+                            <DateTimeInput
+                              name="startTime"
+                              placeholder="Date Time"
+                              dateFormat="YYYY-MM-DD"
+                              clearable
+                              onClear={this.handleInputChange}
+                              minDate={this.state.beginDate}
+                              maxDate={this.state.endTime}
+                              value={this.state.startTime}
+                              iconPosition="left"
+                              onChange={this.handleInputChange}
+                            />
+                        </Form.Field>
+                        <Form.Field>
+                            <label>End Date</label>
+                            <DateTimeInput
+                              name="endTime"
+                              placeholder="Date Time"
+                              dateFormat="YYYY-MM-DD"
+                              clearable
+                              onClear={this.handleInputChange}
+                              minDate={this.state.startTime}
+                              maxDate={this.state.endDate}
+                              value={this.state.endTime}
+                              iconPosition="left"
+                              onChange={this.handleInputChange}
                             />
                         </Form.Field>
                     </Form.Group>

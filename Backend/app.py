@@ -3,6 +3,7 @@ import pymongo
 from flask_cors import CORS
 from multiprocessing import Pool
 import time
+import datetime
 
 app = Flask(__name__)
 CORS(app)
@@ -18,15 +19,22 @@ def func(item):
     a = pymongo.MongoClient("mongodb://localhost:27017/")["mydatabase"]["imageOptions"].find(item[1])
     return a.distinct(item[0])
 
+def parseQuery(query):
+    return {
+        "$and": query["$and"] +
+                [{"date": {"$gte": datetime.datetime.strptime(query["startTime"], "%Y-%m-%d %H:%M")}}] +
+                [{"date": {"$lte": datetime.datetime.strptime(query["endTime"], "%Y-%m-%d %H:%M")}}]
+    }
+
 @app.route('/')
 def hello_world():
     return 'Hello World!'
 
 @app.route('/images/imageCount', methods=['POST'])
 def imageCount():
-    query = request.get_json()
+    query = parseQuery(request.get_json())
     print(query)
-    return jsonify({'count': imagesCol.find(query).count()})
+    return jsonify({'count': imagesCol.count_documents(query)})
 
 @app.route('/images/allOptions', methods=['GET'])
 def imageAllOptions():
@@ -42,11 +50,23 @@ def imageOptions():
     keys = ['season', 'basin', 'storm_name', 'type', 'sensor', 'resolution', 'satellite', 'extension']
     requestJson = request.get_json()
     print(requestJson)
-    queryResult = imageOptionsCol.find(requestJson["query"])
-    beginDate = str(queryResult.sort([("beginDate", 1)]).limit(1)[0]['beginDate'])
-    endDate = str(queryResult.sort([("endDate", -1)]).limit(1)[0]['endDate'])
+    query = {
+        "$and": requestJson["query"]["$and"] +
+                [{"beginDate": {"$gte": datetime.datetime.strptime(requestJson["query"]["startTime"], "%Y-%m-%d %H:%M")}}] +
+                [{"endDate": {"$lte": datetime.datetime.strptime(requestJson["query"]["endTime"], "%Y-%m-%d %H:%M")}}]
+    }
+    print(query)
+    queryResult = imageOptionsCol.find(query)
+    try:
+        beginDate = queryResult.sort([("beginDate", 1)]).limit(1)[0]['beginDate'].strftime("%Y-%m-%d %H:%M")
+    except IndexError:
+        beginDate = requestJson["query"]["startTime"]
+    try:
+        endDate = queryResult.sort([("endDate", -1)]).limit(1)[0]['endDate'].strftime("%Y-%m-%d %H:%M")
+    except IndexError:
+        endDate = requestJson["query"]["endTime"]
     options = {}
-    arr = [(key, requestJson["query"]) for key in keys if key not in requestJson["keys"]]
+    arr = [(key, query) for key in keys if key not in requestJson["keys"]]
     with Pool(4) as p:
         result = p.map(func, arr)
     for i in range(len(arr)):
@@ -56,14 +76,14 @@ def imageOptions():
         'options': options,
         'beginDate': beginDate,
         'endDate': endDate,
-        'imageCount': queryResult.count()
+        'query': query
     })
 
 @app.route('/images/query', methods=['POST'])
 def imageQuery():
     requestJson = request.get_json()
     print(requestJson)
-    query = requestJson["query"]
+    query = parseQuery(requestJson["query"])
     output = []
     count = 0
     for s in imagesCol.find(query):
