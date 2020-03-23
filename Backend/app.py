@@ -17,7 +17,19 @@ ibtracsCol = mydb["ibtracs"]
 
 def func(item):
     a = pymongo.MongoClient("mongodb://localhost:27017/")["mydatabase"]["imageOptions"].find(item[1])
-    return a.distinct(item[0])
+    if item[0] != "satellite" and item[0] != "extension":
+        return a.distinct(item[0])
+    else:
+        key = ""
+        if item[0] == "satellite":
+            key = "satellites"
+        if item[0] == "extension":
+            key = "extensions"
+        resultSet = set()
+        for result in a:
+            for element in result[key]:
+                resultSet.add(element)
+        return list(resultSet)
 
 def parseQuery(query):
     return {
@@ -86,7 +98,7 @@ def imageQuery():
     query = parseQuery(requestJson["query"])
     output = []
     count = 0
-    for s in imagesCol.find(query):
+    for s in imagesCol.find(query).sort([("date", 1)]):
         del s['_id']
         s['date'] = str(s['date'])
         output.append(s)

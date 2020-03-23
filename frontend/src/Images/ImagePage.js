@@ -14,7 +14,7 @@ import {
 } from 'semantic-ui-calendar-react';
 
 class ImagePage extends Component {
-    // API_GATEWAY_ENDPOINT = "http://192.168.0.184:5000";
+    //API_GATEWAY_ENDPOINT = "http://192.168.0.184:5000";
     API_GATEWAY_ENDPOINT = "http://127.0.0.1:5000/";
 
     keys = ['season', 'basin', 'storm_number', 'storm_agency', 'storm_name', 'type', 'sensor', 'resolution',
