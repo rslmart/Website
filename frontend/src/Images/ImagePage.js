@@ -155,6 +155,7 @@ export const ImagePage = props => (
                 <DataViewer
                     imageItems={props.imageItems}
                     imageElementsStatus={props.imageElementsStatus}
+                    ibtracsInfo={props.ibtracsInfo}
                 />
              : ""}
         </Container>
@@ -183,7 +184,8 @@ class DataViewer extends Component {
                 : <Placeholder>
                     <Placeholder.Image />
                   </Placeholder>}
-                  <span>{this.props.imageItems[this.state.imageIndex].date}</span>
+                <span>Time: {this.props.imageItems[this.state.imageIndex].date}</span>
+                <span>Ibtracs Info: {this.props.ibtracsInfo[this.props.imageItems[this.state.imageIndex].ibtracs]}</span>
                 <Form.Input
                     fluid
                     label=''

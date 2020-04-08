@@ -71,7 +71,8 @@ class ImageHandler extends Component {
         beginDate: "1997-06-20 09:31",
         endDate: "2019-12-30 12:40",
         selectedImage: (<div></div>),
-        requestTime: 0
+        requestTime: 0,
+        ibtracsInfo: {}
     };
 
     componentDidMount = async () => {
@@ -247,6 +248,9 @@ class ImageHandler extends Component {
             return response.json();
         }).then((data) => {
             console.log(data);
+            const ibtracsInfo = {};
+            data.ibtracsItems.forEach(item => ibtracsInfo[item['_id']] = item);
+            this.setState({ ibtracsInfo })
         });
     };
 
@@ -323,6 +327,7 @@ class ImageHandler extends Component {
                     imageElements={this.state.imageElements}
                     imageElementsStatus={this.state.imageElementsStatus}
                     imageItems={this.state.imageItems}
+                    ibtracsInfo={this.state.ibtracsInfo}
                     handleInputChange={this.handleInputChange}
                     fetchQuery={this.fetchQuery}
                 />

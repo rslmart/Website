@@ -102,7 +102,6 @@ def imageQuery():
     output = []
     count = 0
     for s in imagesCol.find(query).sort([("date", 1)]):
-        del s['_id']
         s['date'] = str(s['date'])
         output.append(s)
         count += 1
@@ -173,7 +172,6 @@ def ibtracQuery():
     output = []
     count = 0
     for s in ibtracsCol.find(query).sort([("date", 1)]):
-        del s['_id']
         s['date'] = str(s['date'])
         output.append(s)
         count += 1
