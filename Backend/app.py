@@ -98,7 +98,7 @@ def imageQuery():
     query = parseQuery(requestJson["query"])
     output = []
     count = 0
-    for s in imagesCol.find(query).sort([("date", 1)]):
+    for s in imagesCol.find(query).sort([("date", 1)]) :
         del s['_id']
         s['date'] = str(s['date'])
         output.append(s)

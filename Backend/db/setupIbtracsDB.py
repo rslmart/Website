@@ -1,11 +1,7 @@
 import csv
 import os
 import pymongo
-
-myclient = pymongo.MongoClient("mongodb://localhost:27017/")
-mydb = myclient["mydatabase"]
-mycol = mydb["ibtracs"]
-filePath = os.path.join('..', 'Data', 'ibtracs', 'ibtracs.ALL.csv')
+import datetime
 
 def isInt(s):
     try:
@@ -31,33 +27,46 @@ def parseRow(header, row):
         else:
             if row[i].strip():
                 rowDict[header[i]] = row[i]
+    rowDict['_id'] = rowDict['sid'] + rowDict['iso_time'].replace(':','').replace(' ','').replace(':','')
+    rowDict['date'] = datetime.datetime.strptime(rowDict['iso_time'], "%Y-%m-%d %H:%M:%S")
     return rowDict
 
-print('Counting')
-totalSize = sum(1 for line in open(filePath))
+if __name__ == '__main__':
+    myclient = pymongo.MongoClient("mongodb://localhost:27017/")
+    mydb = myclient["mydatabase"]
+    mycol = mydb["ibtracs"]
+    mycol.drop()
+    filePath = os.path.join('..', 'Data', 'ibtracs', 'ibtracs.ALL.csv')
 
-print('Inserting %d records' % totalSize)
-with open(filePath, 'r') as csvfile:
-    reader = csv.reader(csvfile)
-    header = next(reader)  # skip header
-    for i in range(len(header)):
-        header[i] = header[i].lower()
-    units = next(reader)
+    print('Counting')
+    totalSize = sum(1 for line in open(filePath))
 
-    batch_size = 10000
-    batch = []
-    count = 0
-    totalCount = 0
+    print('Inserting %d records' % totalSize)
+    with open(filePath, 'r') as csvfile:
+        reader = csv.reader(csvfile)
+        header = next(reader)  # skip header
+        for i in range(len(header)):
+            header[i] = header[i].lower()
+        units = next(reader)
 
-    for row in reader:
-        if count >= batch_size:
+        batch_size = 10000
+        batch = []
+        count = 0
+        totalCount = 0
+
+        for row in reader:
+            if int(row[1]) > 1996:
+                if count >= batch_size:
+                    x = mycol.insert_many(batch)
+                    totalCount += count
+                    print('Inserted {:d} ({:.2f} %)'.format(totalCount, (totalCount / totalSize) * 100))
+                    batch = []
+                    count = 0
+                parsed = parseRow(header, row)
+                batch.append(parsed)
+                count += 1
+            else:
+                print(row[1])
+        if batch:
             x = mycol.insert_many(batch)
-            totalCount += count
-            print('Inserted {:d} ({:.2f} %)'.format(totalCount, (totalCount / totalSize) * 100))
-            batch = []
-            count = 0
-        batch.append(parseRow(header, row))
-        count += 1
-    if batch:
-        x = mycol.insert_many(batch)
-        pass
+            pass

@@ -3,11 +3,7 @@ import datetime
 import os
 import pymongo
 import re
-
-myclient = pymongo.MongoClient("mongodb://localhost:27017/")
-mydb = myclient["mydatabase"]
-mycol = mydb["images"]
-mycol.drop()
+import pickle
 
 ibtracs2imagesBasin = {'EP': 'EPAC',
                        'NA': 'ATL',
@@ -25,7 +21,7 @@ def isInt(s):
         return False
 
 
-def parseRow(row):
+def parseRow(row, stormMapping):
     keys = ['season', 'basin', 'storm_number', 'storm_agency', 'storm_name', 'type', 'sensor', 'resolution', 'image',
             'image_url']
     rowDict = {}
@@ -85,42 +81,54 @@ def parseRow(row):
             if re.fullmatch('[\d]{8}$', image[2]):
                 rowDict['satellite'] = image[4]
         rowDict['extension'] = image[-1]
+        if rowDict['storm_name'] != 'NONAME' and rowDict['storm_name'] in stormMapping[rowDict['season']][rowDict['basin']]:
+            rowDict['sid'] = stormMapping[rowDict['season']][rowDict['basin']][rowDict['storm_name']]
         return rowDict
     except Exception as e:
         print(e)
         print(rowDict)
+        print(stormMapping[rowDict['season']])
         print(row)
     # print(rowDict)
 
+if __name__ == '__main__':
+    myclient = pymongo.MongoClient("mongodb://localhost:27017/")
+    mydb = myclient["mydatabase"]
+    mycol = mydb["images"]
+    mycol.drop()
 
-print('Counting')
-totalSize = sum(1 for line in open(os.path.join('..', 'Data', 'navy', 'tcdat.csv')))
+    stormMapping = None
+    with open('stormMapping.p', 'rb') as mappingFile:
+        stormMapping = pickle.load(mappingFile)
 
-print('Inserting %d records' % totalSize)
-with open(os.path.join('..', 'Data', 'navy', 'tcdat.csv'), 'r') as csvfile:
-    reader = csv.reader(csvfile)
-    header = next(reader)  # skip header
+    print('Counting')
+    totalSize = sum(1 for line in open(os.path.join('..', 'Data', 'navy', 'tcdat.csv')))
 
-    batch_size = 10000
-    batch = []
-    count = 0
-    totalCount = 0
+    print('Inserting %d records' % totalSize)
+    with open(os.path.join('..', 'Data', 'navy', 'tcdat.csv'), 'r') as csvfile:
+        reader = csv.reader(csvfile)
+        header = next(reader)  # skip header
 
-    withDate = 0
+        batch_size = 10000
+        batch = []
+        count = 0
+        totalCount = 0
 
-    for row in reader:
-        if count >= batch_size:
+        withDate = 0
+
+        for row in reader:
+            if count >= batch_size:
+                mycol.insert_many(batch)
+                totalCount += count
+                print('Inserted {:d} ({:.2f} %)'.format(totalCount, (totalCount / totalSize) * 100))
+                batch = []
+                count = 0
+            rowDict = parseRow(row, stormMapping)
+            if 'date' in rowDict:
+                batch.append(rowDict)
+                count += 1
+        if batch:
             mycol.insert_many(batch)
-            totalCount += count
-            print('Inserted {:d} ({:.2f} %)'.format(totalCount, (totalCount / totalSize) * 100))
-            batch = []
-            count = 0
-        rowDict = parseRow(row)
-        if 'date' in rowDict:
-            batch.append(rowDict)
-            count += 1
-    if batch:
-        mycol.insert_many(batch)
 
-    print('Inserted {:d} ({:.2f} %)'.format(totalCount, (totalCount / totalSize) * 100))
+        print('Inserted {:d} ({:.2f} %)'.format(totalCount, (totalCount / totalSize) * 100))
 
