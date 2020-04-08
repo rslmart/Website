@@ -25,12 +25,12 @@ def main(season):
                 print(season, basin, storm, mapping[season][basin][storm], len(images), len(ibtracs))
                 pointer = 0
                 for image in images:
-                    matched = False
-                    while not matched:
-                        try:
-                            if ((pointer + 1 == len(ibtracs) - 1 and image['date'] > ibtracs[pointer + 1]['date']) or
-                                    (pointer == 0 and image['date'] < ibtracs[pointer]['date']) or
-                                    (ibtracs[pointer]['date'] < image['date'] < ibtracs[pointer + 1]['date'])):
+                    try:
+                        matched = False
+                        while not matched:
+                            if ((pointer + 1 == len(ibtracs) - 1 and image['date'] >= ibtracs[pointer + 1]['date']) or
+                                    (pointer == 0 and image['date'] <= ibtracs[pointer]['date']) or
+                                    (ibtracs[pointer]['date'] <= image['date'] <= ibtracs[pointer + 1]['date'])):
                                 firstDiff = abs(ibtracs[pointer]['date'] - image['date'])
                                 secondDiff = abs(ibtracs[pointer + 1]['date'] - image['date'])
                                 correctPointer = 0
@@ -46,11 +46,12 @@ def main(season):
                                 matched = True
                             else:
                                 pointer += 1
-                        except Exception:
-                            print(pointer, len(ibtracs))
-                            print(image['date'])
-                            print([a['date'] for a in ibtracs[pointer - 1:]])
-                            print(traceback.format_exc())
+                    except Exception:
+                        print("Pointer: ", pointer, "Length: ", len(ibtracs))
+                        print("Image Date: ", image['date'])
+                        print("First Ibtracs Date: ", ibtracs[0]['date'])
+                        print("Ibtracs Dates: ", [str(a['date']) for a in ibtracs[pointer - 1:]])
+                        print(traceback.format_exc())
 
                     imagesDB.replace_one({'_id': image['_id']}, image)
                 for ibtrac in ibtracs:
