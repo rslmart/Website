@@ -14,6 +14,9 @@ imagesCol = mydb["images"]
 imageOptionsCol = mydb["imageOptions"]
 ibtracsCol = mydb["ibtracs"]
 
+ibtracsKeys = ['_id', 'sid', 'season', 'number', 'basin', 'subbasin', 'name', 'iso_time', 'nature', 'lat', 'lon',
+               'wmo_wind', 'wmo_pres', 'wmo_agency', 'track_type', 'dist2land', 'landfall', 'iflag', 'storm_speed',
+               'storm_dir', 'date', 'imageIds']
 
 def func(item):
     a = pymongo.MongoClient("mongodb://localhost:27017/")["mydatabase"]["imageOptions"].find(item[1])
@@ -98,7 +101,7 @@ def imageQuery():
     query = parseQuery(requestJson["query"])
     output = []
     count = 0
-    for s in imagesCol.find(query).sort([("date", 1)]) :
+    for s in imagesCol.find(query).sort([("date", 1)]):
         del s['_id']
         s['date'] = str(s['date'])
         output.append(s)
@@ -107,6 +110,77 @@ def imageQuery():
              break
     print(output[0])
     return jsonify({'imageItems': output})
+
+@app.route('/ibtracs/ibtracCount', methods=['POST'])
+def ibtracCount():
+    query = parseQuery(request.get_json())
+    print(query)
+    return jsonify({'count': ibtracsCol.count_documents(query)})
+
+@app.route('/ibtracs/allOptions', methods=['GET'])
+def ibtracAllOptions():
+    keys = ['season', 'number', 'basin', 'subbasin', 'name', 'nature', 'wmo_agency', 'track_type', 'iflag']
+    maxMinKeys = ['iso_time', 'lat', 'lon', 'wmo_wind', 'wmo_pres', 'dist2land', 'storm_speed', 'storm_dir', 'date',
+                  'landfall']
+    options = {}
+    for key in keys:
+        print(key)
+        options[key] = ibtracsCol.distinct(key)
+    for key in maxMinKeys:
+        print(key)
+        options[key] = {}
+        options[key]['min'] = ibtracsCol.find_one({key: {"$exists": True}}, sort=[(key, 1)])[key]
+        options[key]['max'] = ibtracsCol.find_one({key: {"$exists": True}}, sort=[(key, -1)])[key]
+    return jsonify({'options': options})
+
+@app.route('/ibtracs/options', methods=['POST'])
+def ibtracOptions():
+    requestTime = time.time()
+    keys = ['season', 'number', 'basin', 'subbasin', 'name', 'nature', 'wmo_agency', 'track_type', 'iflag']
+    maxMinKeys = ['iso_time', 'lat', 'lon', 'wmo_wind', 'wmo_pres', 'dist2land', 'storm_speed', 'storm_dir', 'date',
+                  'landfall']
+    requestJson = request.get_json()
+    print(requestJson)
+    query = {
+        "$and": requestJson["query"]["$and"] +
+                [{"date": {"$gte": datetime.datetime.strptime(requestJson["query"]["startTime"], "%Y-%m-%d %H:%M")}}] +
+                [{"date": {"$lte": datetime.datetime.strptime(requestJson["query"]["endTime"], "%Y-%m-%d %H:%M")}}]
+    }
+    print(query)
+    queryResult = ibtracsCol.find(query)
+    options = {}
+    options = {}
+    for key in keys:
+        if key not in requestJson["keys"]:
+            print(key)
+            options[key] = ibtracsCol.distinct(key)
+    for key in maxMinKeys:
+        print(key)
+        options[key] = {}
+        options[key]['min'] = ibtracsCol.find_one({key: {"$exists": True}}, sort=[(key, 1)])[key]
+        options[key]['max'] = ibtracsCol.find_one({key: {"$exists": True}}, sort=[(key, -1)])[key]
+    return jsonify({
+        'requestTime': requestTime,
+        'options': options,
+        'query': query
+    })
+
+@app.route('/ibtracs/query', methods=['POST'])
+def ibtracQuery():
+    requestJson = request.get_json()
+    print(requestJson)
+    query = parseQuery(requestJson["query"])
+    output = []
+    count = 0
+    for s in ibtracsCol.find(query).sort([("date", 1)]):
+        del s['_id']
+        s['date'] = str(s['date'])
+        output.append(s)
+        count += 1
+        if count > 2000:
+             break
+    print(output[0])
+    return jsonify({'ibtracsItems': output})
 
 
 if __name__ == '__main__':
