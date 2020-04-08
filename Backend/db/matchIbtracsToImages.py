@@ -19,32 +19,39 @@ def main(season):
         for storm in mapping[season][basin]:
             id = mapping[season][basin][storm]
             if id != '':
-                print(season, basin, storm, mapping[season][basin][storm])
                 images = list(imagesDB.find(
                     {'$and': [{'season': season}, {'basin': basin}, {'storm_name': storm}]}).sort('date'))
                 ibtracs = list(ibtracsDB.find({'sid': id}).sort('date'))
+                print(season, basin, storm, mapping[season][basin][storm], len(images), len(ibtracs))
                 pointer = 0
                 for image in images:
                     matched = False
                     while not matched:
-                        if ((pointer + 1 == len(ibtracs) - 1 and image['date'] > ibtracs[pointer + 1]['date']) or
-                                (pointer == 0 and image['date'] < ibtracs[pointer]['date']) or
-                                (ibtracs[pointer]['date'] < image['date'] < ibtracs[pointer + 1]['date'])):
-                            firstDiff = abs(ibtracs[pointer]['date'] - image['date'])
-                            secondDiff = abs(ibtracs[pointer + 1]['date'] - image['date'])
-                            correctPointer = 0
-                            if firstDiff <= secondDiff:
-                                correctPointer = pointer
+                        try:
+                            if ((pointer + 1 == len(ibtracs) - 1 and image['date'] > ibtracs[pointer + 1]['date']) or
+                                    (pointer == 0 and image['date'] < ibtracs[pointer]['date']) or
+                                    (ibtracs[pointer]['date'] < image['date'] < ibtracs[pointer + 1]['date'])):
+                                firstDiff = abs(ibtracs[pointer]['date'] - image['date'])
+                                secondDiff = abs(ibtracs[pointer + 1]['date'] - image['date'])
+                                correctPointer = 0
+                                if firstDiff <= secondDiff:
+                                    correctPointer = pointer
+                                else:
+                                    correctPointer = pointer + 1
+                                image['ibtracs'] = ibtracs[correctPointer]['_id']
+                                if 'imageIds' in ibtracs[correctPointer]:
+                                    ibtracs[correctPointer]['imageIds'].append(image['_id'])
+                                else:
+                                    ibtracs[correctPointer]['imageIds'] = [image['_id']]
+                                matched = True
                             else:
-                                correctPointer = pointer + 1
-                            image['ibtracs'] = ibtracs[correctPointer]['_id']
-                            if 'imageIds' in ibtracs[correctPointer]:
-                                ibtracs[correctPointer]['imageIds'].append(image['_id'])
-                            else:
-                                ibtracs[correctPointer]['imageIds'] = [image['_id']]
-                            matched = True
-                        else:
-                            pointer += 1
+                                pointer += 1
+                        except Exception:
+                            print(pointer, len(ibtracs))
+                            print(image['date'])
+                            print([a['date'] for a in ibtracs[pointer - 1:]])
+                            print(traceback.format_exc())
+
                     imagesDB.replace_one({'_id': image['_id']}, image)
                 for ibtrac in ibtracs:
                     if 'imageIds' in ibtrac:
