@@ -27,27 +27,21 @@ def main(season):
                 for image in images:
                     matched = False
                     while not matched:
-                        if ((ibtracs[pointer]['date'] < image['date'] < ibtracs[pointer + 1]['date']) or
-                                (pointer + 2 == len(ibtracs) and image['date'] < ibtracs[pointer]['date']) or
-                                (pointer == 0 and image['date'] > ibtracs[pointer]['date'])):
-                            try:
-                                firstDiff = abs(ibtracs[pointer]['date'] - image['date'])
-                                secondDiff = abs(ibtracs[pointer + 1]['date'] - image['date'])
-                                correctPointer = 0
-                                if firstDiff <= secondDiff:
-                                    correctPointer = pointer
-                                else:
-                                    correctPointer = pointer + 1
-                                image['ibtracs'] = ibtracs[correctPointer]['_id']
-                                if 'imageIds' in ibtracs[correctPointer]:
-                                    ibtracs[correctPointer]['imageIds'].append(image['_id'])
-                                else:
-                                    ibtracs[correctPointer]['imageIds'] = [image['_id']]
-                            except Exception as e:
-                                print(correctPointer, pointer, len(ibtracs))
-                                print(traceback.format_exc())
-                                print(ibtracs[pointer:])
-                                exit()
+                        if ((pointer + 1 == len(ibtracs) - 1 and image['date'] > ibtracs[pointer + 1]['date']) or
+                                (pointer == 0 and image['date'] < ibtracs[pointer]['date']) or
+                                (ibtracs[pointer]['date'] < image['date'] < ibtracs[pointer + 1]['date'])):
+                            firstDiff = abs(ibtracs[pointer]['date'] - image['date'])
+                            secondDiff = abs(ibtracs[pointer + 1]['date'] - image['date'])
+                            correctPointer = 0
+                            if firstDiff <= secondDiff:
+                                correctPointer = pointer
+                            else:
+                                correctPointer = pointer + 1
+                            image['ibtracs'] = ibtracs[correctPointer]['_id']
+                            if 'imageIds' in ibtracs[correctPointer]:
+                                ibtracs[correctPointer]['imageIds'].append(image['_id'])
+                            else:
+                                ibtracs[correctPointer]['imageIds'] = [image['_id']]
                             matched = True
                         else:
                             pointer += 1
