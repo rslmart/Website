@@ -27,8 +27,8 @@ def main(season):
                     matched = False
                     while not matched:
                         if ((ibtracs[pointer]['date'] < image['date'] < ibtracs[pointer + 1]['date']) or
-                                (pointer + 1 == ibtracs.count() and image['date'] < ibtracs[pointer]['date']) or
-                                (pointer == 0 and image['date'] > ibtracs[pointer])):
+                                (pointer + 1 == len(ibtracs) and image['date'] < ibtracs[pointer]['date']) or
+                                (pointer == 0 and image['date'] > ibtracs[pointer]['date'])):
                             firstDiff = abs(ibtracs[pointer]['date'] - image['date'])
                             secondDiff = abs(ibtracs[pointer + 1]['date'] - image['date'])
                             correctPointer = 0
@@ -46,6 +46,7 @@ def main(season):
                             pointer += 1
                     imagesDB.replace_one({'_id': image['_id']}, image)
                 for ibtrac in ibtracs:
+                    ibtrac['imageIds'] = list(set(ibtrac['imageIds']))
                     ibtracsDB.replace_one({'_id': ibtrac['_id']}, ibtrac)
 
 if __name__ == '__main__':
