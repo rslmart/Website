@@ -5,6 +5,7 @@ import re
 import os
 import pickle
 from multiprocessing import Pool
+import traceback
 
 with open('stormMapping.p', 'rb') as file:
     mapping = pickle.load(file)
@@ -43,8 +44,8 @@ def main(season):
                                 else:
                                     ibtracs[correctPointer]['imageIds'] = [image['_id']]
                             except Exception as e:
-                                print(e)
                                 print(correctPointer, pointer, len(ibtracs))
+                                print(traceback.format_exc())
                                 print(ibtracs[pointer:])
                                 exit()
                             matched = True
