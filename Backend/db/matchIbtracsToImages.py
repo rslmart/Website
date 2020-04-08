@@ -38,9 +38,9 @@ def main(season):
                                     correctPointer = pointer
                                 else:
                                     correctPointer = pointer + 1
-                                images['ibtracs'] = ibtracs[correctPointer]['_id']
+                                image['ibtracs'] = ibtracs[correctPointer]['_id']
                                 if 'imageIds' in ibtracs[correctPointer]:
-                                    ibtracs[correctPointer]['imageIds'].push(image['_id'])
+                                    ibtracs[correctPointer]['imageIds'].append(image['_id'])
                                 else:
                                     ibtracs[correctPointer]['imageIds'] = [image['_id']]
                             except Exception as e:
@@ -53,8 +53,9 @@ def main(season):
                             pointer += 1
                     imagesDB.replace_one({'_id': image['_id']}, image)
                 for ibtrac in ibtracs:
-                    ibtrac['imageIds'] = list(set(ibtrac['imageIds']))
-                    ibtracsDB.replace_one({'_id': ibtrac['_id']}, ibtrac)
+                    if 'imageIds' in ibtrac:
+                        ibtrac['imageIds'] = list(set(ibtrac['imageIds']))
+                        ibtracsDB.replace_one({'_id': ibtrac['_id']}, ibtrac)
 
 if __name__ == '__main__':
     with Pool(4) as p:
