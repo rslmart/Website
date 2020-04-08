@@ -6,8 +6,8 @@ import {ImagePage} from './ImagePage';
 import {MenuHeader} from "../Common/CommonComponents";
 
 class ImageHandler extends Component {
-    //API_GATEWAY_ENDPOINT = "http://192.168.0.184:5000";
-    API_GATEWAY_ENDPOINT = "http://127.0.0.1:5000/";
+    API_GATEWAY_ENDPOINT = "http://192.168.0.184:5000";
+    // API_GATEWAY_ENDPOINT = "http://127.0.0.1:5000/";
 
     keys = ['season', 'basin', 'storm_number', 'storm_agency', 'storm_name', 'type', 'sensor', 'resolution',
         'image_url', 'year', 'month', 'day', 'hour', 'minute', 'second', 'satellite', 'extension'];
@@ -208,6 +208,7 @@ class ImageHandler extends Component {
             console.log(data);
             this.setState({ imageItems: data.imageItems, imageIndex: 0 });
             this.fetchImages(data.imageItems);
+            this.fetchIbtracs([...new Set(data.imageItems.map(item => item['ibtracs']))]);
         });
     };
 
@@ -230,6 +231,23 @@ class ImageHandler extends Component {
             />);
         });
         this.setState({ imageElements });
+    };
+
+    fetchIbtracs = async (ibtracsIds) => {
+        const ibtracQuery = {"_id" : {"$in" : ibtracsIds}};
+        fetch(`${this.API_GATEWAY_ENDPOINT}/ibtracs/query`, {
+            method: "POST",
+            body: JSON.stringify({"query": ibtracQuery}),
+            mode: "cors",
+            headers: {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*"
+            }
+        }).then((response) => {
+            return response.json();
+        }).then((data) => {
+            console.log(data);
+        });
     };
 
     generateOptions = async (response) => {
@@ -292,7 +310,7 @@ class ImageHandler extends Component {
         return (
             <div>
                 <MenuHeader
-                    menuItems={[]}
+                    menuItems={[{label: "Ibtracs", path: "/ibtracs"}]}
                 />
                 <ImagePage
                     imageOptions={this.state.imageOptions}

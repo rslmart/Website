@@ -169,7 +169,7 @@ def ibtracOptions():
 def ibtracQuery():
     requestJson = request.get_json()
     print(requestJson)
-    query = parseQuery(requestJson["query"])
+    query = requestJson["query"]
     output = []
     count = 0
     for s in ibtracsCol.find(query).sort([("date", 1)]):

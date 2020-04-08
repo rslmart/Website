@@ -7,8 +7,9 @@ import {
 import {MenuHeader} from "./Common/CommonComponents";
 
 const menuItems = [
-    {label: "Images", path: "/images"}
-    ];
+    {label: "Images", path: "/images"},
+    {label: "Ibtracs", path: "/ibtracs"}
+];
 
 const HomepageContent = () => (
     <Container text>
