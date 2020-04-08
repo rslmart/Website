@@ -4,6 +4,7 @@ import os
 import pymongo
 import re
 import pickle
+import json
 
 ibtracs2imagesBasin = {'EP': 'EPAC',
                        'NA': 'ATL',
@@ -83,6 +84,7 @@ def parseRow(row, stormMapping):
         rowDict['extension'] = image[-1]
         if rowDict['storm_name'] != 'NONAME' and rowDict['storm_name'] in stormMapping[rowDict['season']][rowDict['basin']]:
             rowDict['sid'] = stormMapping[rowDict['season']][rowDict['basin']][rowDict['storm_name']]
+        rowDict['_id'] = hash(json.dumps(rowDict, sort_keys=True, default=lambda o: f"<<non-serializable: {type(o).__qualname__}>>"))
         return rowDict
     except Exception as e:
         print(e)
