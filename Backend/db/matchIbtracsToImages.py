@@ -27,7 +27,7 @@ def main(season):
                     matched = False
                     while not matched:
                         if ((ibtracs[pointer]['date'] < image['date'] < ibtracs[pointer + 1]['date']) or
-                                (pointer + 1 == len(ibtracs) and image['date'] < ibtracs[pointer]['date']) or
+                                (pointer + 2 == len(ibtracs) and image['date'] < ibtracs[pointer]['date']) or
                                 (pointer == 0 and image['date'] > ibtracs[pointer]['date'])):
                             try:
                                 firstDiff = abs(ibtracs[pointer]['date'] - image['date'])
@@ -38,14 +38,15 @@ def main(season):
                                 else:
                                     correctPointer = pointer + 1
                                 images['ibtracs'] = ibtracs[correctPointer]['_id']
-                                if 'imageIds' in ibtracs[pointer]:
+                                if 'imageIds' in ibtracs[correctPointer]:
                                     ibtracs[correctPointer]['imageIds'].push(image['_id'])
                                 else:
                                     ibtracs[correctPointer]['imageIds'] = [image['_id']]
                             except Exception as e:
                                 print(e)
-                                print(pointer, len(ibtracs))
+                                print(correctPointer, pointer, len(ibtracs))
                                 print(ibtracs[pointer:])
+                                exit()
                             matched = True
                         else:
                             pointer += 1
