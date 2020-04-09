@@ -30,6 +30,7 @@ class ImageHandler extends Component {
 
     state = {
         loadingOptions: false,
+        loadingImages: false,
         selections: {
             season: [],
             basin: [],
@@ -195,7 +196,9 @@ class ImageHandler extends Component {
      * @returns {Promise<void>}
      */
     fetchQuery = async () => {
-        fetch(`${this.API_GATEWAY_ENDPOINT}/images/query`, {
+        let data = {};
+        this.setState({loadingImages: true, imageIndex: 0, imageItems: []});
+        await fetch(`${this.API_GATEWAY_ENDPOINT}/images/query`, {
             method: "POST",
             body: JSON.stringify({"query": this.state.query}),
             mode: "cors",
@@ -205,12 +208,15 @@ class ImageHandler extends Component {
             }
         }).then((response) => {
             return response.json();
-        }).then((data) => {
-            console.log(data);
-            this.setState({ imageItems: data.imageItems, imageIndex: 0 });
-            this.fetchImages(data.imageItems);
-            this.fetchIbtracs([...new Set(data.imageItems.map(item => item['ibtracs']))]);
+        }).then((responseJson) => {
+            console.log(responseJson);
+            data = responseJson;
         });
+        await Promise.all([
+            this.fetchImages(data.imageItems),
+            this.fetchIbtracs([...new Set(data.imageItems.map(item => item['ibtracs']))])
+        ]);
+        this.setState({ imageItems: data.imageItems, imageIndex: 0, loadingImages: false });
     };
 
     fetchImages = async (imageItems) => {
@@ -324,6 +330,7 @@ class ImageHandler extends Component {
                     endTime={this.state.endTime}
                     count={this.state.count}
                     query={this.state.query}
+                    loadingImages={this.state.loadingImages}
                     imageElements={this.state.imageElements}
                     imageElementsStatus={this.state.imageElementsStatus}
                     imageItems={this.state.imageItems}

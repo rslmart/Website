@@ -39,6 +39,7 @@ def main(season):
                                 else:
                                     correctPointer = pointer + 1
                                 image['ibtracs'] = ibtracs[correctPointer]['_id']
+                                # TODO: Only add image if it is within 30 minutes of the ibtracs point
                                 if 'imageIds' in ibtracs[correctPointer]:
                                     ibtracs[correctPointer]['imageIds'].append(image['_id'])
                                 else:

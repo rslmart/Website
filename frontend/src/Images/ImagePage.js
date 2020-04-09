@@ -1,6 +1,7 @@
-import {Container, Form, Image, Placeholder} from "semantic-ui-react";
+import {Container, Form, Image, Placeholder, Statistic} from "semantic-ui-react";
 import {DateTimeInput} from "semantic-ui-calendar-react";
 import React, {Component} from "react";
+import Utils from "../Common/Utils";
 
 export const ImagePage = props => (
     <Container style={{ marginTop: '7em' }}>
@@ -151,7 +152,7 @@ export const ImagePage = props => (
         </Form>
         <Container>
             {props.imageElements}
-            {props.imageElements.length > 0 ?
+            {!props.loadingImages && props.imageElements.length > 0 ?
                 <DataViewer
                     imageItems={props.imageItems}
                     imageElementsStatus={props.imageElementsStatus}
@@ -174,6 +175,7 @@ class DataViewer extends Component {
     };
 
     render() {
+        const ibtracData = this.props.ibtracsInfo[this.props.imageItems[this.state.imageIndex].ibtracs];
         return (
             <div>
                 {this.props.imageElementsStatus[this.state.imageIndex] ?
@@ -184,8 +186,12 @@ class DataViewer extends Component {
                 : <Placeholder>
                     <Placeholder.Image />
                   </Placeholder>}
-                <span>Time: {this.props.imageItems[this.state.imageIndex].date}</span>
-                <span>Ibtracs Info: {this.props.ibtracsInfo[this.props.imageItems[this.state.imageIndex].ibtracs]}</span>
+                  {this.props.ibtracsInfo[this.props.imageItems[this.state.imageIndex].ibtracs] ?
+                      Utils.generateIbtracsStatisticItems(ibtracData) :
+                      <Statistic.Group>
+                          <Statistic label='Time' value={this.props.imageItems[this.state.imageIndex].date} />
+                      </Statistic.Group>
+                  }
                 <Form.Input
                     fluid
                     label=''
