@@ -1,8 +1,9 @@
 import {Statistic} from "semantic-ui-react";
 import React, {Component} from "react";
 
+export default class Utils {
 
-const IBTRACS_KEYS = {"sid":"","season":"Year","number":" ","basin":" ","subbasin":" ","name":" ","iso_time":" ",
+    static IBTRACS_KEYS = {"sid":"","season":"Year","number":" ","basin":" ","subbasin":" ","name":" ","iso_time":" ",
         "nature":" ","lat":"° N","lon":"° E","wmo_wind":"kts","wmo_pres":"mb","wmo_agency":" ",
         "track_type":" ","dist2land":"km","landfall":"km","iflag":" ","usa_agency":" ","usa_atcf_id":" ",
         "usa_lat":"degrees_north","usa_lon":"degrees_east","usa_record":" ","usa_status":" ","usa_wind":"kts",
@@ -38,8 +39,6 @@ const IBTRACS_KEYS = {"sid":"","season":"Year","number":" ","basin":" ","subbasi
         "reunion_gust_per":"second","usa_seahgt":"ft","usa_searad_ne":"nmile","usa_searad_se":"nmile",
         "usa_searad_sw":"nmile","usa_searad_nw":"nmile","storm_speed":"kts","storm_dir":"°"};
 
-export default class Utils {
-
     /*
     TODO:
      Take in list of all possible variable keys (second group) so they are always evenly spaced
@@ -60,7 +59,7 @@ export default class Utils {
             firstItems.push({
                 key: foundKey,
                 label: firstGroupLabels[i],
-                value: foundKey ? `${foundValue} ${IBTRACS_KEYS[foundKey]}` : "-",
+                value: foundKey ? `${foundValue} ${Utils.IBTRACS_KEYS[foundKey]}` : "-",
                 text: true
             })
         });
@@ -71,7 +70,7 @@ export default class Utils {
                 secondItems.push({
                     key: key,
                     label: key,
-                    value: `${ibtracObject[key]} ${IBTRACS_KEYS[key]}`,
+                    value: `${ibtracObject[key]} ${Utils.IBTRACS_KEYS[key]}`,
                     text: true
                 })
             }
