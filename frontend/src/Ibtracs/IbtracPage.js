@@ -39,7 +39,7 @@ export const IbtracPage = props => (
                         <label>Subbasin</label>
                         <Form.Dropdown
                             fluid
-                            id="basin"
+                            id="subbasin"
                             placeholder='ATL'
                             multiple
                             search
@@ -55,7 +55,7 @@ export const IbtracPage = props => (
                             placeholder="Isabel"
                             multiple
                             search
-                            options={props.ibtracOptions.storm_name}
+                            options={props.ibtracOptions.name}
                             onChange={props.handleInputChange}
                         />
                     </Form.Field>

@@ -4,6 +4,9 @@ from flask_cors import CORS
 from multiprocessing import Pool
 import time
 import datetime
+import traceback
+
+# TODO: Potentially save queries (cursors?) per user in memory (save significant time on searches with addiontal fields
 
 app = Flask(__name__)
 CORS(app)
@@ -134,29 +137,40 @@ def ibtracAllOptions():
 
 @app.route('/ibtracs/options', methods=['POST'])
 def ibtracOptions():
-    requestTime = time.time()
-    keys = ['season', 'number', 'basin', 'subbasin', 'name']
-    maxMinKeys = ['lat', 'lon', 'wind', 'pres', 'dist2land', 'storm_speed', 'gust', 'date']
-    requestJson = request.get_json()
-    print(requestJson)
-    query = requestJson["query"]
-    print(query)
-    queryResult = ibtracsCol.find(query)
-    options = {}
-    for key in keys:
-        if key not in requestJson["keys"]:
+    try:
+        requestTime = time.time()
+        keys = ['season', 'number', 'basin', 'subbasin', 'name']
+        maxMinKeys = ['lat', 'lon', 'wind', 'pres', 'dist2land', 'storm_speed', 'gust', 'date']
+        requestJson = request.get_json()
+        print(requestJson)
+        query = requestJson["query"]
+        print(query)
+        queryResult = ibtracsCol.find(query)
+        options = {}
+        for key in keys:
+            if key not in requestJson["keys"]:
+                print(key)
+                options[key] = ibtracsCol.distinct(key)
+        for key in maxMinKeys:
             print(key)
-            options[key] = ibtracsCol.distinct(key)
-    for key in maxMinKeys:
-        print(key)
-        options[key] = {}
-        options[key]['min'] = ibtracsCol.find_one({key: {"$exists": True}}, sort=[(key, 1)])[key]
-        options[key]['max'] = ibtracsCol.find_one({key: {"$exists": True}}, sort=[(key, -1)])[key]
-    return jsonify({
-        'requestTime': requestTime,
-        'options': options,
-        'query': query
-    })
+            options[key] = {}
+            options[key]['min'] = ibtracsCol.find_one({key: {"$exists": True}}, sort=[(key, 1)])[key]
+            options[key]['max'] = ibtracsCol.find_one({key: {"$exists": True}}, sort=[(key, -1)])[key]
+        return jsonify({
+            'requestTime': requestTime,
+            'options': options,
+            'query': query
+        })
+    except Exception:
+        print(requestJson)
+        print(requestJson["query"])
+        print(requestJson["keys"])
+        print(traceback.format_exc())
+        return jsonify({
+            'requestJson': requestJson,
+            'errorMessage': traceback.format_exc()
+        })
+
 
 @app.route('/ibtracs/query', methods=['POST'])
 def ibtracQuery():

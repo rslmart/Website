@@ -7,6 +7,8 @@ class IbtracHandler extends Component {
     API_GATEWAY_ENDPOINT = "http://192.168.0.184:5000";
     //API_GATEWAY_ENDPOINT = "http://127.0.0.1:5000/";
 
+    dropdownIds = ["season", "basin", "subbasin", "name"];
+
     state = {
         viewport: {
             height: "100vh",
@@ -14,18 +16,37 @@ class IbtracHandler extends Component {
             location: [48.6908333333, 9.14055555556],
             zoom: 6,
         },
+        allIbtracOptions: {
+            season: [],
+            basin: [],
+            subbasin: [],
+            name: []
+        },
         ibtracOptions: {
             season: [],
             basin: [],
             subbasin: [],
             name: []
         },
-        selections: {},
-        query: ""
+        selections: {
+            season: [],
+            basin: [],
+            subbasin: [],
+            name: []
+        },
+        query: "",
+        requestTime: 0
     };
 
     componentDidMount = async () => {
-        console.log(await this.fetchOptions({}, []));
+        const response = await this.fetchOptions({}, []);
+        await this.setState({
+            allIbtracOptions: response.options,
+            beginDate: new Date(response.beginDate),
+            endDate: new Date(response.endDate)
+        });
+        this.generateOptions(response);
+        // this.fetchIbtracCount(query);
     };
 
     /**
@@ -81,7 +102,8 @@ class IbtracHandler extends Component {
             }
         }
         const keys = removing ? [] : [id];
-        this.generateQuery();
+        await this.generateQuery();
+        this.generateOptions(await this.fetchOptions(this.state.query, keys));
         //this.fetchRecordCount(query);
         //this.generateOptions(await this.fetchOptions(query, keys));
     };
@@ -91,16 +113,64 @@ class IbtracHandler extends Component {
         const queryList = [];
         Object.keys(selections).forEach(key => {
             if (key.includes("max") || key.includes("min")) {
-                if (key.includes("max")) {
-                    queryList.push({ [key.split("_")[1]]: { "$lte": selections[key] } })
-                } else {
-                    queryList.push({ [key.split("_")[1]]: { "$gte": selections[key] } })
+                if (selections[key]) {
+                    const actualKey = key.split("_")[1];
+                    if (key.includes("max")) {
+                        queryList.push({[actualKey]: {"$lte": selections[key]}})
+                    } else {
+                        queryList.push({[actualKey]: {"$gte": selections[key]}})
+                    }
                 }
-            } else {
-                queryList.push({ key: selections[key] });
+            } else if (selections[key].length > 0) {
+                queryList.push({ [key]: selections[key] });
             }
         });
         this.setState({query: JSON.stringify({ "$and": queryList })})
+    };
+
+    generateOptions = async (response) => {
+        if (response.requestTime > this.state.requestTime) {
+            this.setState({ requestTime: response.requestTime });
+            const newOptions = response.options;
+            const allOptions = JSON.parse(JSON.stringify(this.state.allIbtracOptions));
+            const ibtracOptions = JSON.parse(JSON.stringify(this.state.ibtracOptions));
+            this.dropdownIds.forEach(key => {
+                const options = allOptions[key].map(value => {
+                    const group = newOptions[key].includes(value);
+                    return {
+                        key: value,
+                        text: value,
+                        value: value,
+                        icon: group ? "plus" : "minus",
+                    }
+                }).sort((a, b) => {
+                    if (a.icon === "plus" && b.icon !== "plus") {
+                        return -1;
+                    }
+                    if (a.icon !== "plus" && b.icon === "plus") {
+                        return 1;
+                    } else {
+                        if (a.value > b.value) {
+                            return 1;
+                        }
+                        if (a.value < b.value) {
+                            return -1;
+                        }
+                        return 0;
+                    }
+                });
+                Object.assign(ibtracOptions, {[key]: options});
+            });
+            this.setState({
+                ibtracOptions,
+                beginDate: response.beginDate,
+                endDate: response.endDate,
+                startTime: response.beginDate,
+                endTime: response.endDate
+            });
+        } else {
+            console.log(`Bad Request Resposne:${response.requestTime} State:${this.state.requestTime}`)
+        }
     };
 
     onViewPortChange = (viewport) => {
