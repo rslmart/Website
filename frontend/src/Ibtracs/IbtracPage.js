@@ -62,9 +62,12 @@ export const IbtracPage = props => (
                 </Form.Group>
                 <Form.Group widths={"equal"}>
                     <Form.Field>
-                        <label>Only 3 Hour Points</label>
-                        <Form.Checkbox
-                            id="threeHour"
+                        <label>Plot Type</label>
+                        <Form.Dropdown
+                            id="plotType"
+                            options={[{ text: "Heatmap", value: "heatmap"},
+                                { text: "Scatter Plot", value: "scatter"},
+                                { text: "Storm Paths", value: "line"}]}
                             onChange={props.handleInputChange}
                         />
                     </Form.Field>
@@ -77,7 +80,7 @@ export const IbtracPage = props => (
                             onChange={props.handleInputChange}
                             labelPosition='right'
                         >
-                            <Label basic>{props.ibtracOptions.wind ? props.ibtracOptions.wind.min.wind || "0" : "0"}</Label>
+                            <Label basic>{Utils.displayMinMaxValue(props.ibtracOptions, "wind", true, "0")}</Label>
                                 <input />
                             <Label>{Utils.IBTRACS_KEYS["wmo_wind"]}</Label>
                         </Input>
@@ -88,7 +91,7 @@ export const IbtracPage = props => (
                             onChange={props.handleInputChange}
                             labelPosition='right'
                         >
-                            <Label basic>{props.ibtracOptions.wind ? props.ibtracOptions.wind.max.wind || "0"  : "0"}</Label>
+                            <Label basic>{Utils.displayMinMaxValue(props.ibtracOptions, "wind", false, "0")}</Label>
                                 <input />
                             <Label>{Utils.IBTRACS_KEYS["wmo_wind"]}</Label>
                         </Input>
@@ -99,18 +102,24 @@ export const IbtracPage = props => (
                             id="pres_min"
                             placeholder="Min"
                             type="number"
-                            label={Utils.IBTRACS_KEYS["wmo_pres"]}
                             labelPosition='right'
                             onChange={props.handleInputChange}
-                        />
+                        >
+                            <Label basic>{Utils.displayMinMaxValue(props.ibtracOptions, "pres", true, "0")}</Label>
+                                    <input />
+                            <Label>{Utils.IBTRACS_KEYS["wmo_pres"]}</Label>
+                        </Input>
                         <Input
                             id="pres_max"
                             placeholder="Max"
                             type="number"
-                            label={Utils.IBTRACS_KEYS["wmo_pres"]}
                             labelPosition='right'
                             onChange={props.handleInputChange}
-                        />
+                        >
+                            <Label basic>{Utils.displayMinMaxValue(props.ibtracOptions, "pres", false, "0")}</Label>
+                                    <input />
+                            <Label>{Utils.IBTRACS_KEYS["wmo_pres"]}</Label>
+                        </Input>
                     </Form.Field>
                     <Form.Field>
                         <label>Gust</label>
@@ -118,18 +127,24 @@ export const IbtracPage = props => (
                             id="gust_min"
                             placeholder="Min"
                             type="number"
-                            label={Utils.IBTRACS_KEYS["wmo_wind"]}
                             labelPosition='right'
                             onChange={props.handleInputChange}
-                        />
+                        >
+                            <Label basic>{Utils.displayMinMaxValue(props.ibtracOptions, "gust", true, "0")}</Label>
+                                    <input />
+                            <Label>{Utils.IBTRACS_KEYS["wmo_wind"]}</Label>
+                        </Input>
                         <Input
                             id="gust_max"
                             placeholder="Max"
                             type="number"
-                            label={Utils.IBTRACS_KEYS["wmo_wind"]}
                             labelPosition='right'
                             onChange={props.handleInputChange}
-                        />
+                        >
+                            <Label basic>{Utils.displayMinMaxValue(props.ibtracOptions, "gust", false, "0")}</Label>
+                                    <input />
+                            <Label>{Utils.IBTRACS_KEYS["wmo_wind"]}</Label>
+                        </Input>
                     </Form.Field>
                 </Form.Group>
                 <Form.Group widths={"equal"}>
@@ -139,18 +154,24 @@ export const IbtracPage = props => (
                             id="lat_min"
                             placeholder="Min"
                             type="number"
-                            label={Utils.IBTRACS_KEYS["lat"]}
                             labelPosition='right'
                             onChange={props.handleInputChange}
-                        />
+                        >
+                            <Label basic>{Utils.displayMinMaxValue(props.ibtracOptions, "lat", true, "0")}</Label>
+                                    <input />
+                            <Label>{Utils.IBTRACS_KEYS["lat"]}</Label>
+                        </Input>
                         <Input
                             id="lat_max"
                             placeholder="Max"
                             type="number"
-                            label={Utils.IBTRACS_KEYS["lat"]}
                             labelPosition='right'
                             onChange={props.handleInputChange}
-                        />
+                        >
+                            <Label basic>{Utils.displayMinMaxValue(props.ibtracOptions, "lat", false, "0")}</Label>
+                                    <input />
+                            <Label>{Utils.IBTRACS_KEYS["lat"]}</Label>
+                        </Input>
                     </Form.Field>
                     <Form.Field>
                         <label>Longitude</label>
@@ -158,18 +179,24 @@ export const IbtracPage = props => (
                             id="lon_min"
                             placeholder="Min"
                             type="number"
-                            label={Utils.IBTRACS_KEYS["lon"]}
                             labelPosition='right'
                             onChange={props.handleInputChange}
-                        />
+                        >
+                            <Label basic>{Utils.displayMinMaxValue(props.ibtracOptions, "lon", true, "0")}</Label>
+                                    <input />
+                            <Label>{Utils.IBTRACS_KEYS["lon"]}</Label>
+                        </Input>
                         <Input
                             id="lon_max"
                             placeholder="Max"
                             type="number"
-                            label={Utils.IBTRACS_KEYS["lon"]}
                             labelPosition='right'
                             onChange={props.handleInputChange}
-                        />
+                        >
+                            <Label basic>{Utils.displayMinMaxValue(props.ibtracOptions, "lon", false, "0")}</Label>
+                                    <input />
+                            <Label>{Utils.IBTRACS_KEYS["lon"]}</Label>
+                        </Input>
                     </Form.Field>
                     <Form.Field>
                         <label>Distance to Land</label>
@@ -177,18 +204,24 @@ export const IbtracPage = props => (
                             id="dist2land_min"
                             placeholder="Min"
                             type="number"
-                            label={Utils.IBTRACS_KEYS["dist2land"]}
                             labelPosition='right'
                             onChange={props.handleInputChange}
-                        />
+                        >
+                            <Label basic>{Utils.displayMinMaxValue(props.ibtracOptions, "dist2land", true, "0")}</Label>
+                                    <input />
+                            <Label>{Utils.IBTRACS_KEYS["dist2land"]}</Label>
+                        </Input>
                         <Input
                             id="dist2land_max"
                             placeholder="Max"
                             type="number"
-                            label={Utils.IBTRACS_KEYS["dist2land"]}
                             labelPosition='right'
                             onChange={props.handleInputChange}
-                        />
+                        >
+                            <Label basic>{Utils.displayMinMaxValue(props.ibtracOptions, "dist2land", false, "0")}</Label>
+                                    <input />
+                            <Label>{Utils.IBTRACS_KEYS["dist2land"]}</Label>
+                        </Input>
                     </Form.Field>
                     <Form.Field>
                         <label>Storm Speed</label>
@@ -196,18 +229,24 @@ export const IbtracPage = props => (
                             id="speed_min"
                             placeholder="Min"
                             type="number"
-                            label={Utils.IBTRACS_KEYS["storm_speed"]}
                             labelPosition='right'
                             onChange={props.handleInputChange}
-                        />
+                        >
+                            <Label basic>{Utils.displayMinMaxValue(props.ibtracOptions, "speed", true, "0")}</Label>
+                                    <input />
+                            <Label>{Utils.IBTRACS_KEYS["speed"]}</Label>
+                        </Input>
                         <Input
                             id="speed_max"
                             placeholder="Max"
                             type="number"
-                            label={Utils.IBTRACS_KEYS["storm_speed"]}
                             labelPosition='right'
                             onChange={props.handleInputChange}
-                        />
+                        >
+                            <Label basic>{Utils.displayMinMaxValue(props.ibtracOptions, "speed", false, "0")}</Label>
+                                    <input />
+                            <Label>{Utils.IBTRACS_KEYS["speed"]}</Label>
+                        </Input>
                     </Form.Field>
                 </Form.Group>
             </Form>

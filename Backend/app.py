@@ -18,8 +18,8 @@ imageOptionsCol = mydb["imageOptions"]
 ibtracsCol = mydb["ibtracs"]
 
 ibtracsKeys = ['_id', 'sid', 'season', 'number', 'basin', 'subbasin', 'name', 'iso_time', 'nature', 'lat', 'lon',
-               'wmo_wind', 'wmo_pres', 'wmo_agency', 'track_type', 'dist2land', 'landfall', 'iflag', 'storm_speed',
-               'storm_dir', 'date', 'imageIds']
+               'wmo_wind', 'wmo_pres', 'wmo_agency', 'track_type', 'dist2land', 'landfall', 'iflag', 'speed',
+               'dir', 'date', 'imageIds']
 
 def func(item):
     a = pymongo.MongoClient("mongodb://localhost:27017/")["mydatabase"]["imageOptions"].find(item[1])
@@ -56,7 +56,7 @@ def imageCount():
 
 @app.route('/images/allOptions', methods=['GET'])
 def imageAllOptions():
-    keys = ['season', 'basin', 'storm_number', 'storm_agency', 'storm_name', 'type', 'sensor', 'resolution', 'satellite', 'satellite']
+    keys = ['season', 'basin', 'number', 'agency', 'name', 'type', 'sensor', 'resolution', 'satellite', 'satellite']
     options = {}
     for key in keys:
         options[key] = imageOptionsCol.distinct(key)
@@ -65,7 +65,7 @@ def imageAllOptions():
 @app.route('/images/options', methods=['POST'])
 def imageOptions():
     requestTime = time.time()
-    keys = ['season', 'basin', 'storm_name', 'type', 'sensor', 'resolution', 'satellite', 'extension']
+    keys = ['season', 'basin', 'name', 'type', 'sensor', 'resolution', 'satellite', 'extension']
     requestJson = request.get_json()
     print(requestJson)
     query = {
@@ -122,7 +122,7 @@ def ibtracCount():
 @app.route('/ibtracs/allOptions', methods=['GET'])
 def ibtracAllOptions():
     keys = ['season', 'number', 'basin', 'subbasin', 'name', 'nature', 'wmo_agency', 'track_type', 'iflag']
-    maxMinKeys = ['iso_time', 'lat', 'lon', 'wmo_wind', 'wmo_pres', 'dist2land', 'storm_speed', 'storm_dir', 'date',
+    maxMinKeys = ['iso_time', 'lat', 'lon', 'wmo_wind', 'wmo_pres', 'dist2land', 'speed', 'dir', 'date',
                   'landfall']
     options = {}
     for key in keys:
@@ -139,7 +139,7 @@ def ibtracAllOptions():
 def ibtracOptions():
     requestTime = time.time()
     keys = ['season', 'number', 'basin', 'subbasin', 'name']
-    maxMinKeys = ['lat', 'lon', 'wind', 'pres', 'dist2land', 'storm_speed', 'gust', 'date']
+    maxMinKeys = ['lat', 'lon', 'wind', 'pres', 'dist2land', 'speed', 'gust', 'date']
     requestJson = request.get_json()
     print(requestJson)
     query = requestJson["query"]
@@ -153,6 +153,12 @@ def ibtracOptions():
     for key in maxMinKeys:
         print(key)
         options[key] = {}
+        if "$and" not in query:
+            query["$and"] = []
+        queryList = query["$and"] + [{key: {"$exists": True}}]
+        q = {"$and": queryList}
+        print(q)
+        queryResult = ibtracsCol.find(q)
         options[key]['min'] = queryResult.sort(key, pymongo.ASCENDING).limit(1)[0]
         options[key]['max'] = queryResult.sort(key, pymongo.DESCENDING).limit(1)[0]
     return jsonify({
@@ -160,7 +166,6 @@ def ibtracOptions():
         'options': options,
         'query': query
     })
-
 
 @app.route('/ibtracs/query', methods=['POST'])
 def ibtracQuery():

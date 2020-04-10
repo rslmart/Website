@@ -37,7 +37,7 @@ export default class Utils {
         "neumann_pres":"mb","mlc_lat":"degrees_north","mlc_lon":"degrees_east","mlc_class":" ","mlc_wind":"kts",
         "mlc_pres":"mb","usa_gust":"kts","bom_gust":"kts","bom_gust_per":"second","reunion_gust":"kts",
         "reunion_gust_per":"second","usa_seahgt":"ft","usa_searad_ne":"nmile","usa_searad_se":"nmile",
-        "usa_searad_sw":"nmile","usa_searad_nw":"nmile","storm_speed":"kts","storm_dir":"°"};
+        "usa_searad_sw":"nmile","usa_searad_nw":"nmile","speed":"kts","dir":"°"};
 
     /*
     TODO:
@@ -82,6 +82,10 @@ export default class Utils {
             </div>
         )
     };
+
+    static displayMinMaxValue = (ibtracOptions, key, min, defaultVal) => (
+        ibtracOptions[key] ? ibtracOptions[key][min ? "min" : "max"][key] || defaultVal : defaultVal
+    );
     
     static searchForTerm = (object, term) => (object[Object.keys(object).find(key => key.includes(term))])
 };

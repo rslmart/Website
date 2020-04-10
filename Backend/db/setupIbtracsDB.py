@@ -60,6 +60,9 @@ if __name__ == '__main__':
         header = next(reader)  # skip header
         for i in range(len(header)):
             header[i] = header[i].lower()
+            # for storm_speed and storm_dir
+            if header[i] == "storm_speed" or header[i] == "storm_dir":
+                header[i] = header[i].split('_')[1]
         units = next(reader)
 
         batch_size = 10000

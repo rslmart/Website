@@ -4,8 +4,8 @@ import {IbtracPage} from './IbtracPage';
 import ReactMapGL from "react-map-gl";
 
 class IbtracHandler extends Component {
-    API_GATEWAY_ENDPOINT = "http://192.168.0.184:5000";
-    //API_GATEWAY_ENDPOINT = "http://127.0.0.1:5000/";
+    //API_GATEWAY_ENDPOINT = "http://192.168.0.184:5000";
+    API_GATEWAY_ENDPOINT = "http://127.0.0.1:5000/";
 
     dropdownIds = ["season", "basin", "subbasin", "name"];
 
@@ -34,7 +34,7 @@ class IbtracHandler extends Component {
             subbasin: [],
             name: []
         },
-        query: "",
+        query: {},
         requestTime: 0
     };
 
