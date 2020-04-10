@@ -153,8 +153,8 @@ def ibtracOptions():
     for key in maxMinKeys:
         print(key)
         options[key] = {}
-        options[key]['min'] = queryResult.sort(key, pymongo.ASCENDING).limit(1)
-        options[key]['max'] = queryResult.sort(key, pymongo.DESCENDING).limit(1)
+        options[key]['min'] = queryResult.sort(key, pymongo.ASCENDING).limit(1)[0]
+        options[key]['max'] = queryResult.sort(key, pymongo.DESCENDING).limit(1)[0]
     return jsonify({
         'requestTime': requestTime,
         'options': options,

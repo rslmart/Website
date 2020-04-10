@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import ReactMapGL from 'react-map-gl';
-import {Container, Form, Grid, Input} from "semantic-ui-react";
+import {Container, Form, Grid, Input, Label} from "semantic-ui-react";
 import Utils from "../Common/Utils";
 import PolylineOverlay from "../Common/PolylineOverlay";
 
@@ -74,18 +74,24 @@ export const IbtracPage = props => (
                             id="wind_min"
                             placeholder="Min"
                             type="number"
-                            label={Utils.IBTRACS_KEYS["wmo_wind"]}
-                            labelPosition='right'
                             onChange={props.handleInputChange}
-                        />
+                            labelPosition='right'
+                        >
+                            <Label basic>{props.ibtracOptions.wind ? props.ibtracOptions.wind.min.wind || "0" : "0"}</Label>
+                                <input />
+                            <Label>{Utils.IBTRACS_KEYS["wmo_wind"]}</Label>
+                        </Input>
                         <Input
                             id="wind_max"
                             placeholder="Max"
                             type="number"
-                            label={Utils.IBTRACS_KEYS["wmo_wind"]}
-                            labelPosition='right'
                             onChange={props.handleInputChange}
-                        />
+                            labelPosition='right'
+                        >
+                            <Label basic>{props.ibtracOptions.wind ? props.ibtracOptions.wind.max.wind || "0"  : "0"}</Label>
+                                <input />
+                            <Label>{Utils.IBTRACS_KEYS["wmo_wind"]}</Label>
+                        </Input>
                     </Form.Field>
                     <Form.Field>
                         <label>Pressure</label>

@@ -75,6 +75,7 @@ class IbtracHandler extends Component {
         });
     };
 
+    // TODO: Need to wait until a user has stopped typing for min/max fields
     handleInputChange = async (evt, {name, id, value}) => {
         console.log(name);
         console.log(id);
@@ -145,11 +146,9 @@ class IbtracHandler extends Component {
             const newOptions = response.options;
             const allOptions = JSON.parse(JSON.stringify(this.state.allIbtracOptions));
             const ibtracOptions = JSON.parse(JSON.stringify(this.state.ibtracOptions));
-            console.log(newOptions)
             this.dropdownIds.forEach(key => {
                 if (Object.keys(newOptions).includes(key)) {
                     const options = allOptions[key].map(value => {
-                        console.log(key)
                         const group = newOptions[key].includes(value);
                         return {
                             key: value,
@@ -176,6 +175,10 @@ class IbtracHandler extends Component {
                     Object.assign(ibtracOptions, {[key]: options});
                 }
             });
+            Object.keys(allOptions)
+                .filter(key => !this.dropdownIds.includes(key))
+                .forEach(key => Object.assign(ibtracOptions, {[key]: newOptions[key]}));
+            console.log(ibtracOptions);
             this.setState({
                 ibtracOptions,
                 beginDate: response.beginDate,
