@@ -135,19 +135,13 @@ def ibtracAllOptions():
 @app.route('/ibtracs/options', methods=['POST'])
 def ibtracOptions():
     requestTime = time.time()
-    keys = ['season', 'number', 'basin', 'subbasin', 'name', 'nature', 'wmo_agency', 'track_type', 'iflag']
-    maxMinKeys = ['iso_time', 'lat', 'lon', 'wmo_wind', 'wmo_pres', 'dist2land', 'storm_speed', 'storm_dir', 'date',
-                  'landfall']
+    keys = ['season', 'number', 'basin', 'subbasin', 'name']
+    maxMinKeys = ['lat', 'lon', 'wind', 'pres', 'dist2land', 'storm_speed', 'gust', 'date']
     requestJson = request.get_json()
     print(requestJson)
-    query = {
-        "$and": requestJson["query"]["$and"] +
-                [{"date": {"$gte": datetime.datetime.strptime(requestJson["query"]["startTime"], "%Y-%m-%d %H:%M")}}] +
-                [{"date": {"$lte": datetime.datetime.strptime(requestJson["query"]["endTime"], "%Y-%m-%d %H:%M")}}]
-    }
+    query = requestJson["query"]
     print(query)
     queryResult = ibtracsCol.find(query)
-    options = {}
     options = {}
     for key in keys:
         if key not in requestJson["keys"]:

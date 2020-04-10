@@ -1,15 +1,18 @@
 import React, {Component} from "react";
 import {MenuHeader} from "../Common/CommonComponents";
 import {IbtracPage} from './IbtracPage';
+import ReactMapGL from "react-map-gl";
 
 class IbtracHandler extends Component {
-    //API_GATEWAY_ENDPOINT = "http://192.168.0.184:5000";
-    API_GATEWAY_ENDPOINT = "http://127.0.0.1:5000/";
+    API_GATEWAY_ENDPOINT = "http://192.168.0.184:5000";
+    //API_GATEWAY_ENDPOINT = "http://127.0.0.1:5000/";
+
     state = {
         viewport: {
-            latitude: 37.7577,
-            longitude: -122.4376,
-            zoom: 8
+            height: "100vh",
+            width: "100vw",
+            location: [48.6908333333, 9.14055555556],
+            zoom: 6,
         },
         ibtracOptions: {
             season: [],
@@ -19,6 +22,36 @@ class IbtracHandler extends Component {
         },
         selections: {},
         query: ""
+    };
+
+    componentDidMount = async () => {
+        console.log(this.fetchOptions({}, []));
+    };
+
+    /**
+     * This fetchs options based on what has been selected so far
+     * @param query
+     * @returns {Promise<void>}
+     */
+    fetchOptions = async (query, keys) => {
+        this.setState({ loadingOptions: true });
+        console.log(query);
+        const request = {"query": query, "keys": keys};
+        console.log(request);
+        return fetch(`${this.API_GATEWAY_ENDPOINT}/ibtracs/options`, {
+            method: "POST",
+            body: JSON.stringify(request),
+            mode: "cors",
+            headers: {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*"
+            }
+        }).then((response) => {
+            return response.json();
+        }).then((data) => {
+            this.setState({ loadingOptions: false });
+            return data;
+        });
     };
 
     handleInputChange = async (evt, {name, id, value}) => {
@@ -47,22 +80,10 @@ class IbtracHandler extends Component {
                 }
             }
         }
-        // TODO: If removing value requery for that key (ie don't include it in generateOptions)
-        const queryList = Object.keys(this.state.selections).map(key => (
-            {"$or": this.state.selections[key].map(val => ({ [key]:val }))}
-        )).filter(query => query["$or"].length > 0);
-
-        // TODO: Only get options for dropdowns to the right
-        // TODO: Potentially maintain mapping (at least for seasons/storms?)
-        const query = {
-            "$and": queryList,
-            "startTime": this.state.startTime,
-            "endTime": this.state.endTime
-        };
         const keys = removing ? [] : [id];
-        this.setState({query});
-        this.fetchRecordCount(query);
-        this.generateOptions(await this.fetchOptions(query, keys));
+        this.generateQuery();
+        //this.fetchRecordCount(query);
+        //this.generateOptions(await this.fetchOptions(query, keys));
     };
 
     generateQuery = () => {
@@ -71,9 +92,9 @@ class IbtracHandler extends Component {
         Object.keys(selections).forEach(key => {
             if (key.includes("max") || key.includes("min")) {
                 if (key.includes("max")) {
-
+                    queryList.push({ [key.split("_")[1]]: { "$lte": selections[key] } })
                 } else {
-
+                    queryList.push({ [key.split("_")[1]]: { "$gte": selections[key] } })
                 }
             } else {
                 queryList.push({ key: selections[key] });
@@ -83,7 +104,8 @@ class IbtracHandler extends Component {
     };
 
     onViewPortChange = (viewport) => {
-        this.setState({viewport})
+        const {width, height, ...etc} = viewport;
+        this.setState({viewport: etc});
     };
 
     render () {
