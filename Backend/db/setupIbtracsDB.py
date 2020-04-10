@@ -23,7 +23,7 @@ def searchForTerm(rowDict, term):
     for key in rowDict.keys():
         if term in key:
             return rowDict[key]
-    return ''
+    return -1
 
 def parseRow(header, row):
     rowDict = {}
@@ -37,9 +37,11 @@ def parseRow(header, row):
                 rowDict[header[i]] = row[i]
     rowDict['_id'] = rowDict['sid'] + rowDict['iso_time'].replace(':', '').replace(' ', '').replace(':', '')
     rowDict['date'] = datetime.datetime.strptime(rowDict['iso_time'], "%Y-%m-%d %H:%M:%S")
-    rowDict['wind'] = searchForTerm(rowDict, 'wind')
-    rowDict['pres'] = searchForTerm(rowDict, 'pres')
-    rowDict['gust'] = searchForTerm(rowDict, 'gust')
+    additional = ['wind', 'pres', 'gust']
+    for term in additional:
+        val = searchForTerm(rowDict, term)
+        if val >= 0:
+            rowDict[term] = val
     return rowDict
 
 if __name__ == '__main__':

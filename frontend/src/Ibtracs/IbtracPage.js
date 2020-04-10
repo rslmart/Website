@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import ReactMapGL from 'react-map-gl';
 import {Container, Form, Grid, Input} from "semantic-ui-react";
 import Utils from "../Common/Utils";
+import PolylineOverlay from "../Common/PolylineOverlay";
 
 const TOKEN = "pk.eyJ1Ijoicm1tYXJ0aW4wMiIsImEiOiJjazhzeGVnZHcwZTJ4M2ZwYWN0bWY2ZTh3In0.vjI-gVYxkKLmWzVp7uevjg";
 
@@ -212,7 +213,9 @@ export const IbtracPage = props => (
                 {...props.viewport}
                 mapboxApiAccessToken={TOKEN}
                 onViewportChange={props.onViewPortChange}
-            />
+            >
+                <PolylineOverlay points={props.points} />
+            </ReactMapGL>
         </Container>
     </Container>
 );

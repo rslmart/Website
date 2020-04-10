@@ -25,7 +25,7 @@ class IbtracHandler extends Component {
     };
 
     componentDidMount = async () => {
-        console.log(this.fetchOptions({}, []));
+        console.log(await this.fetchOptions({}, []));
     };
 
     /**
@@ -115,6 +115,7 @@ class IbtracHandler extends Component {
                     menuItems={[]}
                 />
                 <IbtracPage
+                    points={[[90,90],[0,0]]}
                     viewport={this.state.viewport}
                     onViewPortChange={this.onViewPortChange}
                     ibtracOptions={this.state.ibtracOptions}
