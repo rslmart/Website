@@ -153,8 +153,8 @@ def ibtracOptions():
     for key in maxMinKeys:
         print(key)
         options[key] = {}
-        options[key]['min'] = queryResult.find_one({key: {"$exists": True}}, sort=[(key, 1)])[key]
-        options[key]['max'] = queryResult.find_one({key: {"$exists": True}}, sort=[(key, -1)])[key]
+        options[key]['min'] = queryResult.sort(key, pymongo.ASCENDING).limit(1)
+        options[key]['max'] = queryResult.sort(key, pymongo.DESCENDING).limit(1)
     return jsonify({
         'requestTime': requestTime,
         'options': options,
