@@ -109,6 +109,17 @@ class IbtracHandler extends Component {
     };
 
     generateQuery = () => {
+        /*
+        {"$and": [
+                {
+                    "$or": [
+                        {
+                            "basin":"ATL"
+                        }
+                    ]
+                }
+            ]
+        }*/
         const selections = Object.assign({}, this.state.selections);
         const queryList = [];
         Object.keys(selections).forEach(key => {
@@ -122,10 +133,10 @@ class IbtracHandler extends Component {
                     }
                 }
             } else if (selections[key].length > 0) {
-                queryList.push({ [key]: selections[key] });
+                queryList.push({"$or": selections[key].map(selection => {return { [key]: selection }})});
             }
         });
-        this.setState({query: JSON.stringify({ "$and": queryList })})
+        this.setState({query: { "$and": queryList } })
     };
 
     generateOptions = async (response) => {
@@ -134,32 +145,36 @@ class IbtracHandler extends Component {
             const newOptions = response.options;
             const allOptions = JSON.parse(JSON.stringify(this.state.allIbtracOptions));
             const ibtracOptions = JSON.parse(JSON.stringify(this.state.ibtracOptions));
+            console.log(newOptions)
             this.dropdownIds.forEach(key => {
-                const options = allOptions[key].map(value => {
-                    const group = newOptions[key].includes(value);
-                    return {
-                        key: value,
-                        text: value,
-                        value: value,
-                        icon: group ? "plus" : "minus",
-                    }
-                }).sort((a, b) => {
-                    if (a.icon === "plus" && b.icon !== "plus") {
-                        return -1;
-                    }
-                    if (a.icon !== "plus" && b.icon === "plus") {
-                        return 1;
-                    } else {
-                        if (a.value > b.value) {
-                            return 1;
+                if (Object.keys(newOptions).includes(key)) {
+                    const options = allOptions[key].map(value => {
+                        console.log(key)
+                        const group = newOptions[key].includes(value);
+                        return {
+                            key: value,
+                            text: value,
+                            value: value,
+                            icon: group ? "plus" : "minus",
                         }
-                        if (a.value < b.value) {
+                    }).sort((a, b) => {
+                        if (a.icon === "plus" && b.icon !== "plus") {
                             return -1;
                         }
-                        return 0;
-                    }
-                });
-                Object.assign(ibtracOptions, {[key]: options});
+                        if (a.icon !== "plus" && b.icon === "plus") {
+                            return 1;
+                        } else {
+                            if (a.value > b.value) {
+                                return 1;
+                            }
+                            if (a.value < b.value) {
+                                return -1;
+                            }
+                            return 0;
+                        }
+                    });
+                    Object.assign(ibtracOptions, {[key]: options});
+                }
             });
             this.setState({
                 ibtracOptions,
