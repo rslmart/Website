@@ -177,10 +177,24 @@ def ibtracQuery():
     print(requestJson)
     query = requestJson["query"]
     output = []
+    if requestJson["storm"]:
+        output = {}
     count = 0
-    for s in ibtracsCol.find(query):
-        s['date'] = str(s['date'])
-        output.append(s)
+    for document in ibtracsCol.find(query):
+        # Whether to organize the points by storm/time and include wind data
+        if not requestJson["storm"]:
+            output.append([document['lat'], document['lon']])
+        else:
+            if document['name'] not in output.keys():
+                output[document['name']] = []
+            tempDict = {
+                'lat': document['lat'],
+                'lon': document['lon'],
+                'date': str(document['date'])
+            }
+            if 'wind' in document:
+                tempDict['wind'] = document['wind']
+            output[document['name']].append(tempDict)
         count += 1
     print(output[0])
     print(count)

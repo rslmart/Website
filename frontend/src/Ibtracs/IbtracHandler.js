@@ -224,7 +224,7 @@ class IbtracHandler extends Component {
         this.setState({ loadingIbtracQuery: true, ibtracItems: [] });
         await fetch(`${this.API_GATEWAY_ENDPOINT}/ibtracs/query`, {
             method: "POST",
-            body: JSON.stringify({"query": this.state.query}),
+            body: JSON.stringify({"query": this.state.query, "storm": false}),
             mode: "cors",
             headers: {
                 "Content-Type": "application/json",
