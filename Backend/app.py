@@ -178,13 +178,12 @@ def ibtracQuery():
     query = requestJson["query"]
     output = []
     count = 0
-    for s in ibtracsCol.find(query).sort([("date", 1)]):
+    for s in ibtracsCol.find(query):
         s['date'] = str(s['date'])
         output.append(s)
         count += 1
-        if count > 2000:
-             break
     print(output[0])
+    print(count)
     return jsonify({'ibtracsItems': output})
 
 

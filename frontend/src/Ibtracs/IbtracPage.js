@@ -249,6 +249,11 @@ export const IbtracPage = props => (
                         </Input>
                     </Form.Field>
                 </Form.Group>
+                <Form.Button
+                    content={`Fetch Data`}
+                    loading={props.loadingIbtracQuery}
+                    onClick={props.fetchQuery}
+                />
             </Form>
         </Container>
         <Container style={{ width: "100%", height: "65%" }}>

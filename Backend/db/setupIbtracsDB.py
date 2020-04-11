@@ -91,7 +91,7 @@ if __name__ == '__main__':
         if batch:
             x = mycol.insert_many(batch)
             pass
-    mycol.find_and_modify(
+    mycol.find_one_and_update(
         {'_id': "1997216N200911997-08-05030000"},
-        {'pres': 996, 'newdelhi_pres': 996, 'wmo_pres': 996}
+        {'$set': {'pres': 996, 'newdelhi_pres': 996, 'wmo_pres': 996}}
     )

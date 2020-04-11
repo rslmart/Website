@@ -10,6 +10,7 @@ class IbtracHandler extends Component {
     dropdownIds = ["season", "basin", "subbasin", "name"];
 
     state = {
+        loadingIbtracQuery: false,
         viewport: {
             height: "100vh",
             width: "100vw",
@@ -36,7 +37,8 @@ class IbtracHandler extends Component {
         },
         typingTimeout: {},
         query: {},
-        requestTime: 0
+        requestTime: 0,
+        ibtracItems: []
     };
 
     componentDidMount = async () => {
@@ -212,6 +214,32 @@ class IbtracHandler extends Component {
         }
     };
 
+    /**
+     * Call this when we finally want to search for ibtrac records
+     * @param query
+     * @returns {Promise<void>}
+     */
+    fetchQuery = async () => {
+        let data = {};
+        this.setState({ loadingIbtracQuery: true, ibtracItems: [] });
+        await fetch(`${this.API_GATEWAY_ENDPOINT}/ibtracs/query`, {
+            method: "POST",
+            body: JSON.stringify({"query": this.state.query}),
+            mode: "cors",
+            headers: {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*"
+            }
+        }).then((response) => {
+            return response.json();
+        }).then((responseJson) => {
+            console.log(responseJson);
+            data = responseJson;
+        });
+        console.log(data.ibtracItems);
+        this.setState({ loadingIbtracQuery: false, ibtracItems: data.ibtracItems });
+    };
+
     onViewPortChange = (viewport) => {
         const {width, height, ...etc} = viewport;
         this.setState({viewport: etc});
@@ -228,6 +256,9 @@ class IbtracHandler extends Component {
                     viewport={this.state.viewport}
                     onViewPortChange={this.onViewPortChange}
                     ibtracOptions={this.state.ibtracOptions}
+                    loadingIbtracQuery={this.state.loadingIbtracQuery}
+                    ibtracItems={this.state.ibtracItems}
+                    fetchQuery={this.fetchQuery}
                     handleDropdownChange={this.handleDropdownChange}
                     handleInputChange={this.handleInputChange}
                 />
