@@ -159,8 +159,12 @@ def ibtracOptions():
         q = {"$and": queryList}
         print(q)
         queryResult = ibtracsCol.find(q)
-        options[key]['min'] = queryResult.sort(key, pymongo.ASCENDING).limit(1)[0]
-        options[key]['max'] = queryResult.sort(key, pymongo.DESCENDING).limit(1)[0]
+        if (queryResult.count() > 0):
+            options[key]['min'] = queryResult.sort(key, pymongo.ASCENDING).limit(1)[0][key]
+            options[key]['max'] = queryResult.sort(key, pymongo.DESCENDING).limit(1)[0][key]
+        else:
+            options[key]['min'] = -1
+            options[key]['max'] = -1
     return jsonify({
         'requestTime': requestTime,
         'options': options,

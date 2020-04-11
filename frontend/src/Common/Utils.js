@@ -3,7 +3,8 @@ import React, {Component} from "react";
 
 export default class Utils {
 
-    static IBTRACS_KEYS = {"sid":"","season":"Year","number":" ","basin":" ","subbasin":" ","name":" ","iso_time":" ",
+    static IBTRACS_KEYS = {"wind": "kts", "pres": "mb", "gust": "kts",
+        "sid":"","season":"Year","number":" ","basin":" ","subbasin":" ","name":" ","iso_time":" ",
         "nature":" ","lat":"° N","lon":"° E","wmo_wind":"kts","wmo_pres":"mb","wmo_agency":" ",
         "track_type":" ","dist2land":"km","landfall":"km","iflag":" ","usa_agency":" ","usa_atcf_id":" ",
         "usa_lat":"degrees_north","usa_lon":"degrees_east","usa_record":" ","usa_status":" ","usa_wind":"kts",
@@ -46,20 +47,19 @@ export default class Utils {
     static generateIbtracsStatisticItems = (ibtracObject) => {
         const firstItems = [];
         const excludeList = ["sid","season","number","basin","subbasin","name","nature","landfall", "wind", "pres",
-            "gust", "lon", "lat", "dist2land", "_id", "imageIds", "iflag", "date", "storm_dir", "storm_dir", "track_type"];
-        const firstGroup = ["_wind", "_gust", "_pres", "lat", "lon", "storm_speed", "storm_dir","dist2land"];
+            "gust", "lon", "lat", "dist2land", "_id", "imageIds", "iflag", "date", "dir", "dir", "track_type"];
+        const firstGroup = ["wind", "gust", "pres", "lat", "lon", "speed", "dir","dist2land"];
         const firstGroupLabels = ["Wind", "Gust", "Pressure", "Latitude", "Longitude", "Storm Speed", "Storm Direction","Distance to Land"];
         firstGroup.forEach((term, i) => {
             const item = {};
-            const foundKey = Object.keys(ibtracObject).find(key => key.includes(term));
-            let foundValue = ibtracObject[foundKey];
+            let foundValue = ibtracObject[term];
             if (term === 'lon' || term === 'lat') {
                 foundValue = (Math.round(parseFloat(foundValue) * 10) / 10).toFixed(1);
             }
             firstItems.push({
-                key: foundKey,
+                key: term,
                 label: firstGroupLabels[i],
-                value: foundKey ? `${foundValue} ${Utils.IBTRACS_KEYS[foundKey]}` : "-",
+                value: foundValue ? `${foundValue} ${Utils.IBTRACS_KEYS[term]}` : "-",
                 text: true
             })
         });
@@ -84,7 +84,7 @@ export default class Utils {
     };
 
     static displayMinMaxValue = (ibtracOptions, key, min, defaultVal) => (
-        ibtracOptions[key] ? ibtracOptions[key][min ? "min" : "max"][key] || defaultVal : defaultVal
+        ibtracOptions[key] ? ibtracOptions[key][min ? "min" : "max"] || defaultVal : defaultVal
     );
     
     static searchForTerm = (object, term) => (object[Object.keys(object).find(key => key.includes(term))])
