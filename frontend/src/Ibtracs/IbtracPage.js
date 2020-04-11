@@ -20,7 +20,7 @@ export const IbtracPage = props => (
                             multiple
                             search
                             options={props.ibtracOptions.season}
-                            onChange={props.handleInputChange}
+                            onChange={props.handleDropdownChange}
                         />
                     </Form.Field>
                     <Form.Field>
@@ -32,7 +32,7 @@ export const IbtracPage = props => (
                             multiple
                             search
                             options={props.ibtracOptions.basin}
-                            onChange={props.handleInputChange}
+                            onChange={props.handleDropdownChange}
                         />
                     </Form.Field>
                     <Form.Field>
@@ -44,7 +44,7 @@ export const IbtracPage = props => (
                             multiple
                             search
                             options={props.ibtracOptions.subbasin}
-                            onChange={props.handleInputChange}
+                            onChange={props.handleDropdownChange}
                         />
                     </Form.Field>
                     <Form.Field>
@@ -56,7 +56,7 @@ export const IbtracPage = props => (
                             multiple
                             search
                             options={props.ibtracOptions.name}
-                            onChange={props.handleInputChange}
+                            onChange={props.handleDropdownChange}
                         />
                     </Form.Field>
                 </Form.Group>
@@ -68,7 +68,7 @@ export const IbtracPage = props => (
                             options={[{ text: "Heatmap", value: "heatmap"},
                                 { text: "Scatter Plot", value: "scatter"},
                                 { text: "Storm Paths", value: "line"}]}
-                            onChange={props.handleInputChange}
+                            onChange={props.handleDropdownChange}
                         />
                     </Form.Field>
                     <Form.Field>

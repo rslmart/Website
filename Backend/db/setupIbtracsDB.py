@@ -18,10 +18,10 @@ def isFloat(s):
         return False
 
 def searchForTerm(rowDict, term):
-    if ('wmo_' + term) in rowDict:
-        return rowDict['wmo_' + term]
+    if ('wmo' + term) in rowDict:
+        return rowDict['wmo' + term]
     for key in rowDict.keys():
-        if term in key:
+        if key.endswith(term):
             return rowDict[key]
     return -1
 
@@ -37,7 +37,7 @@ def parseRow(header, row):
                 rowDict[header[i]] = row[i]
     rowDict['_id'] = rowDict['sid'] + rowDict['iso_time'].replace(':', '').replace(' ', '').replace(':', '')
     rowDict['date'] = datetime.datetime.strptime(rowDict['iso_time'], "%Y-%m-%d %H:%M:%S")
-    additional = ['wind', 'pres', 'gust']
+    additional = ['_wind', '_pres', '_gust']
     for term in additional:
         val = searchForTerm(rowDict, term)
         if val >= 0:

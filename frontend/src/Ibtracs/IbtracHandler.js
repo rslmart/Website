@@ -4,8 +4,8 @@ import {IbtracPage} from './IbtracPage';
 import ReactMapGL from "react-map-gl";
 
 class IbtracHandler extends Component {
-    //API_GATEWAY_ENDPOINT = "http://192.168.0.184:5000";
-    API_GATEWAY_ENDPOINT = "http://127.0.0.1:5000/";
+    API_GATEWAY_ENDPOINT = "http://192.168.0.184:5000";
+    // API_GATEWAY_ENDPOINT = "http://127.0.0.1:5000/";
 
     dropdownIds = ["season", "basin", "subbasin", "name"];
 
@@ -34,6 +34,7 @@ class IbtracHandler extends Component {
             subbasin: [],
             name: []
         },
+        typingTimeout: {},
         query: {},
         requestTime: 0
     };
@@ -75,12 +76,9 @@ class IbtracHandler extends Component {
         });
     };
 
-    // TODO: Need to wait until a user has stopped typing for min/max fields
-    handleInputChange = async (evt, {name, id, value}) => {
-        console.log(name);
+    handleDropdownChange = async (evt, {id, value}) => {
         console.log(id);
         console.log(value);
-        // not date change
         let removing = true;
         if (id) {
             removing = this.state.selections[id].length > value.length;
@@ -88,23 +86,43 @@ class IbtracHandler extends Component {
                 selections: Object.assign(prevState.selections, { [id]: value })
             }));
         }
-        // date change
-        else if (name) {
-            if (value) {
-                await this.setState({ [name]: value });
-            }
-            else {
-                if (name === "startTime") {
-                    await this.setState({ [name]: "1997-06-20 09:31" });
-                }
-                if (name === "endTime") {
-                    await this.setState({ [name]: "2019-12-30 12:40" });
-                }
-            }
-        }
         const keys = removing ? [] : [id];
-        await this.generateQuery();
-        this.generateOptions(await this.fetchOptions(this.state.query, keys));
+        const query = this.generateQuery();
+        this.setState({ query });
+        this.generateOptions(await this.fetchOptions(query, keys));
+        //this.fetchRecordCount(query);
+        //this.generateOptions(await this.fetchOptions(query, keys));
+    };
+
+        // TODO: Need to wait until a user has stopped typing for min/max fields
+    // TODO: Should probably also just separate the min/max fields from the dropdown functions
+    handleInputChange = async (evt, {id, value}) => {
+        console.log(id);
+        console.log(value);
+        const intValue = parseInt(value);
+        await this.setState(prevState => ({
+            selections: Object.assign(prevState.selections, { [id]: intValue })
+        }));
+        const keys = value.length === 0 ? [] : [id];
+        const query = this.generateQuery();
+        console.log(query);
+        this.setState({ query });
+
+        if (this.state.typingTimeout[id]) {
+            clearTimeout(this.state.typingTimeout[id]);
+        }
+
+        const self = this;
+        this.setState(prevState => ({
+            typingTimeout: Object.assign(prevState.typingTimeout, { [id]: setTimeout(
+                 async () => {
+                    self.generateOptions(await self.fetchOptions(query, keys));
+                },
+                1000
+            )})
+        }));
+
+        //
         //this.fetchRecordCount(query);
         //this.generateOptions(await this.fetchOptions(query, keys));
     };
@@ -126,7 +144,7 @@ class IbtracHandler extends Component {
         Object.keys(selections).forEach(key => {
             if (key.includes("max") || key.includes("min")) {
                 if (selections[key]) {
-                    const actualKey = key.split("_")[1];
+                    const actualKey = key.split("_")[0];
                     if (key.includes("max")) {
                         queryList.push({[actualKey]: {"$lte": selections[key]}})
                     } else {
@@ -137,7 +155,10 @@ class IbtracHandler extends Component {
                 queryList.push({"$or": selections[key].map(selection => {return { [key]: selection }})});
             }
         });
-        this.setState({query: { "$and": queryList } })
+        if (queryList.length > 0) {
+            return { "$and": queryList }
+        }
+        return {};
     };
 
     generateOptions = async (response) => {
@@ -207,6 +228,7 @@ class IbtracHandler extends Component {
                     viewport={this.state.viewport}
                     onViewPortChange={this.onViewPortChange}
                     ibtracOptions={this.state.ibtracOptions}
+                    handleDropdownChange={this.handleDropdownChange}
                     handleInputChange={this.handleInputChange}
                 />
             </div>
