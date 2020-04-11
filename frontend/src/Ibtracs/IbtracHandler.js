@@ -1,7 +1,8 @@
 import React, {Component} from "react";
 import {MenuHeader} from "../Common/CommonComponents";
 import {IbtracPage} from './IbtracPage';
-import ReactMapGL from "react-map-gl";
+import {ScatterplotLayer} from '@deck.gl/layers';
+import {HeatmapLayer} from '@deck.gl/aggregation-layers';
 
 class IbtracHandler extends Component {
     API_GATEWAY_ENDPOINT = "http://192.168.0.184:5000";
@@ -38,7 +39,8 @@ class IbtracHandler extends Component {
         typingTimeout: {},
         query: {},
         requestTime: 0,
-        ibtracItems: []
+        ibtracData: [],
+        dataLayer: (<div></div>)
     };
 
     componentDidMount = async () => {
@@ -221,7 +223,7 @@ class IbtracHandler extends Component {
      */
     fetchQuery = async () => {
         let data = {};
-        this.setState({ loadingIbtracQuery: true, ibtracItems: [] });
+        this.setState({ loadingIbtracQuery: true, ibtracData: [] });
         await fetch(`${this.API_GATEWAY_ENDPOINT}/ibtracs/query`, {
             method: "POST",
             body: JSON.stringify({"query": this.state.query, "storm": false}),
@@ -236,8 +238,38 @@ class IbtracHandler extends Component {
             console.log(responseJson);
             data = responseJson;
         });
-        console.log(data.ibtracItems);
-        this.setState({ loadingIbtracQuery: false, ibtracItems: data.ibtracItems });
+        console.log(data.ibtracData);
+        this.setState({ loadingIbtracQuery: false, ibtracData: data.ibtracData });
+    };
+
+    dataLayer = () => {
+        const scatterplotLayer = new ScatterplotLayer({
+            id: 'scatterplot-layer',
+            data,
+            pickable: true,
+            opacity: 0.8,
+            stroked: true,
+            filled: true,
+            radiusScale: 6,
+            radiusMinPixels: 1,
+            radiusMaxPixels: 100,
+            lineWidthMinPixels: 1,
+            getPosition: d => d.coordinates,
+            getRadius: d => Math.sqrt(d.exits),
+            getFillColor: d => [255, 140, 0],
+            getLineColor: d => [0, 0, 0],
+            onHover: ({object, x, y}) => {
+              const tooltip = `${object.name}\n${object.address}`;
+              /* Update tooltip
+                 http://deck.gl/#/documentation/developer-guide/adding-interactivity?section=example-display-a-tooltip-for-hovered-object
+              */
+            }
+        });
+        return new HeatmapLayer({
+            id: 'heatmapLayer',
+            data: this.state.ibtracData,
+            getPosition: d => d,
+        });
     };
 
     onViewPortChange = (viewport) => {
@@ -257,7 +289,8 @@ class IbtracHandler extends Component {
                     onViewPortChange={this.onViewPortChange}
                     ibtracOptions={this.state.ibtracOptions}
                     loadingIbtracQuery={this.state.loadingIbtracQuery}
-                    ibtracItems={this.state.ibtracItems}
+                    ibtracData={this.state.ibtracData}
+                    dataLayer={this.dataLayer()}
                     fetchQuery={this.fetchQuery}
                     handleDropdownChange={this.handleDropdownChange}
                     handleInputChange={this.handleInputChange}

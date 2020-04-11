@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import ReactMapGL from 'react-map-gl';
+import DeckGL from '@deck.gl/react';
 import {Container, Form, Grid, Input, Label} from "semantic-ui-react";
 import Utils from "../Common/Utils";
 import PolylineOverlay from "../Common/PolylineOverlay";
@@ -257,7 +257,7 @@ export const IbtracPage = props => (
             </Form>
         </Container>
         <Container style={{ width: "100%", height: "65%" }}>
-            <ReactMapGL
+            <DeckGL
                 width={"100%"}
                 height={"100%"}
                 {...props.viewport}
@@ -265,7 +265,7 @@ export const IbtracPage = props => (
                 onViewportChange={props.onViewPortChange}
             >
                 <PolylineOverlay points={props.points} />
-            </ReactMapGL>
+            </DeckGL>
         </Container>
     </Container>
 );

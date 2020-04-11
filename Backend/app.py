@@ -180,16 +180,27 @@ def ibtracQuery():
     if requestJson["storm"]:
         output = {}
     count = 0
+    minLat, maxLat, minLon, maxLon = 90, -90, 180, -180
     for document in ibtracsCol.find(query):
+        lat = document['lat']
+        lon = document['long']
+        if lat > maxLat:
+            maxLat = lat
+        if lat < minLat:
+            minLat = lat
+        if lon > maxLon:
+            maxLon = lon
+        if lon < minLon:
+            minLon = lon
         # Whether to organize the points by storm/time and include wind data
         if not requestJson["storm"]:
-            output.append([document['lat'], document['lon']])
+            output.append([lat, lon])
         else:
             if document['name'] not in output.keys():
                 output[document['name']] = []
             tempDict = {
-                'lat': document['lat'],
-                'lon': document['lon'],
+                'lat': lat,
+                'lon': lon,
                 'date': str(document['date'])
             }
             if 'wind' in document:
@@ -198,7 +209,10 @@ def ibtracQuery():
         count += 1
     print(output[0])
     print(count)
-    return jsonify({'ibtracsItems': output})
+    return jsonify({
+        'ibtracData': output,
+        'coordinates': {'lat': {'max': maxLat, 'min': minLat}, 'lon': {'max': maxLon, 'min': minLon}}
+    })
 
 
 if __name__ == '__main__':
