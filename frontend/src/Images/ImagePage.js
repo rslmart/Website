@@ -35,7 +35,7 @@ export const ImagePage = props => (
                     <label>Storm Name</label>
                     <Form.Dropdown
                         fluid
-                        id="name"
+                        id="storm_name"
                         placeholder="Isabel"
                         multiple
                         search

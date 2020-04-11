@@ -41,8 +41,13 @@ def parseRow(header, row):
     for term in additional:
         val = searchForTerm(rowDict, term)
         if val >= 0:
-            rowDict[term] = val
+            rowDict[term[1:]] = val
     return rowDict
+
+'''
+Errors:
+1997216N20091,1997,62,NI,BB,NOT_NAMED,1997-08-05 03:00:00,NR,22.0000,88.0000,30,896,newdelhi,main -> pressure should be 996?
+'''
 
 if __name__ == '__main__':
     myclient = pymongo.MongoClient("mongodb://localhost:27017/")
@@ -86,3 +91,7 @@ if __name__ == '__main__':
         if batch:
             x = mycol.insert_many(batch)
             pass
+    mycol.find_and_modify(
+        {'_id': "1997216N200911997-08-05030000"},
+        {'pres': 996, 'newdelhi_pres': 996, 'wmo_pres': 996}
+    )

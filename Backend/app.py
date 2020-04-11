@@ -56,7 +56,7 @@ def imageCount():
 
 @app.route('/images/allOptions', methods=['GET'])
 def imageAllOptions():
-    keys = ['season', 'basin', 'number', 'agency', 'name', 'type', 'sensor', 'resolution', 'satellite', 'satellite']
+    keys = ['season', 'basin', 'number', 'agency', 'storm_name', 'type', 'sensor', 'resolution', 'satellite', 'satellite']
     options = {}
     for key in keys:
         options[key] = imageOptionsCol.distinct(key)
@@ -65,7 +65,7 @@ def imageAllOptions():
 @app.route('/images/options', methods=['POST'])
 def imageOptions():
     requestTime = time.time()
-    keys = ['season', 'basin', 'name', 'type', 'sensor', 'resolution', 'satellite', 'extension']
+    keys = ['season', 'basin', 'storm_name', 'type', 'sensor', 'resolution', 'satellite', 'extension']
     requestJson = request.get_json()
     print(requestJson)
     query = {
@@ -138,7 +138,7 @@ def ibtracAllOptions():
 @app.route('/ibtracs/options', methods=['POST'])
 def ibtracOptions():
     requestTime = time.time()
-    keys = ['season', 'number', 'basin', 'subbasin', 'name']
+    keys = ['season', 'basin', 'subbasin', 'name']
     maxMinKeys = ['lat', 'lon', 'wind', 'pres', 'dist2land', 'speed', 'gust', 'date']
     requestJson = request.get_json()
     print(requestJson)
