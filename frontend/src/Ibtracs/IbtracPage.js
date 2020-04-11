@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import DeckGL from '@deck.gl/react';
 import {Container, Form, Grid, Input, Label} from "semantic-ui-react";
 import Utils from "../Common/Utils";
-import PolylineOverlay from "../Common/PolylineOverlay";
+import ReactMapGL from 'react-map-gl';
 
 const TOKEN = "pk.eyJ1Ijoicm1tYXJ0aW4wMiIsImEiOiJjazhzeGVnZHcwZTJ4M2ZwYWN0bWY2ZTh3In0.vjI-gVYxkKLmWzVp7uevjg";
 
@@ -256,15 +256,23 @@ export const IbtracPage = props => (
                 />
             </Form>
         </Container>
-        <Container style={{ width: "100%", height: "65%" }}>
+        <Container style={{ width: "100%", height: "65%", position: "relative" }}>
             <DeckGL
+                initialViewState={{
+                    longitude: -74.006,
+                    latitude: 40.7128,
+                    zoom: 12
+                }}
                 width={"100%"}
                 height={"100%"}
-                {...props.viewport}
-                mapboxApiAccessToken={TOKEN}
-                onViewportChange={props.onViewPortChange}
+                controller={true}
+                layers={props.dataLayers}
             >
-                <PolylineOverlay points={props.points} />
+                <ReactMapGL
+                    {...props.viewport}
+                    mapboxApiAccessToken={TOKEN}
+                    onViewportChange={props.onViewPortChange}
+                />
             </DeckGL>
         </Container>
     </Container>

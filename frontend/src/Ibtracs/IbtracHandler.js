@@ -13,9 +13,7 @@ class IbtracHandler extends Component {
     state = {
         loadingIbtracQuery: false,
         viewport: {
-            height: "100vh",
-            width: "100vw",
-            location: [48.6908333333, 9.14055555556],
+            location: [0, 0],
             zoom: 6,
         },
         allIbtracOptions: {
@@ -40,7 +38,7 @@ class IbtracHandler extends Component {
         query: {},
         requestTime: 0,
         ibtracData: [],
-        dataLayer: (<div></div>)
+        dataLayers: ([])
     };
 
     componentDidMount = async () => {
@@ -61,9 +59,7 @@ class IbtracHandler extends Component {
      */
     fetchOptions = async (query, keys) => {
         this.setState({ loadingOptions: true });
-        console.log(query);
         const request = {"query": query, "keys": keys};
-        console.log(request);
         return fetch(`${this.API_GATEWAY_ENDPOINT}/ibtracs/options`, {
             method: "POST",
             body: JSON.stringify(request),
@@ -81,8 +77,6 @@ class IbtracHandler extends Component {
     };
 
     handleDropdownChange = async (evt, {id, value}) => {
-        console.log(id);
-        console.log(value);
         let removing = true;
         if (id) {
             removing = this.state.selections[id].length > value.length;
@@ -101,15 +95,12 @@ class IbtracHandler extends Component {
         // TODO: Need to wait until a user has stopped typing for min/max fields
     // TODO: Should probably also just separate the min/max fields from the dropdown functions
     handleInputChange = async (evt, {id, value}) => {
-        console.log(id);
-        console.log(value);
         const intValue = parseInt(value);
         await this.setState(prevState => ({
             selections: Object.assign(prevState.selections, { [id]: intValue })
         }));
         const keys = value.length === 0 ? [] : [id];
         const query = this.generateQuery();
-        console.log(query);
         this.setState({ query });
 
         if (this.state.typingTimeout[id]) {
@@ -132,22 +123,11 @@ class IbtracHandler extends Component {
     };
 
     generateQuery = () => {
-        /*
-        {"$and": [
-                {
-                    "$or": [
-                        {
-                            "basin":"ATL"
-                        }
-                    ]
-                }
-            ]
-        }*/
         const selections = Object.assign({}, this.state.selections);
         const queryList = [];
         Object.keys(selections).forEach(key => {
             if (key.includes("max") || key.includes("min")) {
-                if (selections[key]) {
+                if (typeof selections[key] ==='number') {
                     const actualKey = key.split("_")[0];
                     if (key.includes("max")) {
                         queryList.push({[actualKey]: {"$lte": selections[key]}})
@@ -238,14 +218,14 @@ class IbtracHandler extends Component {
             console.log(responseJson);
             data = responseJson;
         });
-        console.log(data.ibtracData);
+        this.generateDataLayer(data.ibtracData);
         this.setState({ loadingIbtracQuery: false, ibtracData: data.ibtracData });
     };
 
-    dataLayer = () => {
+    generateDataLayer = (coordinates) => {
         const scatterplotLayer = new ScatterplotLayer({
             id: 'scatterplot-layer',
-            data,
+            data: coordinates,
             pickable: true,
             opacity: 0.8,
             stroked: true,
@@ -254,22 +234,21 @@ class IbtracHandler extends Component {
             radiusMinPixels: 1,
             radiusMaxPixels: 100,
             lineWidthMinPixels: 1,
-            getPosition: d => d.coordinates,
-            getRadius: d => Math.sqrt(d.exits),
+            getPosition: d => d,
+            getRadius: d => 100,
             getFillColor: d => [255, 140, 0],
             getLineColor: d => [0, 0, 0],
-            onHover: ({object, x, y}) => {
-              const tooltip = `${object.name}\n${object.address}`;
-              /* Update tooltip
-                 http://deck.gl/#/documentation/developer-guide/adding-interactivity?section=example-display-a-tooltip-for-hovered-object
-              */
-            }
+            //onHover: ({object, x, y}) => {
+            //  const tooltip = `${object.name}\n${object.address}`;
+            //}
         });
-        return new HeatmapLayer({
+        const heatMapLayer = new HeatmapLayer({
             id: 'heatmapLayer',
-            data: this.state.ibtracData,
+            data: coordinates,
+            radiusPixels: 100,
             getPosition: d => d,
         });
+        this.setState({ dataLayers: [scatterplotLayer] })
     };
 
     onViewPortChange = (viewport) => {
@@ -290,7 +269,7 @@ class IbtracHandler extends Component {
                     ibtracOptions={this.state.ibtracOptions}
                     loadingIbtracQuery={this.state.loadingIbtracQuery}
                     ibtracData={this.state.ibtracData}
-                    dataLayer={this.dataLayer()}
+                    dataLayers={this.state.dataLayers}
                     fetchQuery={this.fetchQuery}
                     handleDropdownChange={this.handleDropdownChange}
                     handleInputChange={this.handleInputChange}

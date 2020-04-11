@@ -183,7 +183,7 @@ def ibtracQuery():
     minLat, maxLat, minLon, maxLon = 90, -90, 180, -180
     for document in ibtracsCol.find(query):
         lat = document['lat']
-        lon = document['long']
+        lon = document['lon']
         if lat > maxLat:
             maxLat = lat
         if lat < minLat:
@@ -192,9 +192,16 @@ def ibtracQuery():
             maxLon = lon
         if lon < minLon:
             minLon = lon
+
+        keys = ['season', 'name', 'wind', 'pres', 'gust', 'lat', 'lon', 'dist2land', 'storm_speed', 'storm_dir']
+        tempDict = {
+            'lat': lat,
+            'lon': lon,
+            'date': str(document['date'])
+        }
         # Whether to organize the points by storm/time and include wind data
         if not requestJson["storm"]:
-            output.append([lat, lon])
+            output.append([lon, lat])
         else:
             if document['name'] not in output.keys():
                 output[document['name']] = []
