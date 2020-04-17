@@ -76,15 +76,47 @@ class IbtracHandler extends Component {
         });
     };
 
-    handleDropdownChange = async (evt, {id, value}) => {
-        let removing = true;
-        if (id) {
-            removing = this.state.selections[id].length > value.length;
-            await this.setState(prevState => ({
-                selections: Object.assign(prevState.selections, { [id]: value })
-            }));
+    handlePlotTypeChange = async (evt, {id, value}) => {
+        let layer;
+        switch (value) {
+            case "heatmap":
+                layer = new HeatmapLayer({
+                    id: 'heatmapLayer',
+                    //data: coordinates,
+                    radiusPixels: 100,
+                    getPosition: d => d,
+                });
+                break;
+            case "scatter":
+                layer = new ScatterplotLayer({
+                    id: 'scatterplot-layer',
+                    //data: coordinates,
+                    pickable: true,
+                    opacity: 0.8,
+                    stroked: true,
+                    filled: true,
+                    radiusScale: 6,
+                    radiusMinPixels: 1,
+                    radiusMaxPixels: 100,
+                    lineWidthMinPixels: 1,
+                    getPosition: d => d,
+                    getRadius: d => 100,
+                    getFillColor: d => [255, 140, 0],
+                    getLineColor: d => [0, 0, 0],
+                    //onHover: ({object, x, y}) => {
+                    //  const tooltip = `${object.name}\n${object.address}`;
+                    //}
+                });
+            break;
         }
-        const keys = removing ? [] : [id];
+        this.setState({ dataLayers: [layer] })
+    };
+
+    handleDropdownChange = async (evt, {id, value}) => {
+        await this.setState(prevState => ({
+            selections: Object.assign(prevState.selections, { [id]: value })
+        }));
+        const keys = this.state.selections[id].length > value.length ? [] : [id];
         const query = this.generateQuery();
         this.setState({ query });
         this.generateOptions(await this.fetchOptions(query, keys));
@@ -92,7 +124,7 @@ class IbtracHandler extends Component {
         //this.generateOptions(await this.fetchOptions(query, keys));
     };
 
-        // TODO: Need to wait until a user has stopped typing for min/max fields
+    // TODO: Need to wait until a user has stopped typing for min/max fields
     // TODO: Should probably also just separate the min/max fields from the dropdown functions
     handleInputChange = async (evt, {id, value}) => {
         const intValue = parseInt(value);
@@ -218,37 +250,7 @@ class IbtracHandler extends Component {
             console.log(responseJson);
             data = responseJson;
         });
-        this.generateDataLayer(data.ibtracData);
         this.setState({ loadingIbtracQuery: false, ibtracData: data.ibtracData });
-    };
-
-    generateDataLayer = (coordinates) => {
-        const scatterplotLayer = new ScatterplotLayer({
-            id: 'scatterplot-layer',
-            data: coordinates,
-            pickable: true,
-            opacity: 0.8,
-            stroked: true,
-            filled: true,
-            radiusScale: 6,
-            radiusMinPixels: 1,
-            radiusMaxPixels: 100,
-            lineWidthMinPixels: 1,
-            getPosition: d => d,
-            getRadius: d => 100,
-            getFillColor: d => [255, 140, 0],
-            getLineColor: d => [0, 0, 0],
-            //onHover: ({object, x, y}) => {
-            //  const tooltip = `${object.name}\n${object.address}`;
-            //}
-        });
-        const heatMapLayer = new HeatmapLayer({
-            id: 'heatmapLayer',
-            data: coordinates,
-            radiusPixels: 100,
-            getPosition: d => d,
-        });
-        this.setState({ dataLayers: [scatterplotLayer] })
     };
 
     onViewPortChange = (viewport) => {

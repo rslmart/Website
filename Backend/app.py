@@ -193,15 +193,18 @@ def ibtracQuery():
         if lon < minLon:
             minLon = lon
 
-        keys = ['season', 'name', 'wind', 'pres', 'gust', 'lat', 'lon', 'dist2land', 'storm_speed', 'storm_dir']
         tempDict = {
-            'lat': lat,
-            'lon': lon,
             'date': str(document['date'])
         }
+
+        keys = ['season', 'name', 'wind', 'pres', 'gust', 'lat', 'lon', 'dist2land', 'storm_speed', 'storm_dir']
+        for key in keys:
+            if key in document:
+                tempDict[key] = document[key]
+
         # Whether to organize the points by storm/time and include wind data
         if not requestJson["storm"]:
-            output.append([lon, lat])
+            output.append(tempDict)
         else:
             if document['name'] not in output.keys():
                 output[document['name']] = []

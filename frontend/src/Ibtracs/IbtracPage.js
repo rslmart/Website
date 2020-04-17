@@ -65,9 +65,11 @@ export const MapForm = props => (
             <label>Plot Type</label>
             <Form.Dropdown
                 id="plotType"
-                options={[{ text: "Heatmap", value: "heatmap"},
+                options={[
+                    { text: "Heatmap", value: "heatmap"},
                     { text: "Scatter Plot", value: "scatter"},
-                    { text: "Storm Paths", value: "line"}]}
+                    { text: "Storm Paths", value: "line"}
+                    ]}
                 onChange={props.handleDropdownChange}
             />
         </Form.Field>
