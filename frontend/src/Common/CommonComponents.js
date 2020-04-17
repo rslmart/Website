@@ -6,7 +6,7 @@ export const MenuHeader = (props) => (
         fixed={'top'}
         inverted
     >
-        <Container style={{marginBottom:'10px'}}>
+        <Container>
             <Menu.Item as='a' href={'/'}>
                 Home
             </Menu.Item>

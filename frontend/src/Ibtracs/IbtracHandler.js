@@ -258,23 +258,18 @@ class IbtracHandler extends Component {
 
     render () {
         return (
-            <div>
-                <MenuHeader
-                    menuItems={[]}
-                />
-                <IbtracPage
-                    points={[[90,90],[0,0]]}
-                    viewport={this.state.viewport}
-                    onViewPortChange={this.onViewPortChange}
-                    ibtracOptions={this.state.ibtracOptions}
-                    loadingIbtracQuery={this.state.loadingIbtracQuery}
-                    ibtracData={this.state.ibtracData}
-                    dataLayers={this.state.dataLayers}
-                    fetchQuery={this.fetchQuery}
-                    handleDropdownChange={this.handleDropdownChange}
-                    handleInputChange={this.handleInputChange}
-                />
-            </div>
+            <IbtracPage
+                points={[[90,90],[0,0]]}
+                viewport={this.state.viewport}
+                onViewPortChange={this.onViewPortChange}
+                ibtracOptions={this.state.ibtracOptions}
+                loadingIbtracQuery={this.state.loadingIbtracQuery}
+                ibtracData={this.state.ibtracData}
+                dataLayers={this.state.dataLayers}
+                fetchQuery={this.fetchQuery}
+                handleDropdownChange={this.handleDropdownChange}
+                handleInputChange={this.handleInputChange}
+            />
         );
     }
 }
