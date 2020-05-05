@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, {Component, useState} from 'react';
 import DeckGL from '@deck.gl/react';
 import {Container, Form, Grid, Input, Label} from "semantic-ui-react";
 import Utils from "../Common/Utils";
@@ -68,9 +68,12 @@ export const MapForm = props => (
                 options={[
                     { text: "Heatmap", value: "heatmap"},
                     { text: "Scatter Plot", value: "scatter"},
+                    { text: "Grid Layer", value: "grid" },
+                    { text: "Grid Layer Max", value: "gridMax" },
+                    { text: "Grid Layer Min", value: "gridMin" },
                     { text: "Storm Paths", value: "line"}
                     ]}
-                onChange={props.handleDropdownChange}
+                onChange={props.handlePlotTypeChange}
             />
         </Form.Field>
         <Form.Field>
@@ -264,19 +267,15 @@ export const IbtracPage = props => (
             />
         </div>
         <div style={{ height: "100%" }}>
+            {props.renderTooltip}
             <DeckGL
-                initialViewState={{
-                    longitude: -74.006,
-                    latitude: 40.7128,
-                    zoom: 12
-                }}
+                viewState={props.viewState}
                 controller={true}
                 layers={props.dataLayers}
+                onViewStateChange={props.onViewStateChange}
             >
                 <ReactMapGL
-                    {...props.viewport}
                     mapboxApiAccessToken={TOKEN}
-                    onViewportChange={props.onViewPortChange}
                 >
                 </ReactMapGL>
             </DeckGL>
@@ -285,11 +284,10 @@ export const IbtracPage = props => (
                     <MapForm
                         ibtracOptions={props.ibtracOptions}
                         loadingIbtracQuery={props.loadingIbtracQuery}
-                        ibtracData={props.ibtracData}
-                        dataLayers={props.dataLayers}
                         fetchQuery={props.fetchQuery}
                         handleDropdownChange={props.handleDropdownChange}
                         handleInputChange={props.handleInputChange}
+                        handlePlotTypeChange={props.handlePlotTypeChange}
                     />
                 </div>
                 <div style={{ float: "right", height: "100%", margin: "0", width: "15%", backgroundColor: "white", opacity: "85%" }}>
