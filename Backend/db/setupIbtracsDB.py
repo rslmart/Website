@@ -37,6 +37,9 @@ def parseRow(header, row):
                 rowDict[header[i]] = row[i]
     rowDict['_id'] = rowDict['sid'] + rowDict['iso_time'].replace(':', '').replace(' ', '').replace(':', '')
     rowDict['date'] = datetime.datetime.strptime(rowDict['iso_time'], "%Y-%m-%d %H:%M:%S")
+    rowDict['day'] = rowDict['date'].day
+    rowDict['month'] = rowDict['date'].month
+    rowDict['year'] = rowDict['date'].year
     additional = ['_wind', '_pres', '_gust']
     for term in additional:
         val = searchForTerm(rowDict, term)

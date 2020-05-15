@@ -54,7 +54,15 @@ class IbtracHandler extends Component {
         requestTime: 0,
         ibtracData: [],
         plotType: "scatter",
-        dataLayers: ([])
+        dataLayer: null,
+        dataLayerValues: {
+            radiusPixels: 30,
+            intensity: 1,
+            threshold: .05,
+            cellSize: 100000,
+            elevationScale: 100,
+
+        }
     };
 
     componentDidMount = async () => {
@@ -114,19 +122,32 @@ class IbtracHandler extends Component {
         );
     };
 
+    handleDataLayerValueChange = (evt, {id, value}) => {
+        this.setState(prevState => ({
+            dataLayerValues: {
+                ...prevState.dataLayerValues,
+                [id]: parseFloat(value)
+            }
+        }));
+        console.log(this.state.dataLayerValues);
+        this.handlePlotTypeChange({}, { value: this.state.plotType});
+    };
+
     handlePlotTypeChange = async (evt, {value}) => {
-        let layer;
+        let dataLayer;
         switch (value) {
             case "heatmap":
-                layer = new HeatmapLayer({
+                dataLayer = new HeatmapLayer({
                     id: 'heatmapLayer',
                     data: this.state.ibtracData,
-                    radiusPixels: 100,
+                    radiusPixels: this.state.dataLayerValues.radiusPixels,
+                    intensity: this.state.dataLayerValues.intensity,
+                    threshold: this.state.dataLayerValues.threshold,
                     getPosition: d => [d.lon, d.lat],
                 });
                 break;
             case "scatter":
-                layer = new ScatterplotLayer({
+                dataLayer = new ScatterplotLayer({
                     id: 'scatterplot-layer',
                     data: this.state.ibtracData,
                     pickable: true,
@@ -172,24 +193,26 @@ class IbtracHandler extends Component {
                 });
                 break;
             case "grid":
-                layer = new GridLayer({
+                dataLayer = new GridLayer({
                     id: 'new-grid-layer',
                     data: this.state.ibtracData,
                     pickable: true,
                     extruded: true,
-                    cellSize: 100000,
-                    elevationScale: 100,
+                    cellSize: this.state.dataLayerValues.cellSize,
+                    elevationScale: this.state.dataLayerValues.elevationScale,
                     getPosition: d => [d.lon, d.lat],
                   });
                 break;
             case "gridMax":
-                layer = new GridLayer({
+                dataLayer = new GridLayer({
                     id: 'new-grid-layer',
                     data: this.state.ibtracData,
                     pickable: true,
                     extruded: true,
-                    cellSize: 100000,
-                    elevationScale: 1000,
+                    cellSize: this.state.dataLayerValues.cellSize,
+                    elevationScale: this.state.dataLayerValues.elevationScale,
+                    colorDomain: [3, 185],
+                    elevationDomain: [3, 185],
                     getPosition: d => [d.lon, d.lat],
                     getElevationWeight: p => p.wind,
                     getColorWeight: p => p.wind,
@@ -198,22 +221,35 @@ class IbtracHandler extends Component {
                   });
                 break;
             case "gridMin":
-                layer = new GridLayer({
+                // subtract min press
+                dataLayer = new GridLayer({
                     id: 'new-grid-layer',
                     data: this.state.ibtracData,
                     pickable: true,
                     extruded: true,
-                    cellSize: 100000,
-                    elevationScale: 500,
+                    cellSize: this.state.dataLayerValues.cellSize,
+                    elevationScale: this.state.dataLayerValues.elevationScale,
+                    colorDomain: [870, 1024],
+                    elevationDomain: [870, 1024],
                     getPosition: d => [d.lon, d.lat],
                     getElevationWeight: p => p.pres,
                     getColorWeight: p => p.pres,
-                    colorAggregation: 'MAX',
-                    elevationAggregation: 'MAX'
+                    colorAggregation: 'MIN',
+                    elevationAggregation: 'MIN'
                   });
                 break;
         }
-        this.setState({ plotType: value, dataLayers: [layer] })
+        this.setState({ plotType: value, dataLayer })
+    };
+
+    handleDateSliderChange = async(data, id) => {
+        await this.setState(prevState => ({
+            selections: Object.assign(prevState.selections, { [id]: data })
+        }));
+        const keys = this.state.selections[id].length > data.length ? [] : [id];
+        const query = this.generateQuery();
+        this.setState({ query });
+        this.generateOptions(await this.fetchOptions(query, keys));
     };
 
     handleDropdownChange = async (evt, {id, value}) => {
@@ -263,7 +299,7 @@ class IbtracHandler extends Component {
         const queryList = [];
         Object.keys(selections).forEach(key => {
             if (key.includes("max") || key.includes("min")) {
-                if (typeof selections[key] ==='number') {
+                if (selections[key] && typeof selections[key] === 'number') {
                     const actualKey = key.split("_")[0];
                     if (key.includes("max")) {
                         queryList.push({[actualKey]: {"$lte": selections[key]}})
@@ -271,7 +307,10 @@ class IbtracHandler extends Component {
                         queryList.push({[actualKey]: {"$gte": selections[key]}})
                     }
                 }
-            } else if (selections[key].length > 0) {
+            } else if (["day", "month", "year"].some(id => id === key)) {
+                queryList.push({[key]: {"$gte": selections[key][0]}})
+                queryList.push({[key]: {"$lte": selections[key][1]}})
+            }  else if (selections[key].length > 0) {
                 queryList.push({"$or": selections[key].map(selection => {return { [key]: selection }})});
             }
         });
@@ -354,11 +393,6 @@ class IbtracHandler extends Component {
             console.log(responseJson);
             data = responseJson;
         });
-        //min min
-        //max max
-
-        // min max
-        // max min
         console.log(data.coordinates.lon.max, data.coordinates.lat.max);
         console.log(data.coordinates.lon.min, data.coordinates.lat.min);
         const {longitude, latitude} = new WebMercatorViewport(this.state.viewState).fitBounds([
@@ -394,11 +428,15 @@ class IbtracHandler extends Component {
                 ibtracOptions={this.state.ibtracOptions}
                 loadingIbtracQuery={this.state.loadingIbtracQuery}
                 ibtracData={this.state.ibtracData}
-                dataLayers={this.state.dataLayers}
+                dataLayer={this.state.dataLayer}
                 fetchQuery={this.fetchQuery}
+                plotType={this.state.plotType}
+                dataLayerValues={this.state.dataLayerValues}
+                handleDateSliderChange={this.handleDateSliderChange}
                 handleDropdownChange={this.handleDropdownChange}
                 handleInputChange={this.handleInputChange}
                 handlePlotTypeChange={this.handlePlotTypeChange}
+                handleDataLayerValueChange={this.handleDataLayerValueChange}
                 renderTooltip={this.renderTooltip()}
             />
         );
