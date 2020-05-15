@@ -79,18 +79,15 @@ if __name__ == '__main__':
         totalCount = 0
 
         for row in reader:
-            if int(row[1]) > 1996:
-                if count >= batch_size:
-                    x = mycol.insert_many(batch)
-                    totalCount += count
-                    print('Inserted {:d} ({:.2f} %)'.format(totalCount, (totalCount / totalSize) * 100))
-                    batch = []
-                    count = 0
-                parsed = parseRow(header, row)
-                batch.append(parsed)
-                count += 1
-            else:
-                print(row[1])
+            if count >= batch_size:
+                x = mycol.insert_many(batch)
+                totalCount += count
+                print('Inserted {:d} ({:.2f} %)'.format(totalCount, (totalCount / totalSize) * 100))
+                batch = []
+                count = 0
+            parsed = parseRow(header, row)
+            batch.append(parsed)
+            count += 1
         if batch:
             x = mycol.insert_many(batch)
             pass

@@ -286,6 +286,10 @@ const MapForm = props => (
                 <Label>{Utils.IBTRACS_KEYS["speed"]}</Label>
             </Input>
         </Form.Field>
+        <Form.Field width={16}>
+            <label>Query</label>
+            <span>{JSON.stringify(props.query)}</span>
+        </Form.Field>
         <Form.Button
             content={`Fetch Data`}
             loading={props.loadingIbtracQuery}
@@ -396,6 +400,7 @@ export const IbtracPage = props => (
                         ibtracOptions={props.ibtracOptions}
                         loadingIbtracQuery={props.loadingIbtracQuery}
                         fetchQuery={props.fetchQuery}
+                        query={props.query}
                         handleDropdownChange={props.handleDropdownChange}
                         handleDateSliderChange={props.handleDateSliderChange}
                         handleInputChange={props.handleInputChange}

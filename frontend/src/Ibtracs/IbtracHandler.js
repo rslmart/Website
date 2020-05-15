@@ -430,6 +430,7 @@ class IbtracHandler extends Component {
                 ibtracData={this.state.ibtracData}
                 dataLayer={this.state.dataLayer}
                 fetchQuery={this.fetchQuery}
+                query={this.state.query}
                 plotType={this.state.plotType}
                 dataLayerValues={this.state.dataLayerValues}
                 handleDateSliderChange={this.handleDateSliderChange}
