@@ -367,7 +367,7 @@ Tick.defaultProps = {
 export const CompoundSlider = props => (
     <div style={{ height: '20px', width: '100%', marginTop: '20px' }}>
         <Slider
-          mode={2}
+          mode={4}
           step={1}
           domain={props.domain}
           rootStyle={props.sliderStyle}

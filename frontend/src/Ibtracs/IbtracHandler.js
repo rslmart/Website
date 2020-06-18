@@ -50,7 +50,7 @@ class IbtracHandler extends Component {
             name: []
         },
         typingTimeout: {},
-        query: {},
+        query: { "iso_time" : { "$regex": "( 00:00:00| 03:00:00| 06:00:00| 09:00:00| 12:00:00| 15:00:00| 18:00:00| 21:00:00){1}$" }},
         requestTime: 0,
         ibtracData: [],
         plotType: "scatter",
@@ -264,8 +264,6 @@ class IbtracHandler extends Component {
         //this.generateOptions(await this.fetchOptions(query, keys));
     };
 
-    // TODO: Need to wait until a user has stopped typing for min/max fields
-    // TODO: Should probably also just separate the min/max fields from the dropdown functions
     handleInputChange = async (evt, {id, value}) => {
         const intValue = parseInt(value);
         await this.setState(prevState => ({
@@ -314,10 +312,11 @@ class IbtracHandler extends Component {
                 queryList.push({"$or": selections[key].map(selection => {return { [key]: selection }})});
             }
         });
+        const timeFilter = { "iso_time" : { "$regex": "( 00:00:00| 03:00:00| 06:00:00| 09:00:00| 12:00:00| 15:00:00| 18:00:00| 21:00:00){1}$" } };
         if (queryList.length > 0) {
-            return { "$and": queryList }
+            return { "$and": queryList.concat([timeFilter]) }
         }
-        return {};
+        return timeFilter;
     };
 
     generateOptions = async (response) => {

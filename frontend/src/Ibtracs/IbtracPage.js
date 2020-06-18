@@ -112,6 +112,20 @@ const MapForm = props => (
             />
         </Form.Field>
         <Form.Field width={16}>
+            <label>Query</label>
+            <span>{JSON.stringify(props.query)}</span>
+        </Form.Field>
+        <Form.Button
+            content={`Fetch Data`}
+            loading={props.loadingIbtracQuery}
+            onClick={props.fetchQuery}
+        />
+    </Form>
+);
+
+const MapForm2 = props => (
+    <Form>
+        <Form.Field width={16}>
             <label>Wind</label>
             <Input
                 id="wind_min"
@@ -286,15 +300,6 @@ const MapForm = props => (
                 <Label>{Utils.IBTRACS_KEYS["speed"]}</Label>
             </Input>
         </Form.Field>
-        <Form.Field width={16}>
-            <label>Query</label>
-            <span>{JSON.stringify(props.query)}</span>
-        </Form.Field>
-        <Form.Button
-            content={`Fetch Data`}
-            loading={props.loadingIbtracQuery}
-            onClick={props.fetchQuery}
-        />
     </Form>
 );
 
@@ -378,7 +383,7 @@ export const IbtracPage = props => (
     <div style={{height: "100%", margin: "0"}}>
         <div style={{ height: "4em"}}>
             <MenuHeader
-                menuItems={[]}
+                menuItems={[{label: "Images", path: "/images"}]}
             />
         </div>
         <div style={{ height: "100%" }}>
@@ -395,7 +400,7 @@ export const IbtracPage = props => (
                 </ReactMapGL>
             </DeckGL>
             <div>
-                <div style={{ float: "left", minHeight: "100%", height: "100%", padding: "10px", marginLeft: "10px", width: "15%", backgroundColor: "white", opacity: "85%" }}>
+                <div style={{ float: "left", minHeight: "100%", height: "100%", padding: "10px", marginLeft: "10px", width: "10%", backgroundColor: "white", opacity: "85%" }}>
                     <MapForm
                         ibtracOptions={props.ibtracOptions}
                         loadingIbtracQuery={props.loadingIbtracQuery}
@@ -406,13 +411,23 @@ export const IbtracPage = props => (
                         handleInputChange={props.handleInputChange}
                         handlePlotTypeChange={props.handlePlotTypeChange}
                     />
+                    <DataLayerForm style={{ marginTop: "10px" }}
+                        plotType={props.plotType}
+                        dataLayerValues={props.dataLayerValues}
+                        handleDataLayerValueChange={props.handleDataLayerValueChange}
+                    />
                 </div>
-                <div style={{ float: "right", height: "100%", margin: "0", width: "15%", backgroundColor: "white", opacity: "85%" }}>
-                <DataLayerForm
-                    plotType={props.plotType}
-                    dataLayerValues={props.dataLayerValues}
-                    handleDataLayerValueChange={props.handleDataLayerValueChange}
-                />
+                <div style={{ float: "right", height: "100%", margin: "0", width: "10%", backgroundColor: "white", opacity: "85%" }}>
+                    <MapForm2
+                        ibtracOptions={props.ibtracOptions}
+                        loadingIbtracQuery={props.loadingIbtracQuery}
+                        fetchQuery={props.fetchQuery}
+                        query={props.query}
+                        handleDropdownChange={props.handleDropdownChange}
+                        handleDateSliderChange={props.handleDateSliderChange}
+                        handleInputChange={props.handleInputChange}
+                        handlePlotTypeChange={props.handlePlotTypeChange}
+                    />
                 </div>
             </div>
         </div>
