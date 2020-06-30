@@ -320,7 +320,7 @@ class ImageHandler extends Component {
         return (
             <div>
                 <MenuHeader
-                    menuItems={[{label: "Ibtracs", path: "/ibtracs"}]}
+                    menuItems={[{label: "Ibtracs", path: "/ibtracs"}, {label: "Cache", path: "/cache"}]}
                 />
                 <ImagePage
                     imageOptions={this.state.imageOptions}

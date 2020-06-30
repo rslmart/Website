@@ -1,5 +1,4 @@
 import React, {Component} from "react";
-import {MenuHeader} from "../Common/CommonComponents";
 import {IbtracPage} from './IbtracPage';
 import {ScatterplotLayer} from '@deck.gl/layers';
 import {HeatmapLayer, GridLayer} from '@deck.gl/aggregation-layers';
