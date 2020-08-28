@@ -8,8 +8,8 @@ import {MenuHeader} from "./Common/CommonComponents";
 
 const menuItems = [
     {label: "Images", path: "/images"},
-    {label: "Ibtracs", path: "/ibtracs"},
-    {label: "Cache", path: "/cache"}
+    {label: "Images", path: "/images"},
+    {label: "Hurdat", path: "/hurdat"},
 ];
 
 const HomepageContent = () => (

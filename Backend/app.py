@@ -224,6 +224,18 @@ def ibtracQuery():
         'coordinates': {'lat': {'max': maxLat, 'min': minLat}, 'lon': {'max': maxLon, 'min': minLon}}
     })
 
+@app.route('/hurdat/query', methods=['POST'])
+def hurdatQuery():
+    requestJson = request.get_json()
+    print(requestJson)
+    query = requestJson["query"]
+    output = []
+    for document in ibtracsCol.find(query):
+        output.append(document)
+    return jsonify({
+        'hurdatData': output,
+    })
+
 
 if __name__ == '__main__':
     app.run()

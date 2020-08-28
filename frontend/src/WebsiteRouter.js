@@ -7,7 +7,7 @@ import {
 import App from "./App";
 import ImageHandler from "./Images/ImageHandler";
 import IbtracHandler from "./Ibtracs/IbtracHandler";
-import CacheHandler from "./Cache/CacheHandler";
+import HurdatHandler from "./Hurdat/HurdatHandler";
 
 export default function WebsiteRouter() {
     return (
@@ -23,8 +23,8 @@ export default function WebsiteRouter() {
                     <Route exact path={'/ibtracs'}>
                         <IbtracHandler/>
                     </Route>
-                    <Route exact path={'/cache'}>
-                        <CacheHandler/>
+                    <Route exact path={'/hurdat'}>
+                        <HurdatHandler/>
                     </Route>
                 </Switch>
             </div>
