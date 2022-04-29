@@ -12,9 +12,90 @@ code {
     monospace;
 }
 
+.app {
+  width: 100vw;
+  min-height: 100vh;
+  background-image: url("./Pics/cool-doge.gif");
+}
+
+@keyframes tile1_anim {
+  0% {
+    transform: translate(0%, 0%);
+    left: 0%;
+    top: 0%;
+  }
+  25% {
+    transform: translate(-100%, 0%);
+    left: 100%;
+    top: 0%;
+  }
+  50% {
+    transform: translate(-100%, -100%);
+    left: 100%;
+    top: 100%;
+  }
+  75% {
+    transform: translate(0%, -100%);
+    left: 0%;
+    top: 100%;
+  }
+}
+
+@keyframes tile2_anim {
+  0% {
+    transform: translate(-100%, 0%);
+    left: 100%;
+    top: 0%;
+  }
+  25% {
+    transform: translate(-100%, -100%);
+    left: 100%;
+    top: 100%;
+  }
+  50% {
+    transform: translate(0%, -100%);
+    left: 0%;
+    top: 100%;
+  }
+  75% {
+    transform: translate(0%, 0%);
+    left: 0%;
+    top: 0%;
+  }
+}
+
 .center {
-  right: 50%;
-  bottom: 50%;
-  transform: translate(50%,50%);
+  display: flex;
+  justify-content: center;
+}
+
+img {
   position: absolute;
+  top: 50%;
+  left: 50%;
+  width: auto;
+  height: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.tile1 {
+  width: 100px;
+  height: 100px;
+  border-style: double;
+  position: absolute;
+  transform: translate(0%, 0%);
+  left: 0%;
+  top: 0%;
+  animation: tile1_anim infinite 10s;
+}
+
+.tile2 {
+  width: 100px;
+  height: 100px;
+  border-style: double;
+  position: absolute;
+  transform: translate(-100%, 0%);
+  left: 100%;
+  top: 0%;
+  animation: tile2_anim infinite 10s;
 }
