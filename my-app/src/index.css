@@ -18,6 +18,11 @@ code {
   background-image: url("./Pics/cool-doge.gif");
 }
 
+.mapboxgl-popup {
+  max-width: 400px;
+  font: 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
+}
+
 @keyframes tile1_anim {
   0% {
     transform: translate(0%, 0%);

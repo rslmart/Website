@@ -15,7 +15,7 @@ function home() {
                     Bio
                 </button>
             </Link>
-            <Link to="/bio">
+            <Link to="/travel">
                 <button
                     className={"tile2"}
                 >
