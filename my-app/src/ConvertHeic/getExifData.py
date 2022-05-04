@@ -21,15 +21,17 @@ if __name__ == '__main__':
     pics_info = {}
     onlyfiles = [f for f in listdir(img_path) if isfile(join(img_path, f))]
     for file in onlyfiles:
-        print(file)
         with open(join(img_path, file), 'rb') as src:
             img = Image(src)
-            if img.has_exif:
+            if img.has_exif and "datetime_digitized" in img.list_all():
                 try:
                     info = {}
                     for key in img.list_all():
-                        if is_jsonable(img.get(key)):
-                            info[key] = img.get(key)
+                        try:
+                            if is_jsonable(img.get(key)):
+                                info[key] = img.get(key)
+                        except:
+                            print(key)
                     info['lat'] = decimal_coords(img.gps_latitude, img.gps_latitude_ref)
                     info['lon'] = decimal_coords(img.gps_longitude, img.gps_longitude_ref)
                     pics_info[file] = info
@@ -37,6 +39,8 @@ if __name__ == '__main__':
                     print('No Coordinates')
             else:
                 print('The Image has no EXIF information')
-    print(pics_info)
+    pic_dates = [(key, pics_info[key]['datetime_digitized']) for key in pics_info]
+    pic_dates = [key for (key, value) in sorted(pic_dates, key=lambda x: x[1])]
+    pics_info['ordered_list'] = pic_dates
     with open(join(img_path, 'data.json'), 'w') as fp:
         json.dump(pics_info, fp)

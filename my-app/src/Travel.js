@@ -1,6 +1,6 @@
 import React from "react";
 import TravelMap from './TravelMap';
-import Thirlmere_to_Ambleside from "./MapData/Helvellyn/Thirlmere_to_Ambleside";
+// import Thirlmere_to_Ambleside from "./MapData/Helvellyn/Thirlmere_to_Ambleside";
 
 function gpxToGeoJson(gpxFile) {
     const parser = new DOMParser();
@@ -16,7 +16,7 @@ function Travel() {
     return (
         <TravelMap
             name="Lake District: Day 1"
-            trailGeoJson={gpxToGeoJson(Thirlmere_to_Ambleside)}
+            // trailGeoJson={gpxToGeoJson(Thirlmere_to_Ambleside)}
         />
     );
 }
