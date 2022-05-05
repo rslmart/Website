@@ -4,7 +4,7 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import Pin from "./pin";
 import PIC_DATA from "./Pics/Colorado/data.json"
 
-const accessToken = "pk.eyJ1Ijoicm1tYXJ0aW4wMiIsImEiOiJjazhzeGVnZHcwZTJ4M2ZwYWN0bWY2ZTh3In0.vjI-gVYxkKLmWzVp7uevjg";
+const accessToken = "pk.eyJ1Ijoicm1tYXJ0aW4wMiIsImEiOiJjbDJycXh3Y2gwMnJ5M2psYmh2NnQwM3JwIn0.AQrKQj9udLED80nJYPYy6g";
 
 export default function TravelMap(props) {
     const [popupInfo, setPopupInfo] = useState(null);
