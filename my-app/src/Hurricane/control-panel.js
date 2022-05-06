@@ -14,27 +14,25 @@ function ControlPanel(props) {
             <hr />
 
             <div key={'min_year'} className="input">
-                <label>Min Year: {min_year}</label>
+                <label>Min Year: </label>
                 <input
                     name="min_year"
-                    type="range"
+                    type="number"
                     value={min_year}
                     min={1851}
                     max={2021}
-                    step={1}
                     onChange={evt => props.onChange(evt)}
                 />
             </div>
 
             <div key={'max_year'} className="input">
-                <label>Max Year: {max_year}</label>
+                <label>Max Year: </label>
                 <input
                     name="max_year"
-                    type="range"
+                    type="number"
                     value={max_year}
                     min={1851}
                     max={2021}
-                    step={1}
                     onChange={evt => props.onChange(evt)}
                 />
             </div>

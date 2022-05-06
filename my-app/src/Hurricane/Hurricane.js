@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState,useEffect} from 'react';
 import DeckGL from '@deck.gl/react';
 import {LineLayer, ScatterplotLayer} from '@deck.gl/layers';
 import {Map} from 'react-map-gl';
@@ -21,9 +21,9 @@ Filters
     Year
     Month
     Wind
-    Pressure
+    Pressure - when enabled filter out all points wihtout pressure
     6 hour points
-    landfall
+    Record Type (for storms make this a list)
     Latitude
         For storms
             max/min
@@ -66,22 +66,25 @@ const getColorFromWindSpeed = (windspeed) => {
     return [94, 186, 255, 255];
 };
 
-const getLineDataFromStormTrackPoints = (trackpoints) => {
+const getLineDataFromStormTrackPoints = (storms) => {
     const line_list = []
-    for (let i = 0; i < trackpoints.length - 1; i++) {
-        const line = {
-            color: getColorFromWindSpeed(trackpoints[i].wind),
-            from: [trackpoints[i]["longitude"], trackpoints[i]["latitude"]],
-            to: [trackpoints[i + 1]["longitude"], trackpoints[i + 1]["latitude"]],
+    storms.forEach(storm => {
+        const trackpoints = storm["track_points"]
+        for (let i = 0; i < trackpoints.length - 1; i++) {
+            const line = {
+                color: getColorFromWindSpeed(trackpoints[i].wind),
+                from: [trackpoints[i]["longitude"], trackpoints[i]["latitude"]],
+                to: [trackpoints[i + 1]["longitude"], trackpoints[i + 1]["latitude"]],
+            }
+            line_list.push(line);
         }
-        line_list.push(line);
-    }
+    });
     return line_list
 };
 
-const getStormLineLayer = (data) => new LineLayer({
+const getStormLineLayer = (storms) => new LineLayer({
     id: 'line-layer',
-    data: getLineDataFromStormTrackPoints(Object.values(data).flatMap(storm => storm.track_points)),
+    data: getLineDataFromStormTrackPoints(Object.values(storms)),
     pickable: false,
     getWidth: 1,
     getSourcePosition: d => d.from,
@@ -89,9 +92,21 @@ const getStormLineLayer = (data) => new LineLayer({
     getColor: d => d.color
 });
 
+const getScatterplotLayer = (track_points, setHoverInfo) => new ScatterplotLayer({
+    id: 'scatterplot-layer',
+    getPosition: d => [d.longitude, d.latitude],
+    getColor: d => getColorFromWindSpeed(d.wind),
+    radiusScale: 6,
+    radiusMinPixels: 2,
+    radiusMaxPixels: 100,
+    data: track_points,
+    pickable: true,
+    onHover: info => setHoverInfo(info)
+});
+
 export default function Hurricane() {
-    const [dataSource, setDataSource] = useState(TRACK_POINTS)
-    const [data, setData] = useState(TRACK_POINTS);
+    const [dataSource, setDataSource] = useState(STORMS)
+    const [data, setData] = useState(STORMS);
     const [min_year, setMinYear] = useState(1851);
     const [max_year, setMaxYear] = useState(2021);
     const [min_wind, setMinWind] = useState(0);
@@ -99,20 +114,9 @@ export default function Hurricane() {
     const [only_6_hour, setOnly6Hour] = useState(false);
     const [hoverInfo, setHoverInfo] = useState();
 
-    const scatterplot_layer = new ScatterplotLayer({
-        id: 'scatterplot-layer',
-        getPosition: d => [d.longitude, d.latitude],
-        getColor: d => getColorFromWindSpeed(d.wind),
-        radiusScale: 6,
-        radiusMinPixels: 1,
-        radiusMaxPixels: 100,
-        data,
-        pickable: true,
-        onHover: info => setHoverInfo(info)
-    });
-
     const layers = [
-        scatterplot_layer
+        getStormLineLayer(data),
+        getScatterplotLayer(Object.values(data).flatMap(storm => storm["track_points"]), setHoverInfo)
     ];
 
     const onChange = (evt) => {
@@ -131,14 +135,27 @@ export default function Hurricane() {
         if (evt.target.name === "only_6_hour") {
             setOnly6Hour(evt.target.checked)
         }
-        setData(dataSource
-            .filter(point => point.year >= min_year)
-            .filter(point => point.year <= max_year)
-            .filter(point => point.wind >= min_wind)
-            .filter(point => point.wind <= max_wind)
-            .filter(point => only_6_hour ? false : point.minutes === 0 && point.hours % 6 === 0)
-        );
     };
+
+    useEffect(() => {
+        if (Array.isArray(dataSource)) {
+            setData(dataSource
+                .filter(point => point.year >= min_year)
+                .filter(point => point.year <= max_year)
+                .filter(point => point.wind >= min_wind)
+                .filter(point => point.wind <= max_wind)
+                .filter(point => only_6_hour ? false : point.minutes === 0 && point.hours % 6 === 0)
+            );
+        } else {
+            console.log(min_year, max_year)
+            setData(Object.fromEntries(Object.entries(dataSource)
+                .filter(([k,storm]) => storm.season >= min_year) // TODO Problem with this logic
+                .filter(([k,storm]) => storm.season <= max_year)
+                .filter(([k,storm]) => storm.max_wind >= min_wind)
+                .filter(([k,storm]) => storm.max_wind <= max_wind)
+            ));
+        }
+    }, [min_year, max_year, min_wind, max_wind, only_6_hour]);
 
     return (
         <div style={{width: "100vw", height: "100vh"}}>
@@ -163,14 +180,14 @@ export default function Hurricane() {
 
                 {hoverInfo && hoverInfo.object && (
                     <div className="tool-tip row" style={{position: 'absolute', zIndex: 1, pointerEvents: 'none', left: hoverInfo.x, top: hoverInfo.y}}>
-                        <div clasName="column">
+                        <div className="column">
                             <p>Name: {STORMS[hoverInfo.object["id"]]["name"]}</p>
                             <p>Date: {hoverInfo.object["date_time"].split(" ")[0]}</p>
                             <p>Longitude: {hoverInfo.object["longitude"]}</p>
                             <p>Wind: {hoverInfo.object["wind"]}</p>
                             {hoverInfo.object["max_wind_radius"] && <p>Max Wind Radius: {hoverInfo.object["max_wind_radius"]}</p>}
                         </div>
-                        <div clasName="column" style={{paddingLeft: 10}}>
+                        <div className="column" style={{paddingLeft: 10}}>
                             <p>Season: {STORMS[hoverInfo.object["id"]]["season"]}</p>
                             <p>Time: {hoverInfo.object["date_time"].split(" ")[1]}</p>
                             <p>Latitude: {hoverInfo.object["latitude"]}</p>

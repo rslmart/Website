@@ -2,6 +2,14 @@ import json
 from datetime import datetime
 import operator
 
+'''
+Fixes
+CHLOE 1967 - last coordinate
+DEBBIE 1969 - last coordinate
+AL211969 - last 4 coordinates
+FAITH 1966 - last 29 coordinates
+'''
+
 def decimal_coords(coords, ref):
     decimal_degrees = coords
     if ref == 'S' or ref == 'W':
@@ -11,17 +19,18 @@ def decimal_coords(coords, ref):
 if __name__ == '__main__':
     storms = {}
     track_points = []
-    with open("./hurdat2-1851-2021-041922.txt") as file:
+    with open("hurdat2.txt") as file:
         storm_id = ""
         for line in file:
             line_arr = ''.join(line.split()).split(',')
             # Start of storm
             if len(line_arr) == 4:
                 if len(storm_id) > 0:  # Means we are at the end of another storms list
+                    storms[storm_id]["ACE"] = storms[storm_id]["ACE"] / 10000
+                    storms[storm_id]["status_list"] = list(storms[storm_id]["status_list"])
+                    storms[storm_id]["record_type_list"] = list(storms[storm_id]["record_type_list"])
                     if storms[storm_id]["min_pressure"] == 100000:
                         del storms[storm_id]["min_pressure"]
-                    # sort track points by time
-                    storms[storm_id]["track_points"].sort(key=operator.itemgetter('date_time'))
                 storm_id = line_arr[0]+line_arr[1]
                 print("Processing: " + storm_id)
                 storms[storm_id] = {
@@ -32,7 +41,9 @@ if __name__ == '__main__':
                     "id": storm_id,
                     "max_wind": 0,
                     "min_pressure": 100000,
-                    "landfall": False,
+                    "status_list": set(),
+                    "record_type_list": set(),
+                    "ACE": 0,
                     "track_points": []
                 }
             else:
@@ -70,11 +81,18 @@ if __name__ == '__main__':
                     "64_nw": int(line_arr[19]),
                     "max_wind_radius": int(line_arr[20])
                 }
+                if track_point["longitude"] < -250:
+                    track_point["longitude"] = 360 + track_point["longitude"]
+                # ACE
+                storms[storm_id]["ACE"] += (track_point["wind"] * track_point["wind"])
+                track_point["ACE"] = storms[storm_id]["ACE"] / 10000
                 for key in list(track_point.keys()):
                     if track_point[key] == -999:
                         del track_point[key]
-                if track_point["status"] == "L":
-                    storms[storm_id]["landfall"] = True
+                if len(track_point["record_type"]) > 0:
+                    storms[storm_id]["record_type_list"].add(track_point["record_type"])
+                if len(track_point["status"]) > 0:
+                    storms[storm_id]["status_list"].add(track_point["status"])
                 if track_point["wind"] > storms[storm_id]["max_wind"]:
                     storms[storm_id]["max_wind"] = track_point["wind"]
                 if "pressure" in track_point and track_point["pressure"] < storms[storm_id]["min_pressure"]:
