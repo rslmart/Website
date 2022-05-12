@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 function ControlPanel(props) {
-    const {min_year, max_year, min_wind, max_wind, only_6_hour} = props;
+    const {plotType, plotTypeOptions, systemStatus, systemStatusOptions, minYear, maxYear, minWind, maxWind, landfall, only6Hour, onChange} = props;
 
     return (
         <div className="control-panel">
@@ -13,65 +13,92 @@ function ControlPanel(props) {
             </p>
             <hr />
 
-            <div key={'min_year'} className="input">
+            <div>
+                <label>Mode: </label>
+                <select name="plotType" value={plotType} onChange={evt => onChange(evt)}>
+                    {Object.values(plotTypeOptions).map(option =>
+                        <option key={option} value={option}>{option}</option>)}
+                </select>
+            </div>
+
+            <div key={'minYear'} className="input">
                 <label>Min Year: </label>
                 <input
-                    name="min_year"
+                    name="minYear"
                     type="number"
-                    value={min_year}
+                    value={minYear}
                     min={1851}
                     max={2021}
-                    onChange={evt => props.onChange(evt)}
+                    onChange={evt => onChange(evt)}
                 />
             </div>
 
-            <div key={'max_year'} className="input">
+            <div key={'maxYear'} className="input">
                 <label>Max Year: </label>
                 <input
-                    name="max_year"
+                    name="maxYear"
                     type="number"
-                    value={max_year}
+                    value={maxYear}
                     min={1851}
                     max={2021}
-                    onChange={evt => props.onChange(evt)}
+                    onChange={evt => onChange(evt)}
                 />
             </div>
 
-            <div key={'min_wind'} className="input">
-                <label>Min Wind: {min_wind}</label>
+            <div key={'minWind'} className="input">
+                <label>Min Wind: {minWind}</label>
                 <input
-                    name="min_wind"
+                    name="minWind"
                     type="range"
-                    value={min_wind}
+                    value={minWind}
                     min={0}
-                    max={200}
-                    step={1}
-                    onChange={evt => props.onChange(evt)}
+                    max={165}
+                    step={5}
+                    onChange={evt => onChange(evt)}
                 />
             </div>
 
-            <div key={'max_wind'} className="input">
-                <label>Max Wind: {max_wind}</label>
+            <div key={'maxWind'} className="input">
+                <label>Max Wind: {maxWind}</label>
                 <input
-                    name="max_wind"
+                    name="maxWind"
                     type="range"
-                    value={max_wind}
+                    value={maxWind}
                     min={0}
-                    max={200}
-                    step={1}
-                    onChange={evt => props.onChange(evt)}
+                    max={165}
+                    step={5}
+                    onChange={evt => onChange(evt)}
                 />
             </div>
 
-            <div key={'only_6_hour'} className="input">
+            <div key={'systemStatus'} className="select">
+                <label>System Status: </label>
+                <select name="systemStatus" value={systemStatus} onChange={evt => onChange(evt)}>
+                    {Object.keys(systemStatusOptions).map(option =>
+                        <option key={option} value={option}>{option}</option>)}
+                </select>
+            </div>
+
+            <div key={'landfall'} className="input">
+                <label>Landfall:</label>
+                <input
+                    type="checkbox"
+                    name="landfall"
+                    value={landfall}
+                    onChange={evt => onChange(evt)}
+                />
+            </div>
+
+            {plotType === "Scatter Plot" && <div key={'only6Hour'} className="input">
                 <label>Only 6 Hour Points:</label>
                 <input
                     type="checkbox"
-                    name="only_6_hour"
-                    value={only_6_hour}
-                    onChange={evt => props.onChange(evt)}
+                    name="only6Hour"
+                    value={only6Hour}
+                    onChange={evt => onChange(evt)}
                 />
             </div>
+            }
         </div>
     );
 }
