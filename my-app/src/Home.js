@@ -22,6 +22,13 @@ function home() {
                     Travels
                 </button>
             </Link>
+            <Link to="/hurricane">
+                <button
+                    className={"tile3"}
+                >
+                    Hurricanes
+                </button>
+            </Link>
         </div>
     );
 

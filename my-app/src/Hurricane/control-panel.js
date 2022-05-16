@@ -3,15 +3,20 @@ import * as React from 'react';
 function ControlPanel(props) {
     const {plotType, plotTypeOptions, systemStatus, systemStatusOptions, minYear, maxYear, minWind, maxWind, landfall, only6Hour, onChange} = props;
 
+    const PLOT_TYPE_DESCRIPTIONS = {
+        STORM: "Showing the entire tracks of storm systems.",
+        SCATTER_PLOT: "Showing individual track points.",
+        HEATMAP: "Showing heatmap from individual track points.",
+        GRID: "Showing bar graph from sum of individual points in the column area.",
+        MAX_WIND_GRID: "Showing bar graph from the max wind of all individual points in the column area."
+    }
+
     return (
         <div className="control-panel">
             <h3>Hurdat Hurricane Data</h3>
             <p>
-                Map showing hurricane tracking data.
+                {PLOT_TYPE_DESCRIPTIONS[plotType]}
             </p>
-            <p>
-            </p>
-            <hr />
 
             <div>
                 <label>Mode: </label>

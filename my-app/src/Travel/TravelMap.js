@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from "react"
 import Map, {Marker, Popup, Source, Layer} from 'react-map-gl';
 import "mapbox-gl/dist/mapbox-gl.css";
-import Pin from "./pin";
-import PIC_DATA from "./Pics/Colorado/data.json"
+import Pin from "../pin";
+import PIC_DATA from "../Pics/Colorado/data.json"
 
 const accessToken = "pk.eyJ1Ijoicm1tYXJ0aW4wMiIsImEiOiJjbDJycXh3Y2gwMnJ5M2psYmh2NnQwM3JwIn0.AQrKQj9udLED80nJYPYy6g";
 

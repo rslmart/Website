@@ -3,8 +3,8 @@ import ReactDOM from "react-dom";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import Home from "./Home";
-import Bio from "./Bio";
-import Travel from "./Travel";
+import Bio from "./Bio/Bio";
+import Travel from "./Travel/Travel";
 import Hurricane from "./Hurricane/Hurricane";
 
 const rootElement = document.getElementById("root");

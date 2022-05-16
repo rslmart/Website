@@ -1,6 +1,6 @@
 import React, {Component} from 'react';
 import DeckGL from '@deck.gl/react';
-import {GridLayer, HeatmapLayer} from '@deck.gl/aggregation-layers';
+import {GridLayer, HexagonLayer, HeatmapLayer} from '@deck.gl/aggregation-layers';
 import {LineLayer, ScatterplotLayer} from '@deck.gl/layers';
 import {Map} from 'react-map-gl';
 import TRACK_POINTS from './track_points.json';
@@ -11,13 +11,20 @@ import ControlPanel from "./control-panel";
 /Layers
     Trackpoint
         /Scatterplot
-        //Heatmap
+            Settings
+        /Heatmap
+            Settings
         //GridLayer/HexagonLayer
-            Number of storms (heatmap)
+            /Number of points (heatmap)
             Max Wind
             Min Pressure
+            Settings
     /Storms
-        LineLayer
+        Storm display
+            Graph of storm winds/pressure
+            Link to storm
+        /LineLayer
+        Settings
 Filters
     /Year
     Month
@@ -43,7 +50,8 @@ const PLOT_TYPES = {
     STORM: "Storm",
     SCATTER_PLOT: "Scatter Plot",
     HEATMAP: "Heatmap",
-    GRID: "Grid"
+    GRID: "Grid",
+    MAX_WIND_GRID: "Max Wind Grid"
 }
 
 const SYSTEM_STATUSES = {
@@ -138,12 +146,27 @@ const getHeatmapLayer = (track_points) => new HeatmapLayer({
 const getGridLayer = (track_points) => new GridLayer({
     id: 'new-grid-layer',
     data: track_points,
-    pickable: true,
     extruded: true,
     cellSize: 100000,
     elevationScale: 400,
     colorRange: [[255,255,178,128],[254,217,118,128],[254,178,76,128],[253,141,60,128],[240,59,32,128],[189,0,38,128]],
+    getPosition: d => [d.longitude, d.latitude]
+});
+
+function getMax(points) {
+    return 1;
+}
+
+const getGridLayerMaxWind = (track_points) => new HexagonLayer({
+    id: 'new-grid-layer',
+    data: track_points,
+    extruded: true,
+    cellSize: 100000,
+    radius: 100000,
+    elevationScale: 400,
+    colorRange: [[255,255,178,128],[254,217,118,128],[254,178,76,128],[253,141,60,128],[240,59,32,128],[189,0,38,128]],
     getPosition: d => [d.longitude, d.latitude],
+    getElevationValue: getMax
 });
 
 const getStormLayers = (storms, setHoverInfo) => [
@@ -204,7 +227,6 @@ class Hurricane extends Component {
         }
         let data;
         if (Array.isArray(dataSource)) {
-            console.log(this.state.only6Hour);
             data = dataSource
                 .filter(point => point.year >= this.state.minYear)
                 .filter(point => point.year <= this.state.maxYear)
@@ -229,6 +251,8 @@ class Hurricane extends Component {
             layers = getHeatmapLayer(data);
         } else if (this.state.plotType === PLOT_TYPES.GRID) {
             layers = getGridLayer(data);
+        } else if (this.state.plotType === PLOT_TYPES.MAX_WIND_GRID) {
+            layers = getGridLayerMaxWind(data);
         } else {
             layers = getScatterplotLayer(data, hoverInfo => this.setState({hoverInfo}));
         }
