@@ -1,23 +1,44 @@
 import React from "react";
-import TravelMap from './TravelMap';
+import {Map} from "react-map-gl";
+
+import MAP_TOKEN from "../credentials";
 // import Thirlmere_to_Ambleside from "./MapData/Helvellyn/Thirlmere_to_Ambleside";
 
-function gpxToGeoJson(gpxFile) {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(gpxFile, "application/xml");
-    const coordinates = Array.from(doc.getElementsByTagName("trkpt")).map(trackPoint => {
-        return [parseFloat(trackPoint.attributes["lon"].value), parseFloat(trackPoint.attributes["lat"].value)];
-    });
-    return coordinates;
-}
+/*
+Map showing different trips via path layer, can then click on trip for day-by-day detail
+Italy Trip 1
+Italy Trip 2
+Ambleside
+Swizterland
+ */
 
+
+const italyTrip1PathLayer = new PathLayer({
+    id: 'path-layer',
+    data,
+    pickable: true,
+    widthScale: 20,
+    widthMinPixels: 2,
+    getPath: d => d.path,
+    getColor: d => colorToRGBArray(d.color),
+    getWidth: d => 5
+});
 
 function Travel() {
     return (
-        <TravelMap
-            name="Lake District: Day 1"
-            // trailGeoJson={gpxToGeoJson(Thirlmere_to_Ambleside)}
-        />
+        <div style={{width: "100vw", height: "100vh"}}>
+            <DeckGL
+                initialViewState={INITIAL_VIEW_STATE}
+                controller={true}
+                layers={this.state.layers}
+                getTooltip={({object}) => this.getToolTip(object)}
+            >
+                <Map
+                    mapboxAccessToken={MAP_TOKEN}
+                    mapStyle="mapbox://styles/mapbox/dark-v9"
+                />
+            </DeckGL>
+        </div>
     );
 }
 

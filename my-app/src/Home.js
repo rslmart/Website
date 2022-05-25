@@ -29,6 +29,13 @@ function home() {
                     Hurricanes
                 </button>
             </Link>
+            <Link to="/blog">
+                <button
+                    className={"tile4"}
+                >
+                    Blog / Random Stuff
+                </button>
+            </Link>
         </div>
     );
 

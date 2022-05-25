@@ -93,6 +93,29 @@ code {
   }
 }
 
+@keyframes tile4_anim {
+  0% {
+    transform: translate(0%, -100%);
+    left: 0%;
+    top: 100%;
+  }
+  25% {
+    transform: translate(0%, 0%);
+    left: 0%;
+    top: 0%;
+  }
+  50% {
+    transform: translate(-100%, 0%);
+    left: 100%;
+    top: 0%;
+  }
+  75% {
+    transform: translate(-100%, -100%);
+    left: 100%;
+    top: 100%;
+  }
+}
+
 .center {
   display: flex;
   justify-content: center;
@@ -138,6 +161,17 @@ img {
   left: 100%;
   top: 100%;
   animation: tile3_anim infinite 10s;
+}
+
+.tile4 {
+  width: 100px;
+  height: 100px;
+  border-style: double;
+  position: absolute;
+  transform: translate(100%, -100%);
+  left: 0%;
+  top: 100%;
+  animation: tile4_anim infinite 10s;
 }
 
 .control-panel {

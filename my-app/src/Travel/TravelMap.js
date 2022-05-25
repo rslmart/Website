@@ -2,9 +2,17 @@ import React, { useState, useMemo } from "react"
 import Map, {Marker, Popup, Source, Layer} from 'react-map-gl';
 import "mapbox-gl/dist/mapbox-gl.css";
 import Pin from "../pin";
-import PIC_DATA from "../Pics/Colorado/data.json"
+import PIC_DATA from "../Pics/Colorado/data.json";
+import MAP_TOKEN from "../credentials";
 
-const accessToken = "pk.eyJ1Ijoicm1tYXJ0aW4wMiIsImEiOiJjbDJycXh3Y2gwMnJ5M2psYmh2NnQwM3JwIn0.AQrKQj9udLED80nJYPYy6g";
+function gpxToGeoJson(gpxFile) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(gpxFile, "application/xml");
+    const coordinates = Array.from(doc.getElementsByTagName("trkpt")).map(trackPoint => {
+        return [parseFloat(trackPoint.attributes["lon"].value), parseFloat(trackPoint.attributes["lat"].value)];
+    });
+    return coordinates;
+}
 
 export default function TravelMap(props) {
     const [popupInfo, setPopupInfo] = useState(null);
@@ -46,7 +54,7 @@ export default function TravelMap(props) {
 
     return <div style={{width: "100vw", height: "100vh"}}>
         <Map
-            mapboxAccessToken={accessToken}
+            mapboxAccessToken={MAP_TOKEN}
             initialViewState={{
                 longitude: PIC_DATA[PIC_DATA.ordered_list[0]].lon,
                 latitude: PIC_DATA[PIC_DATA.ordered_list[0]].lat,

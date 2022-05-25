@@ -81,6 +81,8 @@ if __name__ == '__main__':
                     "64_nw": int(line_arr[19]),
                     "max_wind_radius": int(line_arr[20])
                 }
+                if track_point["wind"] < 0:
+                    track_point["wind"] = 0
                 if track_point["longitude"] < -250:
                     track_point["longitude"] = 360 + track_point["longitude"]
                 # ACE

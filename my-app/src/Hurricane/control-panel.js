@@ -1,7 +1,9 @@
 import * as React from 'react';
 
 function ControlPanel(props) {
-    const {plotType, plotTypeOptions, systemStatus, systemStatusOptions, minYear, maxYear, minWind, maxWind, landfall, only6Hour, onChange} = props;
+    const {plotType, plotTypeOptions, systemStatus, systemStatusOptions,
+        minYear, maxYear, minMonth, maxMonth, minWind, maxWind,
+        filterByPressure, minPressure, maxPressure, landfall, only6Hour, onChange} = props;
 
     const PLOT_TYPE_DESCRIPTIONS = {
         STORM: "Showing the entire tracks of storm systems.",
@@ -49,6 +51,70 @@ function ControlPanel(props) {
                     onChange={evt => onChange(evt)}
                 />
             </div>
+
+            <div key={'minMonth'} className="input">
+                <label>Min Month: {minMonth}</label>
+                <input
+                    name="minMonth"
+                    type="range"
+                    value={minMonth}
+                    min={1}
+                    max={12}
+                    onChange={evt => onChange(evt)}
+                />
+            </div>
+
+            <div key={'maxMonth'} className="input">
+                <label>Max Month: {maxMonth}</label>
+                <input
+                    name="maxMonth"
+                    type="range"
+                    value={maxMonth}
+                    min={1}
+                    max={12}
+                    onChange={evt => onChange(evt)}
+                />
+            </div>
+
+            <div key={'filterByPressure'} className="input">
+                <label>Filter by Pressure:</label>
+                <input
+                    type="checkbox"
+                    name="filterByPressure"
+                    value={filterByPressure}
+                    onChange={evt => onChange(evt)}
+                />
+            </div>
+
+            {filterByPressure &&
+                (<div>
+                    <div key={'minPressure'} className="input">
+                        <label>Min Pressure: {minPressure}</label>
+                        <input
+                            name="minPressure"
+                            type="range"
+                            value={minPressure}
+                            min={882}
+                            max={1024}
+                            step={1}
+                            onChange={evt => onChange(evt)}
+                        />
+                    </div>
+
+                    <div key={'maxPressure'} className="input">
+                        <label>Max Pressure: {maxPressure}</label>
+                        <input
+                            name="maxPressure"
+                            type="range"
+                            value={maxPressure}
+                            min={882}
+                            max={1024}
+                            step={1}
+                            onChange={evt => onChange(evt)}
+                        />
+                    </div>
+                </div>)
+            }
 
             <div key={'minWind'} className="input">
                 <label>Min Wind: {minWind}</label>
