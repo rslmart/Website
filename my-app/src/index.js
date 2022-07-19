@@ -7,6 +7,8 @@ import Bio from "./Bio/Bio";
 import Travel from "./Travel/Travel";
 import Hurricane from "./Hurricane/Hurricane";
 import Blog from "./Blog/Blog"
+import JSPerfTesting from "./Blog/JSPerfTesting";
+import Education from "./Blog/Education";
 
 const rootElement = document.getElementById("root");
 ReactDOM.render(
@@ -17,6 +19,8 @@ ReactDOM.render(
             <Route path="/Travel" element={<Travel/>} />
             <Route path="/Hurricane" element={<Hurricane/>} />
             <Route path="/Blog" element={<Blog/>} />
+            <Route path="/Blog/JSPerformanceTesting" element={<JSPerfTesting/>} />
+            <Route path="/Blog/Education" element={<Education/>} />
         </Routes>
     </BrowserRouter>,
     rootElement
