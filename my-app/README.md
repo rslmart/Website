@@ -4,10 +4,6 @@ This project was bootstrapped with [Create React App](https://github.com/faceboo
 
 ## Available Scripts
 
-Start with this to install node_modules
-
-### `npm install --legacy-peer-deps`
-
 In the project directory, you can run:
 
 ### `npm start`
