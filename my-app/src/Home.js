@@ -2,6 +2,7 @@ import React from "react";
 import {Link } from "react-router-dom";
 import pic from "./Pics/Me_Matterhorn.png";
 import './index.css';
+import '../node_modules/react-vis/dist/style.css';
 
 function home() {
 

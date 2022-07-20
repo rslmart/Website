@@ -6,7 +6,8 @@ import {Map} from 'react-map-gl';
 import TRACK_POINTS from './track_points.json';
 import STORMS from './storms.json';
 import ControlPanel from "./control-panel";
-import MAP_TOKEN from "../credentials"
+import {MAP_TOKEN} from "../credentials"
+import StormInfo from "./storm-info";
 
 /*
 Settings
@@ -42,6 +43,8 @@ Filters
     Longitude
     /Status (for storms make this a list of all statuses achieved by the storm)
  */
+
+const NON_HIGHLIGHT_ALPHA = 20;
 
 const PLOT_TYPES = {
     STORM: "Storm",
@@ -103,8 +106,10 @@ const getLineDataFromStormTrackPoints = (storms) => {
         for (let i = 0; i < trackpoints.length - 1; i++) {
             const line = {
                 color: getColorFromWindSpeed(trackpoints[i].wind),
+                id: trackpoints["id"],
                 from: [trackpoints[i]["longitude"], trackpoints[i]["latitude"]],
                 to: [trackpoints[i + 1]["longitude"], trackpoints[i + 1]["latitude"]],
+                highlight: storm.highlight
             }
             line_list.push(line);
         }
@@ -119,19 +124,34 @@ const getStormLineLayer = (storms) => new LineLayer({
     getWidth: 1,
     getSourcePosition: d => d.from,
     getTargetPosition: d => d.to,
-    getColor: d => d.color
+    getColor: d => {
+        if (d.highlight) {
+            return d.color;
+        }
+        const color = [...d.color];
+        color[3] = NON_HIGHLIGHT_ALPHA;
+        return color;
+    }
 });
 
-const getScatterplotLayer = (track_points, setHoverInfo) => new ScatterplotLayer({
+const getScatterplotLayer = (track_points, setHoverInfo, onChange) => new ScatterplotLayer({
     id: 'scatterplot-layer',
     getPosition: d => [d.longitude, d.latitude],
-    getColor: d => getColorFromWindSpeed(d.wind),
+    getColor: d => {
+        const color = getColorFromWindSpeed(d.wind)
+        if (d.highlight) {
+            return color;
+        }
+        color[3] = NON_HIGHLIGHT_ALPHA;
+        return color;
+    },
     radiusScale: 6,
     radiusMinPixels: 2,
     radiusMaxPixels: 50,
     data: track_points,
     pickable: true,
-    onHover: info => setHoverInfo(info)
+    onHover: info => setHoverInfo(info),
+    onClick: info => onChange({ target: { name: "selectStorm", value: info.object }})
 });
 
 const getHeatmapLayer = (track_points) => new HeatmapLayer({
@@ -170,9 +190,10 @@ const getGridLayerMaxWind = (track_points) => new HexagonLayer({
     elevationAggregation: 'MAX'
 });
 
-const getStormLayers = (storms, setHoverInfo) => [
+// TODO: setStormInfo needs to change data highlight field
+const getStormLayers = (storms, setHoverInfo, onChange) => [
     getStormLineLayer(storms),
-    getScatterplotLayer(Object.values(storms).flatMap(storm => storm["track_points"]), setHoverInfo)
+    getScatterplotLayer(Object.values(storms).flatMap(storm => storm["track_points"]), setHoverInfo, onChange)
 ]
 
 class Hurricane extends Component {
@@ -193,34 +214,12 @@ class Hurricane extends Component {
         landfall: false,
         only6Hour: false,
         hoverInfo: {},
-        layers: getStormLayers(STORMS, hoverInfo => this.setState({hoverInfo}))
-    }
-
-    componentDidMount() {
-        let minW = 999;
-        let maxW = 0;
-        let minP = 9999;
-        let maxP = 0;
-        TRACK_POINTS.forEach(point => {
-            if (point.wind < minW) {
-                minW = point.wind
-            }
-            if (point.wind > maxW) {
-                maxW = point.wind
-            }
-            if (point.pressure) {
-                if (point.pressure < minP) {
-                    minP = point.pressure
-                }
-                if (point.pressure > maxP) {
-                    maxP = point.pressure
-                }
-            }
-        });
-        console.log(minW, maxW, minP, maxP);
+        stormInfo: {},
+        layers: []
     }
 
     onChange = async (evt) => {
+        console.log(evt)
         if (evt.target.name === "minYear") {
             await this.setState({ minYear: evt.target.value });
         }
@@ -260,6 +259,9 @@ class Hurricane extends Component {
         else if (evt.target.name === "plotType") {
             await this.setState({ plotType: evt.target.value });
         }
+        else if (evt.target.name === "selectStorm") {
+            await this.setState({ stormInfo: evt.target.value });
+        }
         let dataSource;
         if (this.state.plotType === PLOT_TYPES.STORM) {
             dataSource = STORMS;
@@ -274,7 +276,7 @@ class Hurricane extends Component {
             }
         }
         let data;
-        if (Array.isArray(dataSource)) {
+        if (Array.isArray(dataSource)) { // Track points
             data = dataSource
                 .filter(point => point.year >= this.state.minYear)
                 .filter(point => point.year <= this.state.maxYear)
@@ -287,7 +289,7 @@ class Hurricane extends Component {
                 .filter(point => SYSTEM_STATUSES[this.state.systemStatus] ? point.status === SYSTEM_STATUSES[this.state.systemStatus] : true)
                 .filter(point => this.state.landfall ? point.record_type === "L" : true)
                 .filter(point => this.state.only6Hour ?  point.minutes === 0 && point.hours % 6 === 0 : true);
-        } else {
+        } else { // Storm
             data = Object.fromEntries(Object.entries(dataSource)
                 .filter(([k,storm]) => storm.season >= this.state.minYear)
                 .filter(([k,storm]) => storm.season <= this.state.maxYear)
@@ -298,11 +300,14 @@ class Hurricane extends Component {
                 .filter(([k,storm]) => this.state.filterByPressure ? storm.min_pressure && storm.min_pressure >= this.state.minPressure : true)
                 .filter(([k,storm]) => this.state.filterByPressure ? storm.min_pressure && storm.min_pressure <= this.state.maxPressure : true)
                 .filter(([k,storm]) => SYSTEM_STATUSES[this.state.systemStatus] ? storm.status_list.includes(SYSTEM_STATUSES[this.state.systemStatus]) : true)
-                .filter(([k,storm]) => this.state.landfall ? storm.record_type_list.includes("L") : true));
+                .filter(([k,storm]) => this.state.landfall ? storm.record_type_list.includes("L") : true))
+            Object.keys(data).forEach(key => {
+                data[key]["highlight"] = Object.keys(this.state.stormInfo).length === 0 ? true : this.state.stormInfo["id"] === data[key]["id"];
+            });
         }
         let layers;
         if (this.state.plotType === PLOT_TYPES.STORM) {
-            layers = getStormLayers(data, hoverInfo => this.setState({hoverInfo}));
+            layers = getStormLayers(data, hoverInfo => this.setState({hoverInfo}), this.onChange);
         } else if (this.state.plotType === PLOT_TYPES.HEATMAP) {
             layers = getHeatmapLayer(data);
         } else if (this.state.plotType === PLOT_TYPES.GRID) {
@@ -310,7 +315,8 @@ class Hurricane extends Component {
         } else if (this.state.plotType === PLOT_TYPES.MAX_WIND_GRID) {
             layers = getGridLayerMaxWind(data);
         } else {
-            layers = getScatterplotLayer(data, hoverInfo => this.setState({hoverInfo}));
+            // Don't pass anything to stormInfo
+            layers = getScatterplotLayer(data, hoverInfo => this.setState({hoverInfo}), stormInfo => {});
         }
         this.setState({
             dataSource,
@@ -318,6 +324,31 @@ class Hurricane extends Component {
             layers
         })
     };
+
+    componentDidMount() {
+        // let minW = 999;
+        // let maxW = 0;
+        // let minP = 9999;
+        // let maxP = 0;
+        // TRACK_POINTS.forEach(point => {
+        //     if (point.wind < minW) {
+        //         minW = point.wind
+        //     }
+        //     if (point.wind > maxW) {
+        //         maxW = point.wind
+        //     }
+        //     if (point.pressure) {
+        //         if (point.pressure < minP) {
+        //             minP = point.pressure
+        //         }
+        //         if (point.pressure > maxP) {
+        //             maxP = point.pressure
+        //         }
+        //     }
+        // });
+        // console.log(minW, maxW, minP, maxP);
+        this.onChange({target: {name: PLOT_TYPES.STORM}})
+    }
 
     getToolTip = (object) => {
         if (!object) { return; }
@@ -339,27 +370,9 @@ class Hurricane extends Component {
                     getTooltip={({object}) => this.getToolTip(object)}
                 >
                     <Map
+                        reuseMaps
                         mapboxAccessToken={MAP_TOKEN}
                         mapStyle="mapbox://styles/mapbox/dark-v9"
-                    />
-
-                    <ControlPanel
-                        plotType={this.state.plotType}
-                        plotTypeOptions={PLOT_TYPES}
-                        systemStatus={this.state.systemStatus}
-                        systemStatusOptions={SYSTEM_STATUSES}
-                        minYear={this.state.minYear}
-                        maxYear={this.state.maxYear}
-                        minMonth={this.state.minMonth}
-                        maxMonth={this.state.maxMonth}
-                        minWind={this.state.minWind}
-                        maxWind={this.state.maxWind}
-                        filterByPressure={this.state.filterByPressure}
-                        minPressure={this.state.minPressure}
-                        maxPressure={this.state.maxPressure}
-                        landfall={this.state.landfall}
-                        only6Hour={this.state.only6Hour}
-                        onChange={evt => this.onChange(evt)}
                     />
 
                     {this.state.hoverInfo && this.state.hoverInfo.object && (
@@ -384,6 +397,29 @@ class Hurricane extends Component {
                         </div>
                     )}
                 </DeckGL>
+                {this.state.stormInfo && STORMS[this.state.stormInfo["id"]] && (
+                    <StormInfo
+                        stormInfo={STORMS[this.state.stormInfo["id"]]}
+                    />)
+                }
+                <ControlPanel
+                    plotType={this.state.plotType}
+                    plotTypeOptions={PLOT_TYPES}
+                    systemStatus={this.state.systemStatus}
+                    systemStatusOptions={SYSTEM_STATUSES}
+                    minYear={this.state.minYear}
+                    maxYear={this.state.maxYear}
+                    minMonth={this.state.minMonth}
+                    maxMonth={this.state.maxMonth}
+                    minWind={this.state.minWind}
+                    maxWind={this.state.maxWind}
+                    filterByPressure={this.state.filterByPressure}
+                    minPressure={this.state.minPressure}
+                    maxPressure={this.state.maxPressure}
+                    landfall={this.state.landfall}
+                    only6Hour={this.state.only6Hour}
+                    onChange={evt => this.onChange(evt)}
+                />
             </div>
         );
     }
