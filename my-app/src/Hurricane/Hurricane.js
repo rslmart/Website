@@ -1,7 +1,7 @@
 import React, {Component} from 'react';
 import DeckGL from '@deck.gl/react';
 import {GridLayer, HexagonLayer, HeatmapLayer} from '@deck.gl/aggregation-layers';
-import {LineLayer, ScatterplotLayer} from '@deck.gl/layers';
+import {LineLayer, PolygonLayer, ScatterplotLayer} from '@deck.gl/layers';
 import {Map} from 'react-map-gl';
 import TRACK_POINTS from './track_points.json';
 import STORMS from './storms.json';
@@ -25,6 +25,7 @@ Layers
         Storm display
             Graph of storm winds/pressure
             Link to storm
+            
         /LineLayer
 Filters
     /Year
@@ -134,6 +135,16 @@ const getStormLineLayer = (storms) => new LineLayer({
     }
 });
 
+const getMaxWindAreaLayer = (track_points) => new PolygonLayer({
+    id: 'polygon-layer',
+    data: track_points,
+    lineWidthMinPixels: 1,
+    getPolygon: point => point.max_wind_poly,
+    // getFillColor: d => [d.population / d.area / 60, 140, 0],
+    getLineColor: [80, 80, 80],
+    getLineWidth: 1
+});
+
 const getScatterplotLayer = (track_points, setHoverInfo, onChange) => new ScatterplotLayer({
     id: 'scatterplot-layer',
     getPosition: d => [d.longitude, d.latitude],
@@ -190,10 +201,10 @@ const getGridLayerMaxWind = (track_points) => new HexagonLayer({
     elevationAggregation: 'MAX'
 });
 
-// TODO: setStormInfo needs to change data highlight field
 const getStormLayers = (storms, setHoverInfo, onChange) => [
     getStormLineLayer(storms),
-    getScatterplotLayer(Object.values(storms).flatMap(storm => storm["track_points"]), setHoverInfo, onChange)
+    getScatterplotLayer(Object.values(storms).flatMap(storm => storm["track_points"]), setHoverInfo, onChange),
+    getMaxWindAreaLayer(Object.values(storms).flatMap(storm => storm["track_points"]).filter(track_point => track_point.max_wind_poly))
 ]
 
 class Hurricane extends Component {
@@ -278,29 +289,29 @@ class Hurricane extends Component {
         let data;
         if (Array.isArray(dataSource)) { // Track points
             data = dataSource
-                .filter(point => point.year >= this.state.minYear)
-                .filter(point => point.year <= this.state.maxYear)
-                .filter(point => point.month >= this.state.minMonth)
-                .filter(point => point.month <= this.state.maxMonth)
-                .filter(point => point.wind >= this.state.minWind)
-                .filter(point => point.wind <= this.state.maxWind)
-                .filter(point => this.state.filterByPressure ? point.pressure && point.pressure >= this.state.minPressure : true)
-                .filter(point => this.state.filterByPressure ? point.pressure && point.pressure <= this.state.maxPressure : true)
-                .filter(point => SYSTEM_STATUSES[this.state.systemStatus] ? point.status === SYSTEM_STATUSES[this.state.systemStatus] : true)
-                .filter(point => this.state.landfall ? point.record_type === "L" : true)
-                .filter(point => this.state.only6Hour ?  point.minutes === 0 && point.hours % 6 === 0 : true);
+                .filter(point => point.year >= this.state.minYear
+                    && point.year <= this.state.maxYear
+                    && point.month >= this.state.minMonth
+                    && point.month <= this.state.maxMonth
+                    && point.wind >= this.state.minWind
+                    && point.wind <= this.state.maxWind
+                    && this.state.filterByPressure ? point.pressure && point.pressure >= this.state.minPressure : true
+                    && this.state.filterByPressure ? point.pressure && point.pressure <= this.state.maxPressure : true
+                    && SYSTEM_STATUSES[this.state.systemStatus] ? point.status === SYSTEM_STATUSES[this.state.systemStatus] : true
+                    && this.state.landfall ? point.record_type === "L" : true
+                    && this.state.only6Hour ?  point.minutes === 0 && point.hours % 6 === 0 : true);
         } else { // Storm
             data = Object.fromEntries(Object.entries(dataSource)
-                .filter(([k,storm]) => storm.season >= this.state.minYear)
-                .filter(([k,storm]) => storm.season <= this.state.maxYear)
-                .filter(([k,storm]) => storm.track_points[0].month >= this.state.minMonth
-                    && storm.track_points[storm.track_points.length - 1].month <= this.state.maxMonth)
-                .filter(([k,storm]) => storm.max_wind >= this.state.minWind)
-                .filter(([k,storm]) => storm.max_wind <= this.state.maxWind)
-                .filter(([k,storm]) => this.state.filterByPressure ? storm.min_pressure && storm.min_pressure >= this.state.minPressure : true)
-                .filter(([k,storm]) => this.state.filterByPressure ? storm.min_pressure && storm.min_pressure <= this.state.maxPressure : true)
-                .filter(([k,storm]) => SYSTEM_STATUSES[this.state.systemStatus] ? storm.status_list.includes(SYSTEM_STATUSES[this.state.systemStatus]) : true)
-                .filter(([k,storm]) => this.state.landfall ? storm.record_type_list.includes("L") : true))
+                .filter(([k,storm]) => console.log(storm) && storm.season >= this.state.minYear
+                    && storm.season <= this.state.maxYear
+                    && storm.track_points[0].month >= this.state.minMonth
+                    && storm.track_points[storm.track_points.length - 1].month <= this.state.maxMonth
+                    && storm.max_wind >= this.state.minWind
+                    && storm.max_wind <= this.state.maxWind
+                    && this.state.filterByPressure ? storm.min_pressure && storm.min_pressure >= this.state.minPressure : true
+                    && this.state.filterByPressure ? storm.min_pressure && storm.min_pressure <= this.state.maxPressure : true
+                    && SYSTEM_STATUSES[this.state.systemStatus] ? storm.status_list.includes(SYSTEM_STATUSES[this.state.systemStatus]) : true
+                    && this.state.landfall ? storm.record_type_list.includes("L") : true))
             Object.keys(data).forEach(key => {
                 data[key]["highlight"] = Object.keys(this.state.stormInfo).length === 0 ? true : this.state.stormInfo["id"] === data[key]["id"];
             });

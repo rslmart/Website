@@ -1,6 +1,7 @@
 import json
 from datetime import datetime
-import operator
+import math
+import geopy.distance
 
 '''
 Fixes
@@ -10,11 +11,57 @@ AL211969 - last 4 coordinates
 FAITH 1966 - last 29 coordinates
 '''
 
+
 def decimal_coords(coords, ref):
     decimal_degrees = coords
     if ref == 'S' or ref == 'W':
         decimal_degrees = -decimal_degrees
     return decimal_degrees
+
+
+def getNewCoordinates(lon, lat, bearing, distance):
+    point = geopy.distance.distance(nautical=distance).destination((lat, lon), bearing)
+    return [round(point.longitude, 3), round(point.latitude, 3)]
+
+def getBearing(key):
+    two_letters = key[-2:]
+    if two_letters == 'ne':
+        return 45
+    if two_letters == 'se':
+        return 135
+    if two_letters == 'sw':
+        return 225
+    if two_letters == 'nw':
+        return 315
+
+def addWindPolygons(track_point):
+    key_list = ["34_ne", "34_se", "34_sw", "34_nw", "50_ne", "50_se", "50_sw", "50_nw", "64_ne", "64_se", "64_sw", "64_nw"]
+    for key in key_list:
+        if track_point[key] >= 0:
+            coords = [track_point["longitude"], track_point["latitude"]]
+            new_coords = getNewCoordinates(coords[0], coords[1], getBearing(key), track_point[key])
+
+            bot_top_bearing = 0
+            if key[3] == 's':
+                bot_top_bearing = 180
+            bot_top_coords = getNewCoordinates(coords[0], coords[1], bot_top_bearing, track_point[key])
+
+            left_right_bearing = 90
+            if key[4] == 'w':
+                left_right_bearing = 270
+            left_right_coords = getNewCoordinates(coords[0], coords[1], left_right_bearing,track_point[key])
+            track_point[key + "_poly"] = [coords, bot_top_coords, new_coords, left_right_coords, coords]
+
+def addMaxWindPolygon(track_point):
+    if track_point["max_wind_radius"] > 0:
+        coords = [track_point["longitude"], track_point["latitude"]]
+        north_coords = getNewCoordinates(coords[0], coords[1], 0, track_point["max_wind_radius"])
+        east_coords = getNewCoordinates(coords[0], coords[1], 90, track_point["max_wind_radius"])
+        south_coords = getNewCoordinates(coords[0], coords[1], 180, track_point["max_wind_radius"])
+        west_coords = getNewCoordinates(coords[0], coords[1], 270, track_point["max_wind_radius"])
+        track_point["max_wind_poly"] = [north_coords, east_coords, south_coords, west_coords, north_coords]
+
+
 
 if __name__ == '__main__':
     storms = {}
@@ -31,7 +78,7 @@ if __name__ == '__main__':
                     storms[storm_id]["record_type_list"] = list(storms[storm_id]["record_type_list"])
                     if storms[storm_id]["min_pressure"] == 100000:
                         del storms[storm_id]["min_pressure"]
-                storm_id = line_arr[0]+line_arr[1]
+                storm_id = line_arr[0] + line_arr[1]
                 print("Processing: " + storm_id)
                 storms[storm_id] = {
                     "name": line_arr[1],
@@ -81,6 +128,8 @@ if __name__ == '__main__':
                     "64_nw": int(line_arr[19]),
                     "max_wind_radius": int(line_arr[20])
                 }
+                addWindPolygons(track_point)
+                addMaxWindPolygon(track_point)
                 if track_point["wind"] < 0:
                     track_point["wind"] = 0
                 if track_point["longitude"] < -250:
