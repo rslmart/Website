@@ -201,11 +201,14 @@ const getGridLayerMaxWind = (track_points) => new HexagonLayer({
     elevationAggregation: 'MAX'
 });
 
-const getStormLayers = (storms, setHoverInfo, onChange) => [
-    getStormLineLayer(storms),
-    getScatterplotLayer(Object.values(storms).flatMap(storm => storm["track_points"]), setHoverInfo, onChange),
-    getMaxWindAreaLayer(Object.values(storms).flatMap(storm => storm["track_points"]).filter(track_point => track_point.max_wind_poly))
-]
+const getStormLayers = (storms, setHoverInfo, onChange) => {
+    const track_points = Object.values(storms).flatMap(storm => storm["track_points"]);
+    return [
+        getScatterplotLayer(track_points, setHoverInfo, onChange),
+        getStormLineLayer(storms),
+        getMaxWindAreaLayer(track_points.filter(track_point => track_point.max_wind_poly))
+    ];
+};
 
 class Hurricane extends Component {
     state = {
@@ -230,7 +233,6 @@ class Hurricane extends Component {
     }
 
     onChange = async (evt) => {
-        console.log(evt)
         if (evt.target.name === "minYear") {
             await this.setState({ minYear: evt.target.value });
         }
@@ -295,23 +297,26 @@ class Hurricane extends Component {
                     && point.month <= this.state.maxMonth
                     && point.wind >= this.state.minWind
                     && point.wind <= this.state.maxWind
-                    && this.state.filterByPressure ? point.pressure && point.pressure >= this.state.minPressure : true
-                    && this.state.filterByPressure ? point.pressure && point.pressure <= this.state.maxPressure : true
-                    && SYSTEM_STATUSES[this.state.systemStatus] ? point.status === SYSTEM_STATUSES[this.state.systemStatus] : true
-                    && this.state.landfall ? point.record_type === "L" : true
-                    && this.state.only6Hour ?  point.minutes === 0 && point.hours % 6 === 0 : true);
+                    && (this.state.filterByPressure ? point.pressure && point.pressure >= this.state.minPressure : true)
+                    && (this.state.filterByPressure ? point.pressure && point.pressure <= this.state.maxPressure : true)
+                    && (SYSTEM_STATUSES[this.state.systemStatus] ? point.status === SYSTEM_STATUSES[this.state.systemStatus] : true)
+                    && (this.state.landfall ? point.record_type === "L" : true)
+                    && (this.state.only6Hour ?  point.minutes === 0 && point.hours % 6 === 0 : true));
+            Object.keys(data).forEach(key => {
+                data[key]["highlight"] = true;
+            });
         } else { // Storm
             data = Object.fromEntries(Object.entries(dataSource)
-                .filter(([k,storm]) => console.log(storm) && storm.season >= this.state.minYear
+                .filter(([k,storm]) => storm.season >= this.state.minYear
                     && storm.season <= this.state.maxYear
                     && storm.track_points[0].month >= this.state.minMonth
                     && storm.track_points[storm.track_points.length - 1].month <= this.state.maxMonth
                     && storm.max_wind >= this.state.minWind
                     && storm.max_wind <= this.state.maxWind
-                    && this.state.filterByPressure ? storm.min_pressure && storm.min_pressure >= this.state.minPressure : true
-                    && this.state.filterByPressure ? storm.min_pressure && storm.min_pressure <= this.state.maxPressure : true
-                    && SYSTEM_STATUSES[this.state.systemStatus] ? storm.status_list.includes(SYSTEM_STATUSES[this.state.systemStatus]) : true
-                    && this.state.landfall ? storm.record_type_list.includes("L") : true))
+                    && (this.state.filterByPressure ? storm.min_pressure && storm.min_pressure >= this.state.minPressure : true)
+                    && (this.state.filterByPressure ? storm.min_pressure && storm.min_pressure <= this.state.maxPressure : true)
+                    && (SYSTEM_STATUSES[this.state.systemStatus] ? storm.status_list.includes(SYSTEM_STATUSES[this.state.systemStatus]) : true)
+                    && (this.state.landfall ? storm.record_type_list.includes("L") : true)))
             Object.keys(data).forEach(key => {
                 data[key]["highlight"] = Object.keys(this.state.stormInfo).length === 0 ? true : this.state.stormInfo["id"] === data[key]["id"];
             });
