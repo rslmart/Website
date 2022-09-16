@@ -37,7 +37,7 @@ def getBearing(key):
 def addWindPolygons(track_point):
     key_list = ["34_ne", "34_se", "34_sw", "34_nw", "50_ne", "50_se", "50_sw", "50_nw", "64_ne", "64_se", "64_sw", "64_nw"]
     for key in key_list:
-        if track_point[key] >= 0:
+        if track_point[key] > 0:
             coords = [track_point["longitude"], track_point["latitude"]]
             new_coords = getNewCoordinates(coords[0], coords[1], getBearing(key), track_point[key])
 

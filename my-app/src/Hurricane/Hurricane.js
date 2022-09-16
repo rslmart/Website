@@ -8,6 +8,7 @@ import STORMS from './storms.json';
 import ControlPanel from "./control-panel";
 import {MAP_TOKEN} from "../credentials"
 import StormInfo from "./storm-info";
+import stormInfo from "./storm-info";
 
 /*
 Settings
@@ -109,8 +110,7 @@ const getLineDataFromStormTrackPoints = (storms) => {
                 color: getColorFromWindSpeed(trackpoints[i].wind),
                 id: trackpoints["id"],
                 from: [trackpoints[i]["longitude"], trackpoints[i]["latitude"]],
-                to: [trackpoints[i + 1]["longitude"], trackpoints[i + 1]["latitude"]],
-                highlight: storm.highlight
+                to: [trackpoints[i + 1]["longitude"], trackpoints[i + 1]["latitude"]]
             }
             line_list.push(line);
         }
@@ -125,14 +125,7 @@ const getStormLineLayer = (storms) => new LineLayer({
     getWidth: 1,
     getSourcePosition: d => d.from,
     getTargetPosition: d => d.to,
-    getColor: d => {
-        if (d.highlight) {
-            return d.color;
-        }
-        const color = [...d.color];
-        color[3] = NON_HIGHLIGHT_ALPHA;
-        return color;
-    }
+    getColor: d => d.color
 });
 
 const getMaxWindAreaLayer = (track_points) => new PolygonLayer({
@@ -140,22 +133,41 @@ const getMaxWindAreaLayer = (track_points) => new PolygonLayer({
     data: track_points,
     lineWidthMinPixels: 1,
     getPolygon: point => point.max_wind_poly,
-    // getFillColor: d => [d.population / d.area / 60, 140, 0],
-    getLineColor: [80, 80, 80],
-    getLineWidth: 1
+    getFillColor: d => {
+        const color = [...getColorFromWindSpeed(d.wind)];
+        color[3] = 60;
+        return color;
+        },
+    getLineColor: [0, 0, 0, 0]
+});
+
+const wind_area_keys = ["34_ne_poly", "34_se_poly", "34_sw_poly", "34_nw_poly", "50_ne_poly", "50_se_poly", "50_sw_poly",
+    "50_nw_poly", "64_ne_poly", "64_se_poly", "64_sw_poly", "64_nw_poly"];
+
+const getWindAreaLayers = (track_points) => {
+    return wind_area_keys.map(key => getWindAreaLayer(track_points.filter(point => point[key]), key));
+}
+const getWindAreaLayer = (track_points, key) => new PolygonLayer({
+    id: 'polygon-layer',
+    data: track_points,
+    lineWidthMinPixels: 1,
+    getPolygon: point => point[key],
+    getFillColor: d => {
+        if (key.startsWith("64")) {
+            return [255, 247, 149, 40];
+        }
+        if (key.startsWith("50")) {
+            return [0, 250, 244, 30];
+        }
+        return [94, 186, 255, 20];
+    },
+    getLineColor: [0, 0, 0, 0]
 });
 
 const getScatterplotLayer = (track_points, setHoverInfo, onChange) => new ScatterplotLayer({
     id: 'scatterplot-layer',
     getPosition: d => [d.longitude, d.latitude],
-    getColor: d => {
-        const color = getColorFromWindSpeed(d.wind)
-        if (d.highlight) {
-            return color;
-        }
-        color[3] = NON_HIGHLIGHT_ALPHA;
-        return color;
-    },
+    getColor: d => getColorFromWindSpeed(d.wind),
     radiusScale: 6,
     radiusMinPixels: 2,
     radiusMaxPixels: 50,
@@ -201,13 +213,23 @@ const getGridLayerMaxWind = (track_points) => new HexagonLayer({
     elevationAggregation: 'MAX'
 });
 
-const getStormLayers = (storms, setHoverInfo, onChange) => {
+const getStormLayers = (storms, setHoverInfo, onChange, showMaxWindPoly, showWindPoly) => {
     const track_points = Object.values(storms).flatMap(storm => storm["track_points"]);
-    return [
+    const layers = [
         getScatterplotLayer(track_points, setHoverInfo, onChange),
-        getStormLineLayer(storms),
-        getMaxWindAreaLayer(track_points.filter(track_point => track_point.max_wind_poly))
+        getStormLineLayer(storms)
     ];
+    if (showMaxWindPoly) {
+        layers.push(
+            getMaxWindAreaLayer(track_points.filter(track_point => track_point.max_wind_poly))
+        )
+    }
+    if (showWindPoly) {
+        layers.push(
+            getWindAreaLayers(track_points)
+        )
+    }
+    return layers;
 };
 
 class Hurricane extends Component {
@@ -226,6 +248,8 @@ class Hurricane extends Component {
         maxPressure: 1024, // Only 1,186 storms out of 1,936 storms have at leasy one pressure reading
         systemStatus: SYSTEM_STATUSES.None,
         landfall: false,
+        showMaxWindPoly: false,
+        showWindPoly: false,
         only6Hour: false,
         hoverInfo: {},
         stormInfo: {},
@@ -266,6 +290,12 @@ class Hurricane extends Component {
         else if (evt.target.name === "landfall") {
             await this.setState({ landfall: evt.target.checked });
         }
+        else if (evt.target.name === "showMaxWindPoly") {
+            await this.setState({ showMaxWindPoly: evt.target.checked });
+        }
+        else if (evt.target.name === "showWindPoly") {
+            await this.setState({ showWindPoly: evt.target.checked });
+        }
         else if (evt.target.name === "only6Hour") {
             await this.setState({ only6Hour: evt.target.checked });
         }
@@ -302,12 +332,11 @@ class Hurricane extends Component {
                     && (SYSTEM_STATUSES[this.state.systemStatus] ? point.status === SYSTEM_STATUSES[this.state.systemStatus] : true)
                     && (this.state.landfall ? point.record_type === "L" : true)
                     && (this.state.only6Hour ?  point.minutes === 0 && point.hours % 6 === 0 : true));
-            Object.keys(data).forEach(key => {
-                data[key]["highlight"] = true;
-            });
         } else { // Storm
             data = Object.fromEntries(Object.entries(dataSource)
-                .filter(([k,storm]) => storm.season >= this.state.minYear
+                .filter(([k,storm]) =>
+                    (Object.keys(this.state.stormInfo).length === 0 ? true : this.state.stormInfo["id"] === storm["id"])
+                    && storm.season >= this.state.minYear
                     && storm.season <= this.state.maxYear
                     && storm.track_points[0].month >= this.state.minMonth
                     && storm.track_points[storm.track_points.length - 1].month <= this.state.maxMonth
@@ -317,13 +346,11 @@ class Hurricane extends Component {
                     && (this.state.filterByPressure ? storm.min_pressure && storm.min_pressure <= this.state.maxPressure : true)
                     && (SYSTEM_STATUSES[this.state.systemStatus] ? storm.status_list.includes(SYSTEM_STATUSES[this.state.systemStatus]) : true)
                     && (this.state.landfall ? storm.record_type_list.includes("L") : true)))
-            Object.keys(data).forEach(key => {
-                data[key]["highlight"] = Object.keys(this.state.stormInfo).length === 0 ? true : this.state.stormInfo["id"] === data[key]["id"];
-            });
         }
         let layers;
         if (this.state.plotType === PLOT_TYPES.STORM) {
-            layers = getStormLayers(data, hoverInfo => this.setState({hoverInfo}), this.onChange);
+            layers = getStormLayers(data, hoverInfo => this.setState({hoverInfo}), this.onChange,
+                this.state.showMaxWindPoly, this.state.showWindPoly);
         } else if (this.state.plotType === PLOT_TYPES.HEATMAP) {
             layers = getHeatmapLayer(data);
         } else if (this.state.plotType === PLOT_TYPES.GRID) {
@@ -416,6 +443,10 @@ class Hurricane extends Component {
                 {this.state.stormInfo && STORMS[this.state.stormInfo["id"]] && (
                     <StormInfo
                         stormInfo={STORMS[this.state.stormInfo["id"]]}
+                        exitStormInfo={async (evt) => {
+                            await this.setState({stormInfo: {}});
+                            this.onChange(evt)
+                        }}
                     />)
                 }
                 <ControlPanel
@@ -433,6 +464,8 @@ class Hurricane extends Component {
                     minPressure={this.state.minPressure}
                     maxPressure={this.state.maxPressure}
                     landfall={this.state.landfall}
+                    showMaxWindPoly={this.state.showMaxWindPoly}
+                    showWindPoly={this.state.showWindPoly}
                     only6Hour={this.state.only6Hour}
                     onChange={evt => this.onChange(evt)}
                 />

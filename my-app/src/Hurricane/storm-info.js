@@ -9,13 +9,13 @@ import {
 } from 'react-vis';
 
 function StormInfo(props) {
-    const {stormInfo} = props;
+    const {stormInfo, exitStormInfo} = props;
 
     return (
         <div className="storm-info">
-            <div>
+            <div style={{marginBottom: "20px"}}>
                 <h3  style={{float: "left", marginTop: 0, marginBottom: 0}}>{stormInfo["name"]} {stormInfo["season"]}</h3>
-                <button style={{float: "right", }}>&times;</button>
+                <button onClick={evt => exitStormInfo(evt)} style={{float: "right", }}>&times;</button>
             </div>
             <div>
                 <XYPlot xType="time" width={300} height={150} style={{marginBottom: "10px"}}>

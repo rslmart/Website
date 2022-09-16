@@ -3,7 +3,8 @@ import * as React from 'react';
 function ControlPanel(props) {
     const {plotType, plotTypeOptions, systemStatus, systemStatusOptions,
         minYear, maxYear, minMonth, maxMonth, minWind, maxWind,
-        filterByPressure, minPressure, maxPressure, landfall, only6Hour, onChange} = props;
+        filterByPressure, minPressure, maxPressure, landfall, showMaxWindPoly, showWindPoly,
+        only6Hour, onChange} = props;
 
     const PLOT_TYPE_DESCRIPTIONS = {
         STORM: "Showing the entire tracks of storm systems.",
@@ -156,6 +157,26 @@ function ControlPanel(props) {
                     type="checkbox"
                     name="landfall"
                     value={landfall}
+                    onChange={evt => onChange(evt)}
+                />
+            </div>
+
+            <div key={'showMaxWindPoly'} className="input">
+                <label>Show Max Wind Radii:</label>
+                <input
+                    type="checkbox"
+                    name="showMaxWindPoly"
+                    value={showMaxWindPoly}
+                    onChange={evt => onChange(evt)}
+                />
+            </div>
+
+            <div key={'showWindPoly'} className="input">
+                <label>Show 34/50/64 Wind Radii:</label>
+                <input
+                    type="checkbox"
+                    name="showWindPoly"
+                    value={showWindPoly}
                     onChange={evt => onChange(evt)}
                 />
             </div>
