@@ -13,7 +13,7 @@ const rootElement = document.getElementById("root");
 ReactDOM.render(
     <BrowserRouter>
         <Routes>
-            <Route exact path="/" element={<Home/>} />
+            <Route exact path="/" element={<Hurricane/>} />
             <Route path="/Bio" element={<Bio/>} />
             <Route path="/Travel" element={<Travel/>} />
             <Route path="/Travel/LakeDistrict" element={<LakeDistrict/>} />

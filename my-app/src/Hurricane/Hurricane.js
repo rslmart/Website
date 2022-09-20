@@ -2,9 +2,10 @@ import React, {Component} from 'react';
 import DeckGL from '@deck.gl/react';
 import {GridLayer, HexagonLayer, HeatmapLayer} from '@deck.gl/aggregation-layers';
 import {LineLayer, PolygonLayer, ScatterplotLayer} from '@deck.gl/layers';
-import {Map} from 'react-map-gl';
-import TRACK_POINTS from './track_points.json';
-import STORMS from './storms.json';
+import {WebMercatorViewport} from '@deck.gl/core';
+import {Map, MapRef} from 'react-map-gl';
+import TRACK_POINTS from './data/track_points.json';
+import STORMS from './data/storms.json';
 import ControlPanel from "./control-panel";
 import {MAP_TOKEN} from "../credentials"
 import StormInfo from "./storm-info";
@@ -70,16 +71,7 @@ const SYSTEM_STATUSES = {
     "Disturbance": "DB"
 };
 
-// Viewport settings
-const INITIAL_VIEW_STATE = {
-    longitude: -64,
-    latitude: 26,
-    zoom: 3,
-    pitch: 0,
-    bearing: 0
-};
-
-const getColorFromWindSpeed = (windspeed) => {
+export const getColorFromWindSpeed = (windspeed) => {
     if (windspeed >= 137) {
         return [196, 100, 217, 255];
     }
@@ -232,8 +224,39 @@ const getStormLayers = (storms, setHoverInfo, onChange, showMaxWindPoly, showWin
     return layers;
 };
 
+const getNewViewPort = (track_points) => {
+    let minLat = 1000;
+    let maxLat = -1000;
+    let minLon = 1000;
+    let maxLon = -1000;
+    track_points.forEach(point => {
+        if (point.latitude > maxLat) {
+            maxLat = point.latitude;
+        }
+        if (point.latitude < minLat) {
+            minLat = point.latitude;
+        }
+        if (point.longitude > maxLon) {
+            maxLon = point.longitude;
+        }
+        if (point.longitude < minLon) {
+            minLon = point.longitude;
+        }
+    })
+    return {minLat, maxLat, minLon, maxLon}
+}
+
 class Hurricane extends Component {
     state = {
+        viewState: new WebMercatorViewport({
+            height: 600,
+            width: 800,
+            longitude: -64,
+            latitude: 26,
+            zoom: 3,
+            pitch: 0,
+            bearing: 0
+        }),
         plotType: PLOT_TYPES.STORM,
         dataSource: STORMS,
         data: STORMS,
@@ -255,7 +278,7 @@ class Hurricane extends Component {
         stormInfo: {},
         controlPanelOpen: true,
         layers: []
-    }
+    };
 
     onChange = async (evt) => {
         if (evt.target.name === "minYear") {
@@ -305,6 +328,8 @@ class Hurricane extends Component {
         }
         else if (evt.target.name === "selectStorm") {
             await this.setState({ stormInfo: evt.target.value });
+            const {minLat, maxLat, minLon, maxLon} = getNewViewPort(STORMS[this.state.stormInfo["id"]].track_points);
+            this.setState(prevState => ({ viewState: prevState.viewState.fitBounds([[minLon, minLat],[maxLon, maxLat]])}))
         }
         let dataSource;
         if (this.state.plotType === PLOT_TYPES.STORM) {
@@ -408,7 +433,7 @@ class Hurricane extends Component {
         return (
             <div style={{width: "100vw", height: "100vh"}}>
                 <DeckGL
-                    initialViewState={INITIAL_VIEW_STATE}
+                    initialViewState={this.state.viewState}
                     controller={true}
                     layers={this.state.layers}
                     getTooltip={({object}) => this.getToolTip(object)}
