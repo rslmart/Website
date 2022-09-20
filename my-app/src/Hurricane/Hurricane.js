@@ -253,6 +253,7 @@ class Hurricane extends Component {
         only6Hour: false,
         hoverInfo: {},
         stormInfo: {},
+        controlPanelOpen: true,
         layers: []
     }
 
@@ -450,6 +451,7 @@ class Hurricane extends Component {
                     />)
                 }
                 <ControlPanel
+                    controlPanelOpen={this.state.controlPanelOpen}
                     plotType={this.state.plotType}
                     plotTypeOptions={PLOT_TYPES}
                     systemStatus={this.state.systemStatus}
@@ -468,6 +470,7 @@ class Hurricane extends Component {
                     showWindPoly={this.state.showWindPoly}
                     only6Hour={this.state.only6Hour}
                     onChange={evt => this.onChange(evt)}
+                    toggleControlPanel={evt => {this.setState(prevState => ({ controlPanelOpen: !prevState.controlPanelOpen}))}}
                 />
             </div>
         );

@@ -14,7 +14,7 @@ function StormInfo(props) {
     return (
         <div className="storm-info">
             <div style={{marginBottom: "20px"}}>
-                <h3  style={{float: "left", marginTop: 0, marginBottom: 0}}>{stormInfo["name"]} {stormInfo["season"]}</h3>
+                <h3 style={{float: "left", marginTop: 0, marginBottom: 0}}>{stormInfo["name"]} {stormInfo["season"]}</h3>
                 <button onClick={evt => exitStormInfo(evt)} style={{float: "right", }}>&times;</button>
             </div>
             <div>
