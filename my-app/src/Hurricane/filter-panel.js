@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-function ControlPanel(props) {
+function FilterPanel(props) {
     const {controlPanelOpen, plotType, plotTypeOptions, systemStatus, systemStatusOptions,
         minYear, maxYear, minMonth, maxMonth, minWind, maxWind,
         filterByPressure, minPressure, maxPressure, landfall, showMaxWindPoly, showWindPoly,
@@ -200,4 +200,4 @@ function ControlPanel(props) {
     );
 }
 
-export default React.memo(ControlPanel);
+export default React.memo(FilterPanel);
