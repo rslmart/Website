@@ -3,31 +3,31 @@ import DeckGL from '@deck.gl/react';
 import {GridLayer, HeatmapLayer} from '@deck.gl/aggregation-layers';
 import {LineLayer, PolygonLayer, ScatterplotLayer} from '@deck.gl/layers';
 import {WebMercatorViewport} from '@deck.gl/core';
-import {Map, MapRef} from 'react-map-gl';
+import {Map} from 'react-map-gl';
 import STORMS from './data/storms.json';
-import ControlPanel from "./filter-panel";
+import FilterPanel from "./filter-panel";
 import {MAP_TOKEN} from "../credentials"
 import StormInfo from "./storm-info";
+import SettingsPanel from "./settings-panel";
 
 /*
-Settings
+/Settings
 Layers
     Trackpoint
         /Scatterplot
-            Settings
         /Heatmap
-            Settings
         //GridLayer/HexagonLayer
             /Number of points (heatmap)
             /Max Wind
-            Min Pressure
+            /Min Pressure
     /Storms
-        Storm display
-            Graph of storm winds/pressure
+        /Storm display
+            /Graph of storm winds/pressure
             Link to storm
-            
         /LineLayer
+        /Wind Radii
 Filters
+    /Basin
     /Year
     /Month
     /Wind
@@ -43,9 +43,10 @@ Filters
             start/end
     Longitude
     /Status (for storms make this a list of all statuses achieved by the storm)
+    Search in polygon
+    Search in distance from point
+    Wind Radii
  */
-
-const NON_HIGHLIGHT_ALPHA = 20;
 
 export const PLOT_TYPES = {
     STORM: "Storm",
@@ -55,7 +56,12 @@ export const PLOT_TYPES = {
     MAX_WIND_GRID: "Max Wind Grid"
 };
 
-const AGGREGATE_LAYERS = [PLOT_TYPES.HEATMAP, PLOT_TYPES.GRID];
+export const BASINS = {
+    ALL: "All",
+    AL: "North Atlantic",
+    EP: "East Pacific",
+    CP: "Central Pacific"
+};
 
 const SYSTEM_STATUSES = {
     "None": "",
@@ -115,6 +121,7 @@ const getStormLineLayer = (storms, settings) => new LineLayer({
     getSourcePosition: d => d.from,
     getTargetPosition: d => d.to,
     getColor: d => d.color,
+    // wrapLongitude: true,
     ...settings
 });
 
@@ -134,22 +141,27 @@ const getMaxWindAreaLayer = (track_points) => new PolygonLayer({
 const wind_area_keys = ["34_ne_poly", "34_se_poly", "34_sw_poly", "34_nw_poly", "50_ne_poly", "50_se_poly", "50_sw_poly",
     "50_nw_poly", "64_ne_poly", "64_se_poly", "64_sw_poly", "64_nw_poly"];
 
-const getWindAreaLayers = (track_points) => {
-    return wind_area_keys.map(key => getWindAreaLayer(track_points.filter(point => point[key]), key));
+const getWindAreaLayers = (track_points, selectedPoint) => {
+    return wind_area_keys.map(key => getWindAreaLayer(track_points.filter(point => point[key]), key, selectedPoint));
 }
-const getWindAreaLayer = (track_points, key) => new PolygonLayer({
+const getWindAreaLayer = (track_points, key, selectedPoint) => new PolygonLayer({
     id: 'polygon-layer',
     data: track_points,
     lineWidthMinPixels: 1,
     getPolygon: point => point[key],
     getFillColor: d => {
+        let color = [0,0,0,0];
         if (key.startsWith("64")) {
-            return [255, 247, 149, 40];
+            color = [255, 247, 149, 40];
+        } else if (key.startsWith("50")) {
+            color = [0, 250, 244, 30];
+        } else {
+            color = [94, 186, 255, 20];
         }
-        if (key.startsWith("50")) {
-            return [0, 250, 244, 30];
+        if (selectedPoint && d.date_time === selectedPoint.date_time) {
+            color[3] = color[3]*4;
         }
-        return [94, 186, 255, 20];
+        return color;
     },
     getLineColor: [0, 0, 0, 0]
 });
@@ -189,39 +201,37 @@ const getHeatmapLayer = (track_points, settings) => new HeatmapLayer({
     ...settings
 });
 
-const getGridLayer = (track_points) => new GridLayer({
+const getGridLayer = (track_points, settings) => new GridLayer({
     id: 'new-grid-layer',
     data: track_points,
     pickable: true,
     extruded: true,
-    cellSize: 100000,
-    elevationScale: 400,
     colorRange: [[255,255,204,128],[255,237,160,128],[254,217,118,128],[254,178,76,128],[253,141,60,128],[252,78,42,128] ,[227,26,28,128],[189,0,38,128],[128,0,38,128]],
-    getPosition: d => [d.longitude, d.latitude]
+    getPosition: d => [d.longitude, d.latitude],
+    ...settings
 });
 
 
-const getGridLayerMaxWind = (track_points) => new GridLayer({
+const getGridLayerMaxWind = (track_points, settings) => new GridLayer({
     id: 'new-grid-layer',
     data: track_points,
     pickable: true,
     extruded: true,
-    cellSize: 100000,
-    radius: 100000,
-    elevationScale: 400,
     colorRange: [[255,255,204,128],[255,237,160,128],[254,217,118,128],[254,178,76,128],[253,141,60,128],[252,78,42,128] ,[227,26,28,128],[189,0,38,128],[128,0,38,128]],
     getPosition: d => [d.longitude, d.latitude],
     getElevationWeight: p => p.wind,
     getColorWeight: p => p.wind,
     colorAggregation: 'MAX',
-    elevationAggregation: 'MAX'
+    elevationAggregation: 'MAX',
+    ...settings
 });
 
-const getStormLayers = (storms, setHoverInfo, onChange, showMaxWindPoly, showWindPoly, stormInfo, selectedPoint) => {
+const getStormLayers = (storms, setHoverInfo, onChange, showMaxWindPoly, showWindPoly, stormInfo, selectedPoint, scatterplotSettings, lineSettings) => {
     const track_points = Object.values(storms).flatMap(storm => storm["track_points"]);
+    const selectedPointActual = stormInfo ? stormInfo.track_points[selectedPoint] : null;
     const layers = [
-        getScatterplotLayer(track_points, setHoverInfo, onChange, stormInfo ? stormInfo.track_points[selectedPoint] : null),
-        getStormLineLayer(storms)
+        getScatterplotLayer(track_points, setHoverInfo, onChange, selectedPointActual, scatterplotSettings),
+        getStormLineLayer(storms, lineSettings)
     ];
     if (showMaxWindPoly) {
         layers.push(
@@ -230,7 +240,7 @@ const getStormLayers = (storms, setHoverInfo, onChange, showMaxWindPoly, showWin
     }
     if (showWindPoly) {
         layers.push(
-            getWindAreaLayers(track_points)
+            getWindAreaLayers(track_points, selectedPointActual)
         )
     }
     return layers;
@@ -258,11 +268,13 @@ const getNewViewPort = (track_points) => {
     return {minLat, maxLat, minLon, maxLon}
 }
 
+let doit;
+
 class Hurricane extends Component {
     state = {
+        height: 0,
+        width: 0,
         viewState: new WebMercatorViewport({
-            height: 600,
-            width: 800,
             longitude: -64,
             latitude: 26,
             zoom: 3,
@@ -270,30 +282,35 @@ class Hurricane extends Component {
             bearing: 0
         }),
         scatterplotSettings: {
-            radiusScale: 1,
-            lineWidthScale: 1,
+            name: "scatterplotSettings",
+            radiusScale: 3,
+            lineWidthScale: 2,
             stroked: true,
             filled: true,
-            radiusMinPixels: 0,
+            radiusMinPixels: 4,
             radiusMaxPixels: Number.MAX_SAFE_INTEGER,
-            lineWidthMinPixels: 0,
+            lineWidthMinPixels: 2,
             lineWidthMaxPixels: Number.MAX_SAFE_INTEGER
         },
         lineSettings: {
+            name: "lineSettings",
             widthScale: 1,
             widthMinPixels: 0,
             widthMaxPixels: Number.MAX_SAFE_INTEGER
         },
         gridSettings: {
-            cellSize: 1000,
-            elevationScale: 1
+            name: "gridSettings",
+            cellSize: 100000,
+            elevationScale: 300
         },
         heatmapSettings: {
-            radiusPixels: 30,
+            name: "heatmapSettings",
+            radiusPixels: 50,
             intensity: 1,
-            threshold: 0.05
+            threshold: 0.1
         },
         plotType: PLOT_TYPES.STORM,
+        basin: "ALL",
         dataSource: STORMS,
         data: STORMS,
         minYear: 1851,
@@ -313,7 +330,8 @@ class Hurricane extends Component {
         hoverInfo: {},
         stormInfo: null,
         selectedPoint: 0,
-        controlPanelOpen: true,
+        filterPanelOpen: true,
+        settingsOpen: false,
         layers: []
     };
 
@@ -363,10 +381,13 @@ class Hurricane extends Component {
         else if (evt.target.name === "plotType") {
             await this.setState({ plotType: evt.target.value });
         }
+        else if (evt.target.name === "basin") {
+            await this.setState({ basin: evt.target.value });
+        }
         else if (evt.target.name === "selectStorm") {
             await this.setState({ stormInfo: STORMS[evt.target.value.id] });
             const {minLat, maxLat, minLon, maxLon} = getNewViewPort(this.state.stormInfo.track_points);
-            this.setState(prevState => ({ viewState: prevState.viewState.fitBounds([[minLon, minLat],[maxLon, maxLat]])}))
+            this.setState(prevState => ({ viewState: prevState.viewState.fitBounds([[minLon, minLat],[maxLon, maxLat]], {padding: 80})}))
         }
         else if (evt.target.name === "selectedPoint") {
             await this.setState({ selectedPoint: parseInt(evt.target.value) });
@@ -387,7 +408,9 @@ class Hurricane extends Component {
         let data;
         if (Array.isArray(dataSource)) { // Track points
             data = dataSource
-                .filter(point => point.year >= this.state.minYear
+                .filter(point =>
+                    (this.state.basin === "ALL" ? true : STORMS[point.id].basin === this.state.basin)
+                    && point.year >= this.state.minYear
                     && point.year <= this.state.maxYear
                     && point.month >= this.state.minMonth
                     && point.month <= this.state.maxMonth
@@ -402,6 +425,7 @@ class Hurricane extends Component {
             data = Object.fromEntries(Object.entries(dataSource)
                 .filter(([k,storm]) =>
                     (this.state.stormInfo ? this.state.stormInfo["id"] === storm["id"] : true)
+                    && (this.state.basin === "ALL" ? true : storm.basin === this.state.basin)
                     && storm.season >= this.state.minYear
                     && storm.season <= this.state.maxYear
                     && storm.track_points[0].month >= this.state.minMonth
@@ -416,22 +440,48 @@ class Hurricane extends Component {
         let layers;
         if (this.state.plotType === PLOT_TYPES.STORM) {
             layers = getStormLayers(data, hoverInfo => this.setState({hoverInfo}), this.onChange,
-                this.state.showMaxWindPoly, this.state.showWindPoly, this.state.stormInfo, this.state.selectedPoint);
+                this.state.showMaxWindPoly, this.state.showWindPoly, this.state.stormInfo, this.state.selectedPoint, this.state.scatterplotSettings, this.state.lineSettings);
         } else if (this.state.plotType === PLOT_TYPES.HEATMAP) {
-            layers = getHeatmapLayer(data);
+            layers = getHeatmapLayer(data, this.state.heatmapSettings);
         } else if (this.state.plotType === PLOT_TYPES.GRID) {
-            layers = getGridLayer(data);
+            layers = getGridLayer(data, this.state.gridSettings);
         } else if (this.state.plotType === PLOT_TYPES.MAX_WIND_GRID) {
-            layers = getGridLayerMaxWind(data);
+            layers = getGridLayerMaxWind(data, this.state.gridSettings);
         } else {
             // Don't pass anything to stormInfo
-            layers = getScatterplotLayer(data, hoverInfo => this.setState({hoverInfo}), stormInfo => {});
+            layers = getScatterplotLayer(data, hoverInfo => this.setState({hoverInfo}), stormInfo => {}, null, this.state.scatterplotSettings);
         }
         this.setState({
             dataSource,
             data,
             layers
         })
+    };
+
+    onSettingsChange = async (evt, settings) => {
+        await this.setState(prevState => ({
+            [settings.name]: {
+                ...prevState[settings.name],
+                [evt.target.name]: parseFloat(evt.target.value)
+            }
+        }));
+        await this.onChange({target: {name: this.state.plotType}})
+    }
+
+    updateDimensions = () => {
+        const height = this.divElement.clientHeight;
+        const width = this.divElement.clientWidth;
+        this.setState({ height, width,
+            viewState: new WebMercatorViewport({
+                height,
+                width,
+                longitude: -64,
+                latitude: 26,
+                zoom: 3,
+                pitch: 0,
+                bearing: 0
+            }),
+        });
     };
 
     componentDidMount() {
@@ -456,7 +506,16 @@ class Hurricane extends Component {
         //     }
         // });
         // console.log(minW, maxW, minP, maxP);
+        window.addEventListener('resize', () => {
+            clearTimeout(doit);
+            doit = setTimeout(this.updateDimensions, 100);
+        });
+        this.updateDimensions();
         this.onChange({target: {name: PLOT_TYPES.STORM}})
+    }
+
+    componentWillUnmount() {
+        window.removeEventListener('resize', this.updateDimensions);
     }
 
     getToolTip = (object) => {
@@ -471,7 +530,7 @@ class Hurricane extends Component {
 
     render() {
         return (
-            <div style={{width: "100vw", height: "100vh"}}>
+            <div style={{width: "100vw", height: "100vh"}} ref={ (divElement) => { this.divElement = divElement } }>
                 <DeckGL
                     initialViewState={this.state.viewState}
                     controller={true}
@@ -517,10 +576,12 @@ class Hurricane extends Component {
                         }}
                     />)
                 }
-                <ControlPanel
-                    controlPanelOpen={this.state.controlPanelOpen}
+                <FilterPanel
+                    filterPanelOpen={this.state.filterPanelOpen}
                     plotType={this.state.plotType}
                     plotTypeOptions={PLOT_TYPES}
+                    basin={this.state.basin}
+                    basinOptions={BASINS}
                     systemStatus={this.state.systemStatus}
                     systemStatusOptions={SYSTEM_STATUSES}
                     minYear={this.state.minYear}
@@ -537,7 +598,17 @@ class Hurricane extends Component {
                     showWindPoly={this.state.showWindPoly}
                     only6Hour={this.state.only6Hour}
                     onChange={evt => this.onChange(evt)}
-                    toggleControlPanel={evt => {this.setState(prevState => ({ controlPanelOpen: !prevState.controlPanelOpen}))}}
+                    toggleFilterPanel={evt => {this.setState(prevState => ({ filterPanelOpen: !prevState.filterPanelOpen}))}}
+                />
+                <SettingsPanel
+                    settingsOpen={this.state.settingsOpen}
+                    onSettingsChange={this.onSettingsChange}
+                    toggleSettingsPanel={evt => {this.setState(prevState => ({ settingsOpen: !prevState.settingsOpen}))}}
+                    scatterplotSettings={this.state.scatterplotSettings}
+                    lineSettings={this.state.lineSettings}
+                    gridSettings={this.state.gridSettings}
+                    heatmapSettings={this.state.heatmapSettings}
+                    plotType={this.state.plotType}
                 />
             </div>
         );

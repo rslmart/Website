@@ -1,10 +1,10 @@
 import * as React from 'react';
 
 function FilterPanel(props) {
-    const {controlPanelOpen, plotType, plotTypeOptions, systemStatus, systemStatusOptions,
+    const {filterPanelOpen, plotType, plotTypeOptions, basin, basinOptions, systemStatus, systemStatusOptions,
         minYear, maxYear, minMonth, maxMonth, minWind, maxWind,
         filterByPressure, minPressure, maxPressure, landfall, showMaxWindPoly, showWindPoly,
-        only6Hour, onChange, toggleControlPanel} = props;
+        only6Hour, onChange, toggleFilterPanel} = props;
 
     const PLOT_TYPE_DESCRIPTIONS = {
         STORM: "Showing the entire tracks of storm systems.",
@@ -14,11 +14,11 @@ function FilterPanel(props) {
         MAX_WIND_GRID: "Showing bar graph from the max wind of all individual points in the column area."
     }
 
-    return (controlPanelOpen ?
+    return (filterPanelOpen ?
                 <div className="control-panel">
                     <div style={{height: "40px", marginBottom: 0, paddingBottom: 0}}>
                         <h3 style={{float: "left", marginTop: 0, marginBottom: 0}}>Hurdat Hurricane Data</h3>
-                        <button onClick={evt => toggleControlPanel(evt)} style={{float: "right", }}>-</button>
+                        <button onClick={evt => toggleFilterPanel(evt)} style={{float: "right", }}>-</button>
                     </div>
                     <div>
                         <div key={'plotType'} className="select" style={{marginTop: 10}}>
@@ -26,6 +26,14 @@ function FilterPanel(props) {
                             <select name="plotType" value={plotType} onChange={evt => onChange(evt)}>
                                 {Object.values(plotTypeOptions).map(option =>
                                     <option key={option} value={option}>{option}</option>)}
+                            </select>
+                        </div>
+
+                        <div key={'basin'} className="select" style={{marginTop: 10}}>
+                            <label>Basin: </label>
+                            <select name="basin" value={basin} onChange={evt => onChange(evt)}>
+                                {Object.keys(basinOptions).map(key=>
+                                    <option key={key} value={key}>{basinOptions[key]}</option>)}
                             </select>
                         </div>
 
@@ -196,7 +204,7 @@ function FilterPanel(props) {
                         }
                     </div>
                 </div> :
-                <button onClick={evt => toggleControlPanel(evt)} style={{position: "absolute", top: 20, right: 20}}>+</button>
+                <button onClick={evt => toggleFilterPanel(evt)} style={{position: "absolute", top: 20, right: 20}}>+</button>
     );
 }
 

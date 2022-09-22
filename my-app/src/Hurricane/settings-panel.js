@@ -13,6 +13,7 @@ function SettingsPanel(props) {
 
     const scatterplotDiv = (
         <div>
+            <label>Scatterplot</label>
             <div>
                 <label>radiusScale: </label>
                 <input
@@ -21,7 +22,7 @@ function SettingsPanel(props) {
                     value={radiusScale}
                     min={1}
                     max={Number.MAX_SAFE_INTEGER}
-                    onChange={evt => onSettingsChange(evt)}
+                    onChange={evt => onSettingsChange(evt, scatterplotSettings)}
                 />
             </div>
             <div>
@@ -32,7 +33,7 @@ function SettingsPanel(props) {
                     value={radiusMinPixels}
                     min={0}
                     max={Number.MAX_SAFE_INTEGER}
-                    onChange={evt => onSettingsChange(evt)}
+                   onChange={evt => onSettingsChange(evt, scatterplotSettings)}
                 />
             </div>
             <div>
@@ -43,7 +44,7 @@ function SettingsPanel(props) {
                     value={radiusMaxPixels}
                     min={0}
                     max={Number.MAX_SAFE_INTEGER}
-                    onChange={evt => onSettingsChange(evt)}
+                   onChange={evt => onSettingsChange(evt, scatterplotSettings)}
                 />
             </div>
             <div>
@@ -54,7 +55,7 @@ function SettingsPanel(props) {
                     value={lineWidthScale}
                     min={1}
                     max={Number.MAX_SAFE_INTEGER}
-                    onChange={evt => onSettingsChange(evt)}
+                   onChange={evt => onSettingsChange(evt, scatterplotSettings)}
                 />
             </div>
             <div>
@@ -65,7 +66,7 @@ function SettingsPanel(props) {
                     value={lineWidthMinPixels}
                     min={0}
                     max={Number.MAX_SAFE_INTEGER}
-                    onChange={evt => onSettingsChange(evt)}
+                   onChange={evt => onSettingsChange(evt, scatterplotSettings)}
                 />
             </div>
             <div>
@@ -76,7 +77,7 @@ function SettingsPanel(props) {
                     value={lineWidthMaxPixels}
                     min={0}
                     max={Number.MAX_SAFE_INTEGER}
-                    onChange={evt => onSettingsChange(evt)}
+                   onChange={evt => onSettingsChange(evt, scatterplotSettings)}
                 />
             </div>
         </div>
@@ -84,6 +85,7 @@ function SettingsPanel(props) {
 
     const lineDiv = (
         <div>
+            <label>Line</label>
             <div>
                 <label>widthScale: </label>
                 <input
@@ -92,7 +94,7 @@ function SettingsPanel(props) {
                     value={widthScale}
                     min={1}
                     max={Number.MAX_SAFE_INTEGER}
-                    onChange={evt => onSettingsChange(evt)}
+                    onChange={evt => onSettingsChange(evt, lineSettings)}
                 />
             </div>
             <div>
@@ -103,7 +105,7 @@ function SettingsPanel(props) {
                     value={widthMinPixels}
                     min={0}
                     max={Number.MAX_SAFE_INTEGER}
-                    onChange={evt => onSettingsChange(evt)}
+                    onChange={evt => onSettingsChange(evt, lineSettings)}
                 />
             </div>
             <div>
@@ -114,7 +116,7 @@ function SettingsPanel(props) {
                     value={widthMaxPixels}
                     min={0}
                     max={Number.MAX_SAFE_INTEGER}
-                    onChange={evt => onSettingsChange(evt)}
+                    onChange={evt => onSettingsChange(evt, lineSettings)}
                 />
             </div>
         </div>
@@ -122,6 +124,7 @@ function SettingsPanel(props) {
 
     const gridDiv = (
         <div>
+            <label>Grid</label>
             <div>
                 <label>cellSize: </label>
                 <input
@@ -130,7 +133,7 @@ function SettingsPanel(props) {
                     value={cellSize}
                     min={1}
                     max={Number.MAX_SAFE_INTEGER}
-                    onChange={evt => onSettingsChange(evt)}
+                    onChange={evt => onSettingsChange(evt, gridSettings)}
                 />
             </div>
             <div>
@@ -141,7 +144,7 @@ function SettingsPanel(props) {
                     value={elevationScale}
                     min={0}
                     max={Number.MAX_SAFE_INTEGER}
-                    onChange={evt => onSettingsChange(evt)}
+                    onChange={evt => onSettingsChange(evt, gridSettings)}
                 />
             </div>
         </div>
@@ -149,6 +152,7 @@ function SettingsPanel(props) {
 
     const heatmapDiv = (
         <div>
+            <label>Heatmap</label>
             <div>
                 <label>radiusPixels: </label>
                 <input
@@ -157,7 +161,7 @@ function SettingsPanel(props) {
                     value={radiusPixels}
                     min={1}
                     max={Number.MAX_SAFE_INTEGER}
-                    onChange={evt => onSettingsChange(evt)}
+                    onChange={evt => onSettingsChange(evt, heatmapSettings)}
                 />
             </div>
             <div>
@@ -168,7 +172,7 @@ function SettingsPanel(props) {
                     value={intensity}
                     min={0}
                     max={Number.MAX_SAFE_INTEGER}
-                    onChange={evt => onSettingsChange(evt)}
+                    onChange={evt => onSettingsChange(evt, heatmapSettings)}
                 />
             </div>
             <div>
@@ -179,7 +183,7 @@ function SettingsPanel(props) {
                     value={threshold}
                     min={0}
                     max={Number.MAX_SAFE_INTEGER}
-                    onChange={evt => onSettingsChange(evt)}
+                    onChange={evt => onSettingsChange(evt, heatmapSettings)}
                 />
             </div>
         </div>
@@ -207,7 +211,7 @@ function SettingsPanel(props) {
     }
 
     return (settingsOpen ?
-        <div className="control-panel">
+        <div className="settings-panel">
             <div style={{height: "40px", marginBottom: 0, paddingBottom: 0}}>
                 <h3 style={{float: "left", marginTop: 0, marginBottom: 0}}>Settings</h3>
                 <button onClick={evt => toggleSettingsPanel(evt)} style={{float: "right", }}>-</button>
