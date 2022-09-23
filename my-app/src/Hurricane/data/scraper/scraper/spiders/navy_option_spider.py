@@ -9,9 +9,9 @@ import pickle
 keys = ['season', 'basin', 'storm_name', 'type', 'sensor', 'resolution', 'image']
 regexOptions = {
     keys[0]: r'tc\d\d', #season
-    keys[1]: r'[A-Z\s]+/', #basin
+    keys[1]: r'ATL/', #basin
     keys[2]: r'\d\d', #storm
-    keys[3]: r'[a-z\s]+/', #type
+    keys[3]: r'(ir|vapor|vis)/', #type
     keys[4]: r'\w+/', #sensor
     keys[5]: r'\w+/', #resolution
     keys[6]: r'\S+\.\S+\.(?:jpg|gif|png)$' #image
