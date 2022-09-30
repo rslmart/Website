@@ -26,6 +26,11 @@ function StormInfo(props) {
                 <h3 style={{float: "left", marginTop: 0, marginBottom: 0}}>{stormInfo["name"]} {stormInfo["season"]}</h3>
                 <button onClick={evt => exitStormInfo(evt)} style={{float: "right", }}>&times;</button>
             </div>
+            {pointInfo["ir_image_url"] &&
+                <div>
+                    <img src={pointInfo["ir_image_url"]} style={{width: "300px"}}/>
+                </div>
+            }
             <div>
                 <XYPlot
                     xType="time"

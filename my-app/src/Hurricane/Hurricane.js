@@ -4,7 +4,7 @@ import {GridLayer, HeatmapLayer} from '@deck.gl/aggregation-layers';
 import {LineLayer, PolygonLayer, ScatterplotLayer} from '@deck.gl/layers';
 import {WebMercatorViewport} from '@deck.gl/core';
 import {Map} from 'react-map-gl';
-import STORMS from './data/storms.json';
+import STORMS from './data/storms_with_ir.json';
 import FilterPanel from "./filter-panel";
 import {MAP_TOKEN} from "../credentials"
 import StormInfo from "./storm-info";
