@@ -391,16 +391,16 @@ class Hurricane extends Component {
         else if (evt.target.name === "selectStorm") {
             await this.setState({ stormInfo: STORMS[evt.target.value.id] });
             const {minLat, maxLat, minLon, maxLon} = getNewViewPort(this.state.stormInfo.track_points);
-            this.setState(prevState => ({ viewState: prevState.viewState.fitBounds([[minLon, minLat],[maxLon, maxLat]], {padding: 80})}))
+            await this.setState(prevState => ({ viewState: prevState.viewState.fitBounds([[minLon, minLat],[maxLon, maxLat]], {padding: 80})}))
         }
         else if (evt.target.name === "selectedPoint") {
             await this.setState({ selectedPoint: parseInt(evt.target.value) });
         }
         else if (evt.target.name === "backwardSelectedPoint" && this.state.selectedPoint > 0) {
-            this.setState(prevState => ({ selectedPoint: (prevState.selectedPoint - 1)}))
+            await this.setState(prevState => ({ selectedPoint: (prevState.selectedPoint - 1)}))
         }
         else if (evt.target.name === "forwardSelectedPoint" && this.state.selectedPoint < this.state.stormInfo.track_points.length - 1) {
-            this.setState(prevState => ({ selectedPoint: (prevState.selectedPoint + 1)}))
+            await this.setState(prevState => ({ selectedPoint: (prevState.selectedPoint + 1)}))
         }
         let dataSource;
         if (this.state.plotType === PLOT_TYPES.STORM) {
