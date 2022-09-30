@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 function FilterPanel(props) {
-    const {filterPanelOpen, plotType, plotTypeOptions, basin, basinOptions, systemStatus, systemStatusOptions,
+    const {filterPanelOpen, plotType, plotTypeOptions, basin, basinOptions, name, systemStatus, systemStatusOptions,
         minYear, maxYear, minMonth, maxMonth, minWind, maxWind,
         filterByPressure, minPressure, maxPressure, landfall, showMaxWindPoly, showWindPoly,
         only6Hour, onChange, toggleFilterPanel} = props;
@@ -36,6 +36,17 @@ function FilterPanel(props) {
                                     <option key={key} value={key}>{basinOptions[key]}</option>)}
                             </select>
                         </div>
+
+                        {plotType === "Storm" &&
+                            <div key={'name'} className="input">
+                                <label>Name: </label>
+                                <input
+                                    name="name"
+                                    value={name}
+                                    onChange={evt => onChange(evt)}
+                                />
+                            </div>
+                        }
 
                         <div key={'minYear'} className="input">
                             <label>Min Year: </label>
@@ -103,7 +114,7 @@ function FilterPanel(props) {
                                         name="minPressure"
                                         type="range"
                                         value={minPressure}
-                                        min={882}
+                                        min={870}
                                         max={1024}
                                         step={1}
                                         onChange={evt => onChange(evt)}
@@ -116,7 +127,7 @@ function FilterPanel(props) {
                                         name="maxPressure"
                                         type="range"
                                         value={maxPressure}
-                                        min={882}
+                                        min={870}
                                         max={1024}
                                         step={1}
                                         onChange={evt => onChange(evt)}
@@ -132,7 +143,7 @@ function FilterPanel(props) {
                                 type="range"
                                 value={minWind}
                                 min={0}
-                                max={165}
+                                max={190}
                                 step={5}
                                 onChange={evt => onChange(evt)}
                             />
@@ -145,7 +156,7 @@ function FilterPanel(props) {
                                 type="range"
                                 value={maxWind}
                                 min={0}
-                                max={165}
+                                max={190}
                                 step={5}
                                 onChange={evt => onChange(evt)}
                             />
@@ -159,15 +170,15 @@ function FilterPanel(props) {
                             </select>
                         </div>
 
-                        <div key={'landfall'} className="input">
-                            <label>Landfall:</label>
-                            <input
-                                type="checkbox"
-                                name="landfall"
-                                value={landfall}
-                                onChange={evt => onChange(evt)}
-                            />
-                        </div>
+                        {/*<div key={'landfall'} className="input">*/}
+                        {/*    <label>Landfall:</label>*/}
+                        {/*    <input*/}
+                        {/*        type="checkbox"*/}
+                        {/*        name="landfall"*/}
+                        {/*        value={landfall}*/}
+                        {/*        onChange={evt => onChange(evt)}*/}
+                        {/*    />*/}
+                        {/*</div>*/}
 
                         {plotType === "Storm" && <div>
                             <div key={'showMaxWindPoly'} className="input">
