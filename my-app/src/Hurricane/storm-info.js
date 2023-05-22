@@ -26,6 +26,11 @@ function StormInfo(props) {
                 <h3 style={{float: "left", marginTop: 0, marginBottom: 0}}>{stormInfo["name"]} {stormInfo["season"]}</h3>
                 <button onClick={evt => exitStormInfo(evt)} style={{float: "right", }}>&times;</button>
             </div>
+            {pointInfo["ir_image_url"] &&
+                <div>
+                    <img src={pointInfo["ir_image_url"]} style={{width: "300px"}}/>
+                </div>
+            }
             <div>
                 <XYPlot
                     xType="time"
@@ -86,7 +91,8 @@ function StormInfo(props) {
                 }
             </div>
             <div key={'selectedPoint'} className="input">
-                <label>Select Point:</label>
+                <label>{"Select Point:  "}</label>
+                <button name="backwardSelectedPoint" onClick={evt => onChange(evt)}>{"<"}</button>
                 <input
                     name="selectedPoint"
                     type="range"
@@ -95,6 +101,7 @@ function StormInfo(props) {
                     max={stormInfo.track_points.length - 1}
                     onChange={evt => onChange(evt)}
                 />
+                <button name="forwardSelectedPoint" onClick={evt => onChange(evt)}>{">"}</button>
             </div>
             <div>Date/Time: {pointInfo.date_time}</div>
             <div>Wind: {pointInfo.wind} Pressure: {pointInfo.pressure}</div>

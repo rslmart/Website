@@ -4,7 +4,7 @@ import {GridLayer, HeatmapLayer} from '@deck.gl/aggregation-layers';
 import {LineLayer, PolygonLayer, ScatterplotLayer} from '@deck.gl/layers';
 import {WebMercatorViewport} from '@deck.gl/core';
 import {Map} from 'react-map-gl';
-import STORMS from './data/storms.json';
+import STORMS from './data/storms_with_ir.json';
 import FilterPanel from "./filter-panel";
 import {MAP_TOKEN} from "../credentials"
 import StormInfo from "./storm-info";
@@ -313,14 +313,15 @@ class Hurricane extends Component {
         basin: "ALL",
         dataSource: STORMS,
         data: STORMS,
+        name: "",
         minYear: 1851,
         maxYear: 2021,
         minMonth: 1,
         maxMonth: 12,
         minWind: 0,
-        maxWind: 165,
+        maxWind: 190,
         filterByPressure: false,
-        minPressure: 882, // Only out 22,558 points of 53,501 points have pressure
+        minPressure: 870, // Only out 22,558 points of 53,501 points have pressure
         maxPressure: 1024, // Only 1,186 storms out of 1,936 storms have at leasy one pressure reading
         systemStatus: SYSTEM_STATUSES.None,
         landfall: false,
@@ -336,6 +337,9 @@ class Hurricane extends Component {
     };
 
     onChange = async (evt) => {
+        if (evt.target.name === "name") {
+            await this.setState({ name: evt.target.value });
+        }
         if (evt.target.name === "minYear") {
             await this.setState({ minYear: evt.target.value });
         }
@@ -387,16 +391,22 @@ class Hurricane extends Component {
         else if (evt.target.name === "selectStorm") {
             await this.setState({ stormInfo: STORMS[evt.target.value.id] });
             const {minLat, maxLat, minLon, maxLon} = getNewViewPort(this.state.stormInfo.track_points);
-            this.setState(prevState => ({ viewState: prevState.viewState.fitBounds([[minLon, minLat],[maxLon, maxLat]], {padding: 80})}))
+            await this.setState(prevState => ({ viewState: prevState.viewState.fitBounds([[minLon, minLat],[maxLon, maxLat]], {padding: 80})}))
         }
         else if (evt.target.name === "selectedPoint") {
             await this.setState({ selectedPoint: parseInt(evt.target.value) });
+        }
+        else if (evt.target.name === "backwardSelectedPoint" && this.state.selectedPoint > 0) {
+            await this.setState(prevState => ({ selectedPoint: (prevState.selectedPoint - 1)}))
+        }
+        else if (evt.target.name === "forwardSelectedPoint" && this.state.selectedPoint < this.state.stormInfo.track_points.length - 1) {
+            await this.setState(prevState => ({ selectedPoint: (prevState.selectedPoint + 1)}))
         }
         let dataSource;
         if (this.state.plotType === PLOT_TYPES.STORM) {
             dataSource = STORMS;
         } else {
-            dataSource = Object.values(STORMS).flatMap(storm => storm["track_points"]);;
+            dataSource = Object.values(STORMS).flatMap(storm => storm["track_points"]);
             // For aggregation layers we need to remove none 6 hours points so its unbiased
             if (this.state.plotType === PLOT_TYPES.HEATMAP || this.state.plotType === PLOT_TYPES.GRID) {
                 await this.setState({ only6Hour: true });
@@ -426,6 +436,7 @@ class Hurricane extends Component {
                 .filter(([k,storm]) =>
                     (this.state.stormInfo ? this.state.stormInfo["id"] === storm["id"] : true)
                     && (this.state.basin === "ALL" ? true : storm.basin === this.state.basin)
+                    && (this.state.name ? storm.name.startsWith(this.state.name.toUpperCase()): true)
                     && storm.season >= this.state.minYear
                     && storm.season <= this.state.maxYear
                     && storm.track_points[0].month >= this.state.minMonth
@@ -485,27 +496,27 @@ class Hurricane extends Component {
     };
 
     componentDidMount() {
-        // let minW = 999;
-        // let maxW = 0;
-        // let minP = 9999;
-        // let maxP = 0;
-        // TRACK_POINTS.forEach(point => {
-        //     if (point.wind < minW) {
-        //         minW = point.wind
-        //     }
-        //     if (point.wind > maxW) {
-        //         maxW = point.wind
-        //     }
-        //     if (point.pressure) {
-        //         if (point.pressure < minP) {
-        //             minP = point.pressure
-        //         }
-        //         if (point.pressure > maxP) {
-        //             maxP = point.pressure
-        //         }
-        //     }
-        // });
-        // console.log(minW, maxW, minP, maxP);
+        let minW = 999;
+        let maxW = 0;
+        let minP = 9999;
+        let maxP = 0;
+        Object.values(STORMS).flatMap(storm => storm["track_points"]).forEach(point => {
+            if (point.wind < minW) {
+                minW = point.wind
+            }
+            if (point.wind > maxW) {
+                maxW = point.wind
+            }
+            if (point.pressure) {
+                if (point.pressure < minP) {
+                    minP = point.pressure
+                }
+                if (point.pressure > maxP) {
+                    maxP = point.pressure
+                }
+            }
+        });
+        console.log(minW, maxW, minP, maxP);
         window.addEventListener('resize', () => {
             clearTimeout(doit);
             doit = setTimeout(this.updateDimensions, 100);
@@ -582,6 +593,7 @@ class Hurricane extends Component {
                     plotTypeOptions={PLOT_TYPES}
                     basin={this.state.basin}
                     basinOptions={BASINS}
+                    name={this.state.name}
                     systemStatus={this.state.systemStatus}
                     systemStatusOptions={SYSTEM_STATUSES}
                     minYear={this.state.minYear}
