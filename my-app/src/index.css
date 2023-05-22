@@ -15,7 +15,7 @@ code {
 .app {
   width: 100vw;
   min-height: 100vh;
-  background-image: url("./Pics/cool-doge.gif");
+  background-image: url("Travel/Pics/cool-doge.gif");
 }
 
 .mapboxgl-popup {

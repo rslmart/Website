@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react"
 import Map, {Marker, Popup, Source, Layer} from 'react-map-gl';
 import "mapbox-gl/dist/mapbox-gl.css";
 import Pin from "../pin";
-import PIC_DATA from "../Pics/Colorado/data.json";
+import PIC_DATA from "./Pics/Colorado/data.json";
 import MAP_TOKEN from "../credentials";
 
 function gpxToGeoJson(gpxFile) {

@@ -8,17 +8,19 @@ import Travel from "./Travel/Travel";
 import LakeDistrict from "./Travel/LakeDistrict/LakeDistrict"
 import Hurricane from "./Hurricane/Hurricane";
 import Blog from "./Blog/Blog"
+import RoyalTree from "./Royalty/RoyalTreePage";
 
 const rootElement = document.getElementById("root");
 ReactDOM.render(
     <BrowserRouter>
         <Routes>
-            <Route exact path="/" element={<Hurricane/>} />
+            <Route exact path="/" element={<RoyalTree/>} />
             <Route path="/Bio" element={<Bio/>} />
             <Route path="/Travel" element={<Travel/>} />
             <Route path="/Travel/LakeDistrict" element={<LakeDistrict/>} />
             <Route path="/Hurricane" element={<Hurricane/>} />
             <Route path="/Blog" element={<Blog/>} />
+            <Route path="/RoyalTree" element={<RoyalTree/>} />
         </Routes>
     </BrowserRouter>,
     rootElement
