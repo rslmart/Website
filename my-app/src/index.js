@@ -1,7 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-
 import Home from "./Home";
 import Bio from "./Bio/Bio";
 import Travel from "./Travel/Travel";

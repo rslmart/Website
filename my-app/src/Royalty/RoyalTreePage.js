@@ -1,69 +1,144 @@
-import React, {Component} from 'react';
-import ROYAL_DATA from "./royaltree.json"
-import Graph from "react-graph-vis";
+import React, { useMemo, useState, useCallback } from 'react';
+import ROYAL_TREE from './royaltree_fixed.json';
+import TEST_TREE from './average-tree.json';
+import treePackage from 'relatives-tree/package.json';
+import ReactFamilyTree from 'react-family-tree';
+import { PinchZoomPan } from './PinchZoomPan/PinchZoomPan';
+import { FamilyNode } from './FamilyNode/FamilyNode';
+import { NodeDetails } from './NodeDetails/NodeDetails';
 
-class RoyalTree extends Component {
-  state = {
-    graph: this.convertToGraph(ROYAL_DATA, "/wiki/Charlemagne"),
-    options: {
-      layout: {
-        hierarchical: true
-      },
-      edges: {
-        color: "#000000"
-      },
-      height: "500px"
-    }
-  }
+import css from './RoyalTreePage.module.css';
 
-  events = {
-    select: function(event) {
-      var { nodes, edges } = event;
-    }
+const NODE_WIDTH = 70;
+const NODE_HEIGHT = 80;
+
+function getNodeStyle({ left, top }) {
+  return {
+    width: NODE_WIDTH,
+    height: NODE_HEIGHT,
+    transform: `translate(${left * (NODE_WIDTH / 2)}px, ${top * (NODE_HEIGHT / 2)}px)`,
   };
-
-  convertToGraph(data, personId) {
-    console.log("Loading ")
-    // nodes: [
-    //   { id: 1, label: "Node 1", title: "node 1 tootip text" },
-    //   { id: 2, label: "Node 2", title: "node 2 tootip text" }
-    // ],
-    //     edges: [
-    //   { from: 1, to: 2 }
-    // ]
-    const graph = { nodes: [], edges: []};
-    graph.nodes = Object.values(data).map(person =>
-      { return { id: person.id, label: person.name, title: person.name} }
-    )
-    Object.values(data).forEach((person, i) => {
-      console.log(i)
-      if (person.spouseList) {
-        person.spouseList.forEach(spouseId => graph.edges.push({ from: person.id, to: spouseId }))
-      }
-      if (person.issueList) {
-        person.issueList.forEach(childId => graph.edges.push({ from: person.id, to: childId }))
-      }
-      if (person.father) {
-        graph.edges.push({ from: person.father, to: person.id })
-      }
-      if (person.mother) {
-        graph.edges.push({ from: person.mother, to: person.id })
-      }
-    })
-    return graph;
-  }
-
-  render() {
-    return (
-        <div id="treeWrapper" style={{width: "100vw", height: "100vh"}}>
-          <Graph
-              graph={this.state.graph}
-              options={this.state.options}
-              events={this.events}
-          />
-        </div>
-    )
-  }
 }
 
-export default RoyalTree
+function getFirstNEntries(obj, n) {
+  const entries = Object.entries(obj).slice(0, n);
+  const result = {};
+
+  for (const [key, value] of entries) {
+    result[key] = value;
+  }
+
+  return result;
+}
+
+function convertToGraph(data) {
+  const nodeSet = {}
+  const nodes = Object.values(data).map(person => {
+    const node = {
+      id: person.id,
+      gender: person.sex ? person.sex :  null,
+      parents: [],
+      children: [],
+      siblings: [],
+      spouses: []
+    };
+    if (person['mother'] && data[person['mother']]){
+      node['parents'].push({ id: person['mother'], type: "blood" })
+    }
+    if (person['father'] && data[person['father']]){
+      node['parents'].push({ id: person['father'], type: "blood" })
+    }
+    if (person['issueList']){
+      node['children'] = person['issueList'].filter(childId => data[childId])
+          .map(childId => { return { id: childId, type: "blood" } })
+    }
+    if (person['spouseList']){
+      node['spouses'] = person['spouseList'].filter(spouseId => data[spouseId])
+          .map(spouseId => { return { id: spouseId, type: "married" } })
+    }
+    return node;
+  });
+  console.log(nodes);
+  return nodes;
+}
+
+export default React.memo(function Royal() {
+  // const [source, setSource] = useState(DEFAULT_SOURCE);
+  const [nodes, setNodes] = useState(convertToGraph(getFirstNEntries(ROYAL_TREE, 100)));
+  // const [nodes, setNodes] = useState(TEST_TREE);
+
+  const firstNodeId = useMemo(() => nodes[0].id, [nodes]);
+  const [rootId, setRootId] = useState(firstNodeId);
+
+  const [selectId, setSelectId] = useState();
+  const [hoverId, setHoverId] = useState();
+
+  const resetRootHandler = useCallback(() => setRootId(firstNodeId), [firstNodeId]);
+
+  // const changeSourceHandler = useCallback((value, nodes) => {
+  //   setRootId(nodes[0].id);
+  //   setNodes(nodes);
+  //   setSource(value);
+  //   setSelectId(undefined);
+  //   setHoverId(undefined);
+  // }, []);
+
+  const selected = useMemo(() => nodes.find(item => item.id === selectId), [nodes, selectId]);
+
+      return (
+          <div className={css.root}>
+            <header className={css.header}>
+              <h1 className={css.title}>
+                FamilyTree demo
+                <span className={css.version}>
+              core: {treePackage.version}
+            </span>
+              </h1>
+
+              {/*<div>*/}
+              {/*  <label>Source: </label>*/}
+              {/*  <SourceSelect value={source} items={SOURCES} onChange={changeSourceHandler} />*/}
+              {/*</div>*/}
+
+              <a href="https://github.com/SanichKotikov/react-family-tree-example">GitHub</a>
+            </header>
+            {nodes.length > 0 && (
+                <PinchZoomPan min={0.5} max={2.5} captureWheel className={css.wrapper}>
+                  <ReactFamilyTree
+                      nodes={nodes}
+                      rootId={rootId}
+                      width={NODE_WIDTH}
+                      height={NODE_HEIGHT}
+                      className={css.tree}
+                      renderNode={(node) => (
+                          <FamilyNode
+                              key={node.id}
+                              node={node}
+                              isRoot={node.id === rootId}
+                              isHover={node.id === hoverId}
+                              onClick={setSelectId}
+                              onSubClick={setRootId}
+                              style={getNodeStyle(node)}
+                          />
+                      )}
+                  />
+                </PinchZoomPan>
+            )}
+            {rootId !== firstNodeId && (
+                <button className={css.reset} onClick={resetRootHandler}>
+                  Reset
+                </button>
+            )}
+            {selected && (
+                <NodeDetails
+                    node={selected}
+                    className={css.details}
+                    onSelect={setSelectId}
+                    onHover={setHoverId}
+                    onClear={() => setHoverId(undefined)}
+                />
+            )}
+          </div>
+      );
+    },
+);
