@@ -1,62 +1,66 @@
 import React, {Component} from 'react';
-import Tree from 'react-d3-tree';
 import ROYAL_DATA from "./royaltree.json"
+import Graph from "react-graph-vis";
 
 class RoyalTree extends Component {
   state = {
-    chart: this.convertToChart(ROYAL_DATA, "/wiki/Charlemagne")
+    graph: this.convertToGraph(ROYAL_DATA, "/wiki/Charlemagne"),
+    options: {
+      layout: {
+        hierarchical: true
+      },
+      edges: {
+        color: "#000000"
+      },
+      height: "500px"
+    }
   }
 
-  convertToChart(data, personId) {
-    console.log("Loading ")
-    const orgChart = { name: data[personId].id, children: [] };
-    const processedIds = new Set([personId]);
-    const queue = [{ id: personId, parent: orgChart }];
-
-    while (queue.length > 0) {
-      const { id, parent } = queue.shift();
-      const person = data[id];
-
-      if (person.father && !processedIds.has(person.father)) {
-        const father = data[person.father];
-        if (father) {
-          const fatherNode = { name: father.id, children: [], parent };
-          parent.children.push(fatherNode);
-          queue.push({ id: person.father, parent: fatherNode });
-          processedIds.add(person.father);
-        }
-      }
-
-      if (person.mother && !processedIds.has(person.mother)) {
-        const mother = data[person.mother];
-        if (mother) {
-          const motherNode = { name: mother.id, children: [], parent };
-          parent.children.push(motherNode);
-          queue.push({ id: person.mother, parent: motherNode });
-          processedIds.add(person.mother);
-        }
-      }
-
-      if (person.issueList) {
-        person.issueList.forEach(childId => {
-          if (!processedIds.has(childId)) {
-            const child = data[childId];
-            const childNode = { name: child.id, children: [], parent };
-            parent.children.push(childNode);
-            queue.push({ id: childId, parent: childNode });
-            processedIds.add(childId);
-          }
-        });
-      }
+  events = {
+    select: function(event) {
+      var { nodes, edges } = event;
     }
+  };
 
-    return orgChart;
+  convertToGraph(data, personId) {
+    console.log("Loading ")
+    // nodes: [
+    //   { id: 1, label: "Node 1", title: "node 1 tootip text" },
+    //   { id: 2, label: "Node 2", title: "node 2 tootip text" }
+    // ],
+    //     edges: [
+    //   { from: 1, to: 2 }
+    // ]
+    const graph = { nodes: [], edges: []};
+    graph.nodes = Object.values(data).map(person =>
+      { return { id: person.id, label: person.name, title: person.name} }
+    )
+    Object.values(data).forEach((person, i) => {
+      console.log(i)
+      if (person.spouseList) {
+        person.spouseList.forEach(spouseId => graph.edges.push({ from: person.id, to: spouseId }))
+      }
+      if (person.issueList) {
+        person.issueList.forEach(childId => graph.edges.push({ from: person.id, to: childId }))
+      }
+      if (person.father) {
+        graph.edges.push({ from: person.father, to: person.id })
+      }
+      if (person.mother) {
+        graph.edges.push({ from: person.mother, to: person.id })
+      }
+    })
+    return graph;
   }
 
   render() {
     return (
         <div id="treeWrapper" style={{width: "100vw", height: "100vh"}}>
-          <Tree data={this.state.chart} />
+          <Graph
+              graph={this.state.graph}
+              options={this.state.options}
+              events={this.events}
+          />
         </div>
     )
   }
