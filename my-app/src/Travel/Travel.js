@@ -3,8 +3,7 @@ import {useNavigate} from 'react-router-dom';
 import DeckGL from '@deck.gl/react';
 import {PathLayer} from '@deck.gl/layers';
 import {Map} from "react-map-gl";
-
-import {MAP_TOKEN} from "../credentials";
+import CREDENTIALS from "../credentials.json";
 // import Thirlmere_to_Ambleside from "./MapData/Helvellyn/Thirlmere_to_Ambleside";
 
 /*
@@ -60,7 +59,7 @@ function Travel() {
                 layers={[pathLayer]}
             >
                 <Map
-                    mapboxAccessToken={MAP_TOKEN}
+                    mapboxAccessToken={CREDENTIALS["MAP_TOKEN"]}
                     mapStyle="mapbox://styles/mapbox/dark-v9"
                 >
                     {hoverInfo.object && (

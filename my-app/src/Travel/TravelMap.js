@@ -3,7 +3,7 @@ import Map, {Marker, Popup, Source, Layer} from 'react-map-gl';
 import "mapbox-gl/dist/mapbox-gl.css";
 import Pin from "../pin";
 import PIC_DATA from "./Pics/Colorado/data.json";
-import MAP_TOKEN from "../credentials";
+import CREDENTIALS from "../credentials.json";
 
 function gpxToGeoJson(gpxFile) {
     const parser = new DOMParser();
@@ -54,7 +54,7 @@ export default function TravelMap(props) {
 
     return <div style={{width: "100vw", height: "100vh"}}>
         <Map
-            mapboxAccessToken={MAP_TOKEN}
+            mapboxAccessToken={CREDENTIALS["MAP_TOKEN"]}
             initialViewState={{
                 longitude: PIC_DATA[PIC_DATA.ordered_list[0]].lon,
                 latitude: PIC_DATA[PIC_DATA.ordered_list[0]].lat,

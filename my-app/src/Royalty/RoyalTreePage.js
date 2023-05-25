@@ -17,7 +17,31 @@ function getMarriageName(father, mother) {
   return [father, mother].sort().join('');
 }
 
+function loadImage(imageUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = (error) => reject(error);
+    image.src = imageUrl;
+  });
+}
+
+async function loadLocalImage(imageUrl) {
+  for (const extension of ['.jpg', 'JPG', 'png', 'jpeg']) {
+     try {
+       const newUrl = imageUrl + extension;
+        console.log(newUrl)
+        const image = await loadImage(newUrl);
+        return URL.createObjectURL(newUrl);
+      } catch (error) {
+        continue;
+      }
+  }
+  return null;
+}
+
 function convertToChart(data) {
+  console.log(import.meta.url);
   const nodeSet = new Set();
   const edges = [];
   const nodes = []
@@ -31,14 +55,19 @@ function convertToChart(data) {
       node.style['stroke'] = person.sex === 'male' ? 'blue' : 'red';
     }
     if (person.picture) {
-      node.style['icon'] = {
-        type: 'image',
-        value: person.picture,
-        size: [20, 20],
-        clip: {
-          r: 10,
+      loadLocalImage("Images" + person.id).then((imageUrl) => {
+        if (imageUrl) {
+          node.style['icon'] = {
+            type: 'image',
+            value: imageUrl,
+            size: [20, 20],
+            clip: {
+              r: 10,
+            },
+          };
+
         }
-      }
+      });
     }
     nodes.push(node);
     if (person['spouseList']){

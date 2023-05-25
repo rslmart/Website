@@ -6,7 +6,7 @@ import {WebMercatorViewport} from '@deck.gl/core';
 import {Map} from 'react-map-gl';
 import STORMS from './data/storms_with_ir.json';
 import FilterPanel from "./filter-panel";
-import {MAP_TOKEN} from "../credentials"
+import CREDENTIALS from "../credentials.json"
 import StormInfo from "./storm-info";
 import SettingsPanel from "./settings-panel";
 
@@ -550,7 +550,7 @@ class Hurricane extends Component {
                 >
                     <Map
                         reuseMaps
-                        mapboxAccessToken={MAP_TOKEN}
+                        mapboxAccessToken={CREDENTIALS["MAP_TOKEN"]}
                         mapStyle="mapbox://styles/mapbox/dark-v9"
                     />
 
