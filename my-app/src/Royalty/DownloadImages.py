@@ -19,7 +19,7 @@ def download_image(url, file_path):
             if file_path.split('.')[-1] != 'jpg':
                 # Open the image using PIL
                 image = Image.open(file_path)
-                image.convert('RGB')
+                image = image.convert('RGB')
                 image.save(new_file_path)
             print("Downloaded successfully: {}".format(url))
         else:

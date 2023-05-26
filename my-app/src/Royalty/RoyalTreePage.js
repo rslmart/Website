@@ -1,6 +1,6 @@
-import React, {Component} from 'react';
+import React, {Component, useContext, useEffect} from 'react';
 import ROYAL_TREE from './royaltree_fixed.json';
-import Graphin, { Behaviors } from '@antv/graphin';
+import Graphin, { IG6GraphEvent, Utils, GraphinData, GraphinContext, Behaviors } from '@antv/graphin';
 
 function getFirstNEntries(obj, n) {
   const entries = Object.entries(obj).slice(0, n);
@@ -17,27 +17,8 @@ function getMarriageName(father, mother) {
   return [father, mother].sort().join('');
 }
 
-function loadImage(imageUrl) {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = (error) => reject(error);
-    image.src = imageUrl;
-  });
-}
-
-async function loadLocalImage(imageUrl) {
-  for (const extension of ['.jpg', 'JPG', 'png', 'jpeg']) {
-     try {
-       const newUrl = imageUrl + extension;
-        console.log(newUrl)
-        const image = await loadImage(newUrl);
-        return URL.createObjectURL(newUrl);
-      } catch (error) {
-        continue;
-      }
-  }
-  return null;
+function getMarriageLabel(father, mother) {
+  return [father, mother].sort().join(' + ');
 }
 
 function convertToChart(data) {
@@ -48,53 +29,50 @@ function convertToChart(data) {
   Object.values(data).forEach(person => {
     const node = {...person};
     node['style'] = {
-      label: { value: person.name }
+      label: { value: person.title ? person.name + '\n' + person.title : person.name }
     };
     if (person.sex) {
-      node.style['fill'] = person.sex === 'male' ? 'blue' : 'red';
-      node.style['stroke'] = person.sex === 'male' ? 'blue' : 'red';
+      node.style['keyshape'] = {
+        fill: person.sex === 'male' ? 'blue' : 'red',
+        stroke: person.sex === 'male' ? 'blue' : 'red'
+      }
     }
     if (person.picture) {
-      loadLocalImage("Images" + person.id).then((imageUrl) => {
-        if (imageUrl) {
-          node.style['icon'] = {
-            type: 'image',
-            value: imageUrl,
-            size: [20, 20],
-            clip: {
-              r: 10,
-            },
-          };
-
-        }
-      });
+        node.style['icon'] = {
+          type: 'image',
+          value: process.env.PUBLIC_URL + person.id + '.jpg',
+          size: [20, 20],
+          clip: {
+            r: 10,
+          },
+        };
     }
     nodes.push(node);
     if (person['spouseList']){
       person['spouseList'].filter(spouseId => data[spouseId] && !nodeSet.has(getMarriageName(person.id, spouseId)))
           .forEach(spouseId => {
             const marriageName = getMarriageName(person.id, spouseId);
-            nodes.push({ id: marriageName, style: { label: { value: marriageName } } });
+            nodes.push({ id: marriageName, style: { label: { value: getMarriageLabel(person.name, data[spouseId]['name']) } } });
             nodeSet.add(marriageName);
+            edges.push({ source: person.id, target: marriageName, style: { keyshape: { stroke: person.sex === 'male' ? 'blue' : 'red' }} })
+            edges.push({ source: spouseId, target: marriageName, style: { keyshape: { stroke: data[spouseId].sex === 'male' ? 'blue' : 'red' }}  })
           })
     }
     if (person['mother'] && data[person['mother']] && person['father'] && data[person['father']]){
       const marriageName = getMarriageName(person['mother'], person['father']);
       if (!nodeSet.has(marriageName)) {
-        nodes.push({ id: marriageName, style: { label: { value: marriageName } } });
+        nodes.push({ id: marriageName, style: { label: { value: getMarriageLabel(data[person['mother']]['name'], data[person['father']]['name']) } } });
         nodeSet.add(marriageName);
       }
-      edges.push({ source: person['mother'], target: marriageName })
-      edges.push({ source: person['father'], target: marriageName })
-      edges.push({ source: marriageName, target: person.id })
+      edges.push({ source: person['mother'], target: marriageName, style: { keyshape: { stroke: 'red' }} })
+      edges.push({ source: person['father'], target: marriageName, style: { keyshape: { stroke: 'blue' }}  })
+      edges.push({ source: marriageName, target: person.id, style: { keyshape: { stroke: 'black' }}  })
     } else if (person['mother'] && data[person['mother']]){
-      edges.push({ source: person['mother'], target: person.id })
+      edges.push({ source: person['mother'], target: person.id, style: { keyshape: { stroke: 'red' }}  })
     } else if (person['father'] && data[person['father']]){
-      edges.push({ source: person['father'], target: person.id })
+      edges.push({ source: person['father'], target: person.id, style: { keyshape: { stroke: 'blue' }}  })
     }
   });
-  // topologicalSort(nodes, edges);
-  console.log(nodes);
   return { nodes, edges };
 }
 
@@ -164,46 +142,91 @@ function topologicalSort(nodes, edges) {
   return nodes;
 }
 
-const { DragCanvas, ZoomCanvas, DragNode, ActivateRelations } = Behaviors;
+function findLargestTree(people) {
+  let largestTreeNodes = {};
+  let visited = new Set();
+
+  // Visit each node, try and explore all nodes from it and form a list
+  // If you visit a node, add it to visited
+  // When done exploring move to next node, skipping it if already explored
+  Object.values(people).forEach(person => {
+    if (!visited.has(person.id)) {
+      const curNodes = {}
+      const queue = [person.id];
+      while (queue.length > 0) {
+        const curPerson = people[queue.pop()]
+        if (!visited.has(curPerson.id)) {
+          curNodes[curPerson.id] = curPerson;
+          visited.add(curPerson.id)
+          if (curPerson.mother && people[curPerson.mother] && !visited.has(curPerson.mother)) {
+            queue.push(curPerson.mother);
+          }
+          if (curPerson.father && people[curPerson.father] && !visited.has(curPerson.father)) {
+            queue.push(curPerson.father);
+          }
+          if (curPerson.spouseList) {
+            curPerson.spouseList.filter(spouseId => people[spouseId] && !visited.has(spouseId)).forEach(spouseId => queue.push(spouseId));
+          }
+          if (curPerson.issueList) {
+            curPerson.issueList.filter(childId => people[childId] && !visited.has(childId)).forEach(childId => queue.push(childId));
+          }
+        }
+      }
+      if (Object.keys(curNodes).length > Object.keys(largestTreeNodes).length) {
+        largestTreeNodes = curNodes;
+      }
+    }
+  });
+
+  return largestTreeNodes;
+}
+
+const SampleBehavior = ({ updateSelectedNode }) => {
+  const { graph, apis } = useContext(GraphinContext);
+
+  useEffect(() => {
+    const handleClick = (evt) => {
+      const node = evt.item;
+      const model = node.getModel();
+      updateSelectedNode(model);
+    };
+    graph.on('node:click', handleClick);
+    return () => {
+      graph.off('node:click', handleClick);
+    };
+  }, []);
+  return null;
+};
+
+const { ClickSelect, ZoomCanvas, ActivateRelations } = Behaviors;
 
 class RoyalTree extends Component {
   state = {
     data: {
-      nodes: [
-        {
-          id: 'node-0',
-          x: 100,
-          y: 100,
-        },
-        {
-          id: 'node-1',
-          x: 200,
-          y: 200,
-        },
-        {
-          id: 'node-2',
-          x: 100,
-          y: 300,
-        },
-      ],
-      edges: [
-        {
-          source: 'node-0',
-          target: 'node-1',
-        },
-      ],
-    }
+      nodes: [],
+      edges: [],
+    },
+    selectedNode: null
   }
 
+  updateSelectedNode = (selectedNode) => this.setState({ selectedNode });
+
   componentDidMount() {
-    this.setState({ data: convertToChart(getFirstNEntries(ROYAL_TREE, 1000)) });
+    this.setState({ data: convertToChart(getFirstNEntries(ROYAL_TREE, 100)) });
   }
 
   render() {
     return (
         <div style={{ width: "100vw", height: "100vh" }}>
-            <Graphin data={this.state.data} layout={{ type: 'dagre' }}>
-              <ZoomCanvas disabled />
+            <Graphin data={this.state.data} layout={{ type: 'dagre' }} fitView={true}>
+              <ZoomCanvas enableOptimize />
+              <ActivateRelations trigger="click" resetSelected={true} />
+              <SampleBehavior updateSelectedNode={this.updateSelectedNode}/>
+              {this.state.selectedNode && (
+              <div className="storm-info">
+                <span>{this.state.selectedNode.name}</span>
+              </div>
+              )}
             </Graphin>
         </div>
     )
