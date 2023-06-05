@@ -2,6 +2,32 @@ import React, {Component, useContext, useEffect} from 'react';
 import ROYAL_TREE from './royaltree_fixed.json';
 import Graphin, { IG6GraphEvent, Utils, GraphinData, GraphinContext, Behaviors } from '@antv/graphin';
 
+/**
+ * TODO:
+ * Data:
+ *    Generate definitive data from wikipedia
+ *    Fix Titles
+ *    Fix Families
+ *    Fix Dynasties
+ * Graph:
+ *    Pick start node
+ *    Pick number of nodes to display
+ *      # of ancestors from root
+ *      # of descendants from root
+ *   Highlight ancestors
+ *   Highlight descendants
+ *   Highlight a dynasty
+ *   Highlight a house
+ *   Highlight a title (King's of England)
+ * Map Mode:
+ *    Create map mode
+ *    Show place of birth/death
+ *    Show marriages between countries
+ * Timeline Mode:
+ *    Show graph but on a timeline
+ *    Show peoples lives (birth/death/marriages/children birth dates)
+ */
+
 function getFirstNEntries(obj, n) {
   const entries = Object.entries(obj).slice(0, n);
   const result = {};
@@ -224,7 +250,10 @@ class RoyalTree extends Component {
               <SampleBehavior updateSelectedNode={this.updateSelectedNode}/>
               {this.state.selectedNode && (
               <div className="storm-info">
-                <span>{this.state.selectedNode.name}</span>
+                <dl>
+                  <dt>Name</dt>
+                  <dd>{this.state.selectedNode.name}</dd>
+                </dl>
               </div>
               )}
             </Graphin>
