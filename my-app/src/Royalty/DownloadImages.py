@@ -45,7 +45,7 @@ if __name__ == '__main__':
             urls.append(' http:' + person['picture'])
         for url in urls:
             try:
-                download_image(urls[0], './Images/{}.{}'.format(person['id'], urls[0].split('.')[-1].split('?')[0]))
+                download_image(urls[0], '../../public/{}.{}'.format(person['id'], urls[0].split('.')[-1].split('?')[0]))
             except Exception as e:
                 print("Invalid URL", url)
                 print(e)

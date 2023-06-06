@@ -18,7 +18,7 @@ import Graphin, { IG6GraphEvent, Utils, GraphinData, GraphinContext, Behaviors }
  *   Highlight descendants
  *   Highlight a dynasty
  *   Highlight a house
- *   Highlight a title (King's of England)
+ *   Highlight a title (Kings of England)
  * Map Mode:
  *    Create map mode
  *    Show place of birth/death
@@ -48,11 +48,11 @@ function getMarriageLabel(father, mother) {
 }
 
 function convertToChart(data) {
-  console.log(import.meta.url);
   const nodeSet = new Set();
   const edges = [];
   const nodes = []
   Object.values(data).forEach(person => {
+    console.log(person);
     const node = {...person};
     node['style'] = {
       label: { value: person.title ? person.name + '\n' + person.title : person.name }
@@ -67,9 +67,9 @@ function convertToChart(data) {
         node.style['icon'] = {
           type: 'image',
           value: process.env.PUBLIC_URL + person.id + '.jpg',
-          size: [20, 20],
+          size: [30, 30],
           clip: {
-            r: 10,
+            r: 12,
           },
         };
     }
@@ -238,7 +238,8 @@ class RoyalTree extends Component {
   updateSelectedNode = (selectedNode) => this.setState({ selectedNode });
 
   componentDidMount() {
-    this.setState({ data: convertToChart(getFirstNEntries(ROYAL_TREE, 100)) });
+    /// this.setState({ data: convertToChart(getFirstNEntries(ROYAL_TREE, 100)) });
+    this.setState({ data: convertToChart(ROYAL_TREE) });
   }
 
   render() {

@@ -1,4 +1,5 @@
 import json
+import sys
 
 def datetime_encoder(obj):
     if isinstance(obj, datetime):
@@ -15,7 +16,7 @@ def saveData(data, filename):
 		file.write(json_data)
 
 if __name__ == '__main__':
-    with open('royaltree_fixed.json', 'r') as file:
+    with open(sys.argv[1], 'r') as file:
         data = json.load(file)
 
     # TODO: This can even be used to add nodes that don't exist in the data yet
