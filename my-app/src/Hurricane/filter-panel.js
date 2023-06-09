@@ -16,7 +16,7 @@ function FilterPanel(props) {
 
     return (filterPanelOpen ?
                 <div className="control-panel">
-                    <div style={{height: "40px", marginBottom: 0, paddingBottom: 0}}>
+                    <div style={{height: "25px", marginBottom: 0, paddingBottom: 0}}>
                         <h3 style={{float: "left", marginTop: 0, marginBottom: 0}}>Hurdat Hurricane Data</h3>
                         <button onClick={evt => toggleFilterPanel(evt)} style={{float: "right", }}>-</button>
                     </div>
