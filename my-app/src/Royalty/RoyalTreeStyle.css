@@ -1,0 +1,10 @@
+.nodeToolTips {
+    position: absolute;
+    left: -300px;
+    top: -100px;
+    /* width: 150px; */
+    height: 160px;
+    padding: 10px;
+    border: 1px solid #36cfc9;
+    background: #e6fffb;
+}

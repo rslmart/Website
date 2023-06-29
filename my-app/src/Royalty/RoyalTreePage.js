@@ -1,8 +1,11 @@
-import React, {Component, useContext, useEffect} from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import ROYAL_TREE from './royaltree_fixed.json';
-import Graphin, { IG6GraphEvent, Utils, GraphinData, GraphinContext, Behaviors } from '@antv/graphin';
-import { convertToChart, getFirstNEntries } from './RoyalTreeUtils';
+import Graphin, { GraphinContext, Behaviors } from '@antv/graphin';
+import { convertToChart, createLabel, getCertainNumberOfConnections, getFirstNEntries } from './RoyalTreeUtils';
 import FilterPanel from "./filter-panel";
+import G6 from "@antv/g6";
+import NodeToolTip from "./NodeToolTip";
+
 /**
  * TODO:
  * Data:
@@ -29,92 +32,107 @@ import FilterPanel from "./filter-panel";
  *    Show peoples lives (birth/death/marriages/children birth dates)
  */
 
-const SampleBehavior = ({ updateSelectedNode }) => {
-  const { graph, apis } = useContext(GraphinContext);
+const RoyalTree = () => {
+  const ref = React.useRef(null);
 
-  useEffect(() => {
-    const handleClick = (evt) => {
-      const node = evt.item;
-      const model = node.getModel();
-      updateSelectedNode(model);
-    };
-    graph.on('node:click', handleClick);
-    return () => {
-      graph.off('node:click', handleClick);
-    };
-  }, []);
-  return null;
-};
+  const [graph, setGraph] = useState();
+  const [selectedRoot, setSelectedRoot] = useState({
+    "value": "/wiki/Charlemagne",
+    "label": "Charlemagne\n/wiki/Holy_Roman_Emperor"
+  });
+  const [rootOptions, setRootOptions] = useState(Object.values(ROYAL_TREE).map(node => ({ value: node.id, label: createLabel(node) })));
+  const [numberOfAncestors, setNumberOfAncestors] = useState(10);
+  const [numberOfDescendants, setNumberOfDescendants] = useState(10);
+  const [filterPanelOpen, setFilterPanelOpen] = useState(true);
+  // The coordinate of node tooltip
+  const [showNodeToolTip, setShowNodeToolTip] = useState(false);
+  const [nodeTooltipX, setNodeToolTipX] = useState(0);
+  const [nodeTooltipY, setNodeToolTipY] = useState(0);
 
-const { ClickSelect, ZoomCanvas, ActivateRelations } = Behaviors;
+  const bindEvents = (graf) => {
+    // Listen to the mouse event on node
+    graf.on('node:mouseenter', evt => {
+      const {item} = evt;
+      const model = item.getModel();
+      const {x, y} = model;
+      const point = graf.getCanvasByPoint(x, y);
 
-class RoyalTree extends Component {
-  state = {
-    data: {
-      nodes: [],
-      edges: [],
-    },
-    selectedRoot: null,
-    rootOptions: [],
-    selectedNode: null,
-    numberOfAncestors: 100,
-    numberOfDescendants: 100,
-    filterPanelOpen: true
-  }
+      setNodeToolTipX(point.x - 75);
+      setNodeToolTipY(point.y + 15);
+      setShowNodeToolTip(true);
+    });
 
-  updateSelectedNode = (selectedNode) => this.setState({ selectedNode });
-
-  componentDidMount() {
-    const data = convertToChart(getFirstNEntries(ROYAL_TREE, 100));
-    // const data = convertToChart(ROYAL_TREE);
-    const rootOptions = data.nodes.map(node => { return { value: node.id, label: node.style.label.value }});
-    this.setState({
-      selectedRoot: rootOptions.find(option => option.value === "/wiki/Charlemagne"),
-      rootOptions,
-      data
+    // Hide the tooltip and the contextMenu when the mouseleave event is activated on the node
+    graf.on('node:mouseleave', () => {
+      setShowNodeToolTip(false);
     });
   }
 
-  selectRoot(evt) {
+  useEffect(() => {
+    setNumberOfDescendants(10); // trigger changeData
+  }, []);
 
-  }
+  useEffect(() => {
+    changeData(getCertainNumberOfConnections(ROYAL_TREE, selectedRoot.value, numberOfAncestors, numberOfDescendants));
+  }, [selectedRoot, numberOfAncestors, numberOfDescendants]);
 
-  onChange(evt) {
-    if (evt.target.name === "numberOfAncestors" || evt.target.name === "numberOfDescendants") {
-      this.setState({ [evt.target.name]: evt.target.value });
-
+  const changeData = (data) => {
+    console.log("Change Data");
+    if (!graph) {
+      const graf = new G6.Graph({
+        container: ref.current,
+        fitView: true,
+        modes: {
+          default: ["drag-canvas", "zoom-canvas"],
+        },
+        layout: {
+          type: "dagre"
+        }
+      });
+      graf.data(data);
+      graf.layout();
+      graf.render();
+      bindEvents(graf);
+      setGraph(graf);
+    } else {
+      graph.changeData(data);
     }
-  }
+  };
 
-  render() {
-    return (
-        <div style={{ width: "100vw", height: "100vh" }}>
-            <Graphin data={this.state.data} layout={{ type: 'dagre' }} fitView={true}>
-              <ZoomCanvas enableOptimize />
-              <ActivateRelations trigger="click" resetSelected={true} />
-              <SampleBehavior updateSelectedNode={this.updateSelectedNode}/>
-              {this.state.selectedNode && (
-              <div className="storm-info">
-                <dl>
-                  <dt>Name</dt>
-                  <dd>{this.state.selectedNode.name}</dd>
-                </dl>
-              </div>
-              )}
-            </Graphin>
-            <FilterPanel
-                filterPanelOpen={this.state.filterPanelOpen}
-                selectedRoot={this.state.selectedRoot}
-                rootOptions={this.state.rootOptions}
-                selectRoot={evt => this.selectRoot(evt)}
-                numberOfAncestors={this.state.numberOfAncestors}
-                numberOfDescendants={this.state.numberOfDescendants}
-                onChange={evt => this.onChange(evt)}
-                toggleFilterPanel={evt => {this.setState(prevState => ({ filterPanelOpen: !prevState.filterPanelOpen}))}}
-            />
-        </div>
-    )
-  }
+  const onChange = (evt) => {
+    const { name, value } = evt.target;
+
+    if (["selectedRoot", "numberOfAncestors", "numberOfDescendants"].includes(name)) {
+      let parsedValue = value;
+      if (["numberOfAncestors", "numberOfDescendants"].includes(name)) {
+        parsedValue = parseInt(value);
+      }
+
+      if (name === "selectedRoot") {
+        setSelectedRoot(parsedValue);
+      } else if (name === "numberOfAncestors") {
+        setNumberOfAncestors(parsedValue);
+      } else if (name === "numberOfDescendants") {
+        setNumberOfDescendants(parsedValue);
+      }
+    }
+  };
+
+  return (
+      <div style={{ width: "100vw", height: "100vh" }} ref={ref}>
+        {showNodeToolTip && <NodeToolTip x={nodeTooltipX} y={nodeTooltipY} />}
+        <FilterPanel
+            filterPanelOpen={filterPanelOpen}
+            selectedRoot={selectedRoot}
+            rootOptions={rootOptions}
+            selectRoot={evt => onChange({ target: { name: "selectedRoot", value: evt } })}
+            numberOfAncestors={numberOfAncestors}
+            numberOfDescendants={numberOfDescendants}
+            onChange={onChange}
+            toggleFilterPanel={() => setFilterPanelOpen(prevState => !prevState)}
+        />
+      </div>
+  );
 };
 
 export default RoyalTree;

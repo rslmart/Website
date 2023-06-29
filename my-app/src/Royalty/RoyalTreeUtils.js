@@ -17,30 +17,35 @@ function getMarriageLabel(father, mother) {
   return [father, mother].sort().join(' + ');
 }
 
+export function createLabel(person) {
+  return person.title ? person.name + '\n' + person.title : person.name
+}
+
 export function convertToChart(data) {
   const nodeSet = new Set();
-  const edges = [];
+  let edges = [];
   const nodes = []
   Object.values(data).forEach(person => {
-    console.log(person);
     const node = {...person};
-    node['style'] = {
-      label: { value: person.title ? person.name + '\n' + person.title : person.name }
-    };
+    node['type'] = 'circle';
+    node['size'] = 50;
+    node['label'] = createLabel(person);
+    node['labelCfg'] = { position: "bottom" };
+    node['style'] = {};
     if (person.sex) {
-      node.style['keyshape'] = {
+      node.style = {
         fill: person.sex === 'male' ? 'blue' : 'red',
-        stroke: person.sex === 'male' ? 'blue' : 'red'
+        stroke: person.sex === 'male' ? 'blue' : 'red',
+        opacity: 0.5,
+        lineWidth: 2
       }
     }
     if (person.picture) {
-        node.style['icon'] = {
-          type: 'image',
-          value: process.env.PUBLIC_URL + person.id + '.jpg',
-          size: [30, 30],
-          clip: {
-            r: 12,
-          },
+        node['icon'] = {
+          img: process.env.PUBLIC_URL + person.id + '.jpg',
+          width: 30,
+          height: 40,
+          show: true
         };
     }
     nodes.push(node);
@@ -48,33 +53,81 @@ export function convertToChart(data) {
       person['spouseList'].filter(spouseId => data[spouseId] && !nodeSet.has(getMarriageName(person.id, spouseId)))
           .forEach(spouseId => {
             const marriageName = getMarriageName(person.id, spouseId);
-            nodes.push({ id: marriageName, style: { label: { value: getMarriageLabel(person.name, data[spouseId]['name']) } } });
+            nodes.push({ id: marriageName, label: getMarriageLabel(person.name, data[spouseId]['name']) });
             nodeSet.add(marriageName);
-            edges.push({ source: person.id, target: marriageName, style: { keyshape: { stroke: person.sex === 'male' ? 'blue' : 'red' }} })
-            edges.push({ source: spouseId, target: marriageName, style: { keyshape: { stroke: data[spouseId].sex === 'male' ? 'blue' : 'red' }}  })
+            edges.push({ source: person.id, target: marriageName, style: { stroke: person.sex === 'male' ? 'blue' : 'red' } })
+            edges.push({ source: spouseId, target: marriageName, style: { stroke: data[spouseId].sex === 'male' ? 'blue' : 'red' }  })
           })
     }
     if (person['mother'] && data[person['mother']] && person['father'] && data[person['father']]){
       const marriageName = getMarriageName(person['mother'], person['father']);
       if (!nodeSet.has(marriageName)) {
-        nodes.push({ id: marriageName, style: { label: { value: getMarriageLabel(data[person['mother']]['name'], data[person['father']]['name']) } } });
+        nodes.push({ id: marriageName, label: getMarriageLabel(data[person['mother']]['name'], data[person['father']]['name']) });
         nodeSet.add(marriageName);
       }
-      edges.push({ source: person['mother'], target: marriageName, style: { keyshape: { stroke: 'red' }} })
-      edges.push({ source: person['father'], target: marriageName, style: { keyshape: { stroke: 'blue' }}  })
-      edges.push({ source: marriageName, target: person.id, style: { keyshape: { stroke: 'black' }}  })
+      edges.push({ source: person['mother'], target: marriageName, style: { stroke: 'red' } })
+      edges.push({ source: person['father'], target: marriageName, style: { stroke: 'blue' } })
+      edges.push({ source: marriageName, target: person.id, style: { stroke: 'black' } })
     } else if (person['mother'] && data[person['mother']]){
-      edges.push({ source: person['mother'], target: person.id, style: { keyshape: { stroke: 'red' }}  })
+      edges.push({ source: person['mother'], target: person.id, style: { stroke: 'red' } })
     } else if (person['father'] && data[person['father']]){
-      edges.push({ source: person['father'], target: person.id, style: { keyshape: { stroke: 'blue' }}  })
+      edges.push({ source: person['father'], target: person.id, style: { stroke: 'blue' } })
     }
   });
+  // Need to filter out edges to missing nodes
+  nodes.forEach(node => nodeSet.add(node.id));
+  edges = edges.filter(edge => nodeSet.has(edge.target) && nodeSet.has(edge.source));
   return { nodes, edges };
 }
 
-export function getCertainNumberOfConnections(data, root, numberOfAncestors, numberOfDescendants) {
+export function getCertainNumberOfConnections(data, rootId, numberOfAncestors, numberOfDescendants) {
+  const nodes = {};
+  // Get descendants
+  let visited = new Set();
+  let queue = [{ currentNodeId: rootId, level: 0 }];
+  queue.push(rootId);
+  visited.add(rootId);
+  while (queue.length > 0) {
+    const { currentNodeId, level } = queue.shift();
+    if (level === numberOfDescendants) {
+      break;
+    }
+    if (data[currentNodeId]) {
+      const currentNode = data[currentNodeId];
+      nodes[currentNodeId] = currentNode;
+      if (currentNode.issueList) {
+        currentNode.issueList.filter(childId => !visited.has(childId)).forEach(childId => {
+          visited.add(childId);
+          queue.push({ currentNodeId: childId, level: level + 1 })
+        });
+      }
+    }
+  }
 
-  
+  // Get ancestors
+  visited = new Set();
+  queue = [{ currentNodeId: rootId, level: 0 }];
+  queue.push(rootId);
+  visited.add(rootId);
+  while (queue.length > 0) {
+    const { currentNodeId, level } = queue.shift();
+    if (level === numberOfAncestors) {
+      break;
+    }
+    if (data[currentNodeId]) {
+      const currentNode = data[currentNodeId];
+      nodes[currentNodeId] = currentNode;
+      if (currentNode.father) {
+        visited.add(currentNode.father);
+        queue.push({currentNodeId: currentNode.father, level: level + 1})
+      }
+      if (currentNode.mother) {
+        visited.add(currentNode.mother);
+        queue.push({currentNodeId: currentNode.mother, level: level + 1})
+      }
+    }
+  }
+  return convertToChart(nodes);
 }
 
 function topologicalSort(nodes, edges) {
