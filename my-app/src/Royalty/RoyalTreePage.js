@@ -1,7 +1,13 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, EffectCallback, DependencyList, useRef } from 'react';
 import ROYAL_TREE from './royaltree_fixed.json';
 import Graphin, { GraphinContext, Behaviors } from '@antv/graphin';
-import { convertToChart, createLabel, getCertainNumberOfConnections, getFirstNEntries } from './RoyalTreeUtils';
+import {
+  convertToChart,
+  createLabel,
+  getCertainNumberOfConnections,
+  getFirstNEntries,
+  traceBackToRoot
+} from './RoyalTreeUtils';
 import FilterPanel from "./filter-panel";
 import G6 from "@antv/g6";
 import NodeToolTip from "./NodeToolTip";
@@ -14,12 +20,12 @@ import NodeToolTip from "./NodeToolTip";
  *    Fix Families
  *    Fix Dynasties
  * Graph:
- *    Pick start node
- *    Pick number of nodes to display
- *      # of ancestors from root
- *      # of descendants from root
- *   Highlight ancestors
- *   Highlight descendants
+ *    Root Mode:
+ *      Pick start node
+ *      Pick number of nodes to display
+ *        # of ancestors from root
+ *        # of descendants from root
+ *      On selecting node it traces path to root node
  *   Highlight a dynasty
  *   Highlight a house
  *   Highlight a title (Kings of England)
@@ -32,14 +38,37 @@ import NodeToolTip from "./NodeToolTip";
  *    Show peoples lives (birth/death/marriages/children birth dates)
  */
 
+const useNonInitialEffect = (effect, deps) => {
+  const initialRender = useRef(true);
+
+  useEffect(() => {
+    let effectReturns = () => {};
+
+    if (initialRender.current) {
+      initialRender.current = false;
+    } else {
+      effectReturns = effect();
+    }
+
+    if (effectReturns && typeof effectReturns === 'function') {
+      return effectReturns;
+    }
+  }, deps);
+};
+
+
 const RoyalTree = () => {
   const ref = React.useRef(null);
+  const initialRender = useRef(true);
 
+  const [data, setData] = useState(ROYAL_TREE);
+  const [highlightedNodes, setHighlightNodes] = useState([]);
   const [graph, setGraph] = useState();
   const [selectedRoot, setSelectedRoot] = useState({
     "value": "/wiki/Charlemagne",
     "label": "Charlemagne\n/wiki/Holy_Roman_Emperor"
   });
+  const [selectedNode, setSelectedNode] = useState(null);
   const [rootOptions, setRootOptions] = useState(Object.values(ROYAL_TREE).map(node => ({ value: node.id, label: createLabel(node) })));
   const [numberOfAncestors, setNumberOfAncestors] = useState(10);
   const [numberOfDescendants, setNumberOfDescendants] = useState(10);
@@ -66,18 +95,23 @@ const RoyalTree = () => {
     graf.on('node:mouseleave', () => {
       setShowNodeToolTip(false);
     });
+
+    graf.on('node:click', (evt) => {
+      setSelectedNode(evt.item._cfg.model);
+    });
+
+    graf.on('canvas:click', (evt) => {
+      setSelectedNode(null);
+    });
   }
 
   useEffect(() => {
-    setNumberOfDescendants(10); // trigger changeData
-  }, []);
-
-  useEffect(() => {
-    changeData(getCertainNumberOfConnections(ROYAL_TREE, selectedRoot.value, numberOfAncestors, numberOfDescendants));
+    setData(getCertainNumberOfConnections(ROYAL_TREE, selectedRoot.value, numberOfAncestors, numberOfDescendants));
   }, [selectedRoot, numberOfAncestors, numberOfDescendants]);
 
-  const changeData = (data) => {
-    console.log("Change Data");
+  useNonInitialEffect(() => {
+    console.log("Change Data: ", Object.keys(data).length);
+    const newConvertedData = convertToChart(data, highlightedNodes);
     if (!graph) {
       const graf = new G6.Graph({
         container: ref.current,
@@ -89,15 +123,23 @@ const RoyalTree = () => {
           type: "dagre"
         }
       });
-      graf.data(data);
+      graf.data(newConvertedData);
       graf.layout();
       graf.render();
       bindEvents(graf);
       setGraph(graf);
     } else {
-      graph.changeData(data);
+      graph.changeData(newConvertedData);
     }
-  };
+  }, [data, highlightedNodes]);
+
+  useNonInitialEffect(() => {
+    if (selectedNode) {
+       setHighlightNodes(traceBackToRoot(selectedNode, data[selectedRoot.value], data));
+    } else {
+      setHighlightNodes([]);
+    }
+  }, [selectedNode]);
 
   const onChange = (evt) => {
     const { name, value } = evt.target;

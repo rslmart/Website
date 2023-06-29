@@ -21,7 +21,8 @@ export function createLabel(person) {
   return person.title ? person.name + '\n' + person.title : person.name
 }
 
-export function convertToChart(data) {
+export function convertToChart(data, highlightedNodes) {
+  const highlightedNodeSet = new Set(highlightedNodes.map(node => node.id));
   const nodeSet = new Set();
   let edges = [];
   const nodes = []
@@ -36,7 +37,7 @@ export function convertToChart(data) {
       node.style = {
         fill: person.sex === 'male' ? 'blue' : 'red',
         stroke: person.sex === 'male' ? 'blue' : 'red',
-        opacity: 0.5,
+        opacity: highlightedNodeSet.has(person.id) ? 1 : 0.5,
         lineWidth: 2
       }
     }
@@ -95,6 +96,9 @@ export function getCertainNumberOfConnections(data, rootId, numberOfAncestors, n
     if (data[currentNodeId]) {
       const currentNode = data[currentNodeId];
       nodes[currentNodeId] = currentNode;
+      if (currentNode.spouseList) {
+        currentNode.spouseList.filter(spouseId => data[spouseId]).forEach(spouseId => nodes[spouseId] = data[spouseId])
+      }
       if (currentNode.issueList) {
         currentNode.issueList.filter(childId => !visited.has(childId)).forEach(childId => {
           visited.add(childId);
@@ -127,7 +131,64 @@ export function getCertainNumberOfConnections(data, rootId, numberOfAncestors, n
       }
     }
   }
-  return convertToChart(nodes);
+  return nodes;
+}
+
+/**
+ * Trace from node back to root, return list of node/edges that make up the path
+ * @param targetNode
+ * @param root
+ * @param data
+ */
+export function traceBackToRoot(targetNode, root, data) {
+  let queue = [{ node: root, path: [] }]; // Initialize queue with start node and an empty path
+  let visited = new Set(); // Track visited nodes
+
+  // Search descendants
+  while (queue.length > 0) {
+    const { node, path } = queue.shift();
+    // Skip already visited nodes
+    if (visited.has(node.id)) {
+      continue;
+    }
+    // Add current node to the path
+    const currentPath = [...path, node];
+    // Check if the target node is found
+    if (node.id === targetNode.id) {
+      return currentPath; // Return the path to the target node
+    }
+    visited.add(node.id);
+    // Add unvisited neighboring nodes to the queue with the updated path
+    const issueList = node.issueList;
+    if (issueList) {
+      issueList.filter(childId => data[childId]).forEach(childId => queue.push({ node: data[childId], path: currentPath }))
+    }
+  }
+  queue = [{ node: root, path: [] }]; // Initialize queue with start node and an empty path
+  visited = new Set(); // Track visited nodes
+  //Search ancestors
+  while (queue.length > 0) {
+    const { node, path } = queue.shift();
+    // Skip already visited nodes
+    if (visited.has(node.id)) {
+      continue;
+    }
+    // Add current node to the path
+    const currentPath = [...path, node];
+    // Check if the target node is found
+    if (node.id === targetNode.id) {
+      return currentPath; // Return the path to the target node
+    }
+    visited.add(node.id);
+    // Add unvisited neighboring nodes to the queue with the updated path
+    if (node.father && data[node.father]) {
+      queue.push({ node: data[node.father], path: currentPath })
+    }
+    if (node.mother && data[node.mother]) {
+      queue.push({ node: data[node.mother], path: currentPath })
+    }
+  }
+  return []; // Return an empty array if the target node is not found
 }
 
 function topologicalSort(nodes, edges) {
