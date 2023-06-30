@@ -66,7 +66,7 @@ const RoyalTree = () => {
       { label: "Monarchs", value: "monarchs"}
   ]
 
-  const [graphType, setGraphType] = useState("monarchs");
+  const [graphType, setGraphType] = useState("family_tree");
   const [selectedMonarchs, setSelectedMonarchs] = useState("England");
   const [graphData, setGraphData] = useState({ data: ROYAL_TREE, highlightedNodes: [], rootId: MONARCH_LISTS["England"][0] });
   const [graph, setGraph] = useState();
@@ -99,7 +99,9 @@ const RoyalTree = () => {
     });
 
     graf.on('node:click', (evt) => {
-      setSelectedNode(evt.item._cfg.model);
+      if (graphType === "family_tree") {
+        setSelectedNode(evt.item._cfg.model);
+      }
     });
 
     graf.on('canvas:click', (evt) => {
@@ -146,7 +148,7 @@ const RoyalTree = () => {
     } else {
       graph.changeData(newConvertedData);
     }
-  }, [graphData]);
+  }, [graphData.data, graphData.highlightedNodes]);
 
   useNonInitialEffect(() => {
     if (selectedNode) {
@@ -175,9 +177,9 @@ const RoyalTree = () => {
 
     if (name === "selectedRoot") {
       setGraphData({
-         data: getCertainNumberOfConnections(ROYAL_TREE, value, numberOfAncestors, numberOfDescendants),
+         data: getCertainNumberOfConnections(ROYAL_TREE, value.value, numberOfAncestors, numberOfDescendants),
          highlightedNodes: [],
-         rootId: value
+         rootId: value.value
        });
     } else if (name === "numberOfAncestors") {
       setNumberOfAncestors(parsedValue);
@@ -199,7 +201,7 @@ const RoyalTree = () => {
             graphTypeOptions={graphTypeOptions}
             selectedMonarchs={selectedMonarchs}
             monarchyOptions={Object.keys(MONARCH_LISTS)}
-            selectedRoot={{ label: "", value: "" }}
+            selectedRoot={{ label: createLabel(ROYAL_TREE[graphData.rootId]), value: graphData.rootId }}
             rootOptions={rootOptions}
             selectRoot={evt => onChange({ target: { name: "selectedRoot", value: evt } })}
             numberOfAncestors={numberOfAncestors}
