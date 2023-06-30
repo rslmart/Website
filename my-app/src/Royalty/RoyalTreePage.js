@@ -1,137 +1,133 @@
-import React, { useState, useEffect, EffectCallback, DependencyList, useRef } from 'react';
+import React, { Component } from 'react';
+import Graphin, { GraphinContext, Behaviors } from '@antv/graphin';
 import ROYAL_TREE from './royaltree_fixed.json';
 import MONARCH_LISTS from './monarch_list.json';
-import Graphin, { GraphinContext, Behaviors } from '@antv/graphin';
-import {
-  convertToChart,
-  createLabel,
-  getCertainNumberOfConnections, getConnectedGraph,
-  getFirstNEntries,
-  traceBackToRoot
-} from './RoyalTreeUtils';
 import FilterPanel from "./filter-panel";
 import G6 from "@antv/g6";
 import NodeToolTip from "./NodeToolTip";
+import {
+  convertToChart,
+  createLabel,
+  getCertainNumberOfConnections,
+  getConnectedGraph,
+  getFirstNEntries,
+  traceBackToRoot
+} from './RoyalTreeUtils';
 
-/**
- * TODO:
- * Data:
- *    Generate definitive data from wikipedia
- *    Fix Titles
- *    Fix Families
- *    Fix Dynasties
- * Graph:
- *    Root Mode:
- *      Pick start node
- *      Pick number of nodes to display
- *        # of ancestors from root
- *        # of descendants from root
- *      On selecting node it traces path to root node
- *   Highlight a dynasty
- *   Highlight a house
- *   Highlight a title (Kings of England)
- * Map Mode:
- *    Create map mode
- *    Show place of birth/death
- *    Show marriages between countries
- * Timeline Mode:
- *    Show graph but on a timeline
- *    Show peoples lives (birth/death/marriages/children birth dates)
- */
+const graphTypeOptions = [
+  { label: "Family Tree", value: "family_tree"},
+  { label: "Monarchs", value: "monarchs"}
+]
 
-const useNonInitialEffect = (effect, deps) => {
-  const initialRender = useRef(true);
+const EMPTY_NODE = { id: '' };
 
-  useEffect(() => {
-    let effectReturns = () => {};
+class RoyalTree extends Component {
+  constructor(props) {
+    super(props);
+    this.ref = React.createRef();
 
-    if (initialRender.current) {
-      initialRender.current = false;
-    } else {
-      effectReturns = effect();
+    this.state = {
+      graphType: "monarchs",
+      selectedMonarchs: "England",
+      data: ROYAL_TREE,
+      highlightedNodes: [],
+      rootId: MONARCH_LISTS["England"][0],
+      selectedNode: EMPTY_NODE,
+      rootOptions: Object.values(ROYAL_TREE).map(node => ({ value: node.id, label: createLabel(node) })),
+      numberOfAncestors: 10,
+      numberOfDescendants: 10,
+      filterPanelOpen: true,
+      showNodeToolTip: false,
+      nodeTooltipX: 0,
+      nodeTooltipY: 0,
+    };
+  }
+
+  onChange = (evt) => {
+    const family_tree_values = ["selectedRoot", "numberOfAncestors", "numberOfDescendants"]
+    const monarchs_values = ["selectedMonarchs"]
+    const { name, value } = evt.target;
+    let { data, graphType, highlightedNodes, rootId, numberOfAncestors, numberOfDescendants, selectedMonarchs } = this.state;
+
+    let parsedValue = value;
+    if (["numberOfAncestors", "numberOfDescendants"].includes(name)) {
+      parsedValue = parseInt(value);
     }
 
-    if (effectReturns && typeof effectReturns === 'function') {
-      return effectReturns;
+    if (name === "selectedRoot") {
+      rootId =  value.value;
+    } else if (name === "numberOfAncestors") {
+      numberOfAncestors = parsedValue;
+    } else if (name === "numberOfDescendants") {
+      numberOfDescendants = parsedValue;
+    } else if (name === "graphType") {
+      graphType = value;
     }
-  }, deps);
-};
+    if (family_tree_values.includes(name)) {
+      data = getCertainNumberOfConnections(ROYAL_TREE, rootId, numberOfAncestors, numberOfDescendants);
+    }
+    if (name === "graphType" || name === "selectedMonarchs") {
+      if (graphType === "family_tree") {
+        rootId = "/wiki/Charlemagne";
+        data = getCertainNumberOfConnections(ROYAL_TREE, rootId, numberOfAncestors, numberOfDescendants);
+        highlightedNodes = highlightedNodes;
+      } else if (graphType === "monarchs") {
+        if (name === "selectedMonarchs") {
+          selectedMonarchs = value;
+        }
+        data = getConnectedGraph(ROYAL_TREE, MONARCH_LISTS[selectedMonarchs]);
+        highlightedNodes = MONARCH_LISTS[selectedMonarchs].filter(monarchId => ROYAL_TREE[monarchId]).map(monarchId => ROYAL_TREE[monarchId]);
+        rootId = MONARCH_LISTS[selectedMonarchs][0];
+      }
+    }
+    this.setState({ data, graphType, highlightedNodes, rootId, numberOfAncestors, numberOfDescendants, selectedMonarchs });
+    this.createGraph(data, highlightedNodes, rootId);
+  };
 
-
-const RoyalTree = () => {
-  const ref = React.useRef(null);
-  const initialRender = useRef(true);
-  const graphTypeOptions = [
-      { label: "Family Tree", value: "family_tree"},
-      { label: "Monarchs", value: "monarchs"}
-  ]
-
-  const [graphType, setGraphType] = useState("family_tree");
-  const [selectedMonarchs, setSelectedMonarchs] = useState("England");
-  const [graphData, setGraphData] = useState({ data: ROYAL_TREE, highlightedNodes: [], rootId: MONARCH_LISTS["England"][0] });
-  const [graph, setGraph] = useState();
-  const [selectedNode, setSelectedNode] = useState(null);
-  const [rootOptions, setRootOptions] = useState(Object.values(ROYAL_TREE).map(node => ({ value: node.id, label: createLabel(node) })));
-  const [numberOfAncestors, setNumberOfAncestors] = useState(10);
-  const [numberOfDescendants, setNumberOfDescendants] = useState(10);
-  const [filterPanelOpen, setFilterPanelOpen] = useState(true);
-  // The coordinate of node tooltip
-  const [showNodeToolTip, setShowNodeToolTip] = useState(false);
-  const [nodeTooltipX, setNodeToolTipX] = useState(0);
-  const [nodeTooltipY, setNodeToolTipY] = useState(0);
-
-  const bindEvents = (graf) => {
-    // Listen to the mouse event on node
+  bindEvents = (graf) => {
     graf.on('node:mouseenter', evt => {
-      const {item} = evt;
+      const { item } = evt;
       const model = item.getModel();
-      const {x, y} = model;
+      const { x, y } = model;
       const point = graf.getCanvasByPoint(x, y);
 
-      setNodeToolTipX(point.x - 75);
-      setNodeToolTipY(point.y + 15);
-      setShowNodeToolTip(true);
+      this.setState({
+        showNodeToolTip: true,
+        nodeTooltipX: point.x - 75,
+        nodeTooltipY: point.y + 15
+      });
     });
 
-    // Hide the tooltip and the contextMenu when the mouseleave event is activated on the node
     graf.on('node:mouseleave', () => {
-      setShowNodeToolTip(false);
+      this.setState({ showNodeToolTip: false });
     });
 
     graf.on('node:click', (evt) => {
-      if (graphType === "family_tree") {
-        setSelectedNode(evt.item._cfg.model);
+      console.log(evt);
+      let { selectedNode, highlightedNodes } = this.state;
+      if (evt.item._cfg.model.id === selectedNode.id) {
+        selectedNode = EMPTY_NODE;
+        highlightedNodes = [];
+      } else {
+        selectedNode = evt.item._cfg.model;
+        highlightedNodes = traceBackToRoot(selectedNode, ROYAL_TREE[this.state.rootId], this.state.data);
       }
+      this.setState({ selectedNode, highlightedNodes });
+      this.createGraph(this.state.data, highlightedNodes, this.state.rootId);
     });
+  };
 
-    graf.on('canvas:click', (evt) => {
-      setSelectedNode(null);
-    });
+  componentDidMount() {
+    this.onChange({ target: { name: "graphType", value: "family_tree" } });
   }
 
-  useEffect(() => {
-    if (graphType === "family_tree") {
-      setGraphData({
-        data: getCertainNumberOfConnections(ROYAL_TREE, graphData.rootId, numberOfAncestors, numberOfDescendants),
-        highlightedNodes: graphData.highlightedNodes,
-        rootId: "/wiki/Charlemagne"
-      });
-    } else if (graphType === "monarchs") {
-      setGraphData({
-        data: getConnectedGraph(ROYAL_TREE, MONARCH_LISTS[selectedMonarchs]),
-        highlightedNodes: MONARCH_LISTS[selectedMonarchs].filter(monarchId => ROYAL_TREE[monarchId]).map(monarchId => ROYAL_TREE[monarchId]),
-        rootId: MONARCH_LISTS[selectedMonarchs][0]
-      });
-    }
-  }, [graphType, selectedMonarchs, graphData.rootId, numberOfAncestors, numberOfDescendants]);
-
-  useNonInitialEffect(() => {
-    setSelectedNode(null);
-    console.log("Change Data: ", Object.keys(graphData.data).length);
-    const newConvertedData = convertToChart(graphData.data, graphData.highlightedNodes);
-    if (!graph) {
+  createGraph(data, highlightedNodes, rootId) {
+    console.log("Change Data: ", Object.keys(data).length);
+    this.setState({ data, highlightedNodes, rootId });
+    const newConvertedData = convertToChart(data, highlightedNodes);
+    if (!this.state.graph) {
       const graf = new G6.Graph({
-        container: ref.current,
+        container: this.ref.current,
         fitView: true,
         modes: {
           default: ["drag-canvas", "zoom-canvas"],
@@ -143,74 +139,36 @@ const RoyalTree = () => {
       graf.data(newConvertedData);
       graf.layout();
       graf.render();
-      bindEvents(graf);
-      setGraph(graf);
+      this.bindEvents(graf);
+      this.setState({ graph: graf });
     } else {
-      graph.changeData(newConvertedData);
+      this.state.graph.changeData(newConvertedData);
     }
-  }, [graphData.data, graphData.highlightedNodes]);
+  }
 
-  useNonInitialEffect(() => {
-    if (selectedNode) {
-       setGraphData({
-         data: graphData.data,
-         highlightedNodes: traceBackToRoot(selectedNode, graphData.data[graphData.rootId], graphData.data),
-         rootId: graphData.rootId
-       });
-    } else {
-      setGraphData({
-         data: graphData.data,
-         highlightedNodes: [],
-         rootId: graphData.rootId
-       });
-    }
-  }, [selectedNode]);
+  render() {
+    const { graphType, selectedMonarchs, rootOptions, rootId, numberOfAncestors, numberOfDescendants, filterPanelOpen, showNodeToolTip, nodeTooltipX, nodeTooltipY } = this.state;
 
-  const onChange = (evt) => {
-    const { name, value } = evt.target;
-    console.log(name, value);
-
-    let parsedValue = value;
-    if (["numberOfAncestors", "numberOfDescendants"].includes(name)) {
-      parsedValue = parseInt(value);
-    }
-
-    if (name === "selectedRoot") {
-      setGraphData({
-         data: getCertainNumberOfConnections(ROYAL_TREE, value.value, numberOfAncestors, numberOfDescendants),
-         highlightedNodes: [],
-         rootId: value.value
-       });
-    } else if (name === "numberOfAncestors") {
-      setNumberOfAncestors(parsedValue);
-    } else if (name === "numberOfDescendants") {
-      setNumberOfDescendants(parsedValue);
-    } else if (name === "graphType") {
-      setGraphType(value);
-    } else if (name === "selectedMonarchs") {
-      setSelectedMonarchs(value);
-    }
-  };
-
-  return (
-      <div style={{ width: "100vw", height: "100vh" }} ref={ref}>
-        {showNodeToolTip && <NodeToolTip x={nodeTooltipX} y={nodeTooltipY} />}
-        <FilterPanel
-            filterPanelOpen={filterPanelOpen}
-            graphType={graphType}
-            graphTypeOptions={graphTypeOptions}
-            selectedMonarchs={selectedMonarchs}
-            monarchyOptions={Object.keys(MONARCH_LISTS)}
-            selectedRoot={{ label: createLabel(ROYAL_TREE[graphData.rootId]), value: graphData.rootId }}
-            rootOptions={rootOptions}
-            selectRoot={evt => onChange({ target: { name: "selectedRoot", value: evt } })}
-            numberOfAncestors={numberOfAncestors}
-            numberOfDescendants={numberOfDescendants}
-            onChange={onChange}
-            toggleFilterPanel={() => setFilterPanelOpen(prevState => !prevState)}
-        />
-      </div>
-  );
-};
+    return (
+        <div style={{ width: "100vw", height: "100vh" }} ref={this.ref}>
+          {showNodeToolTip && <NodeToolTip x={nodeTooltipX} y={nodeTooltipY} />}
+          <FilterPanel
+              filterPanelOpen={filterPanelOpen}
+              graphType={graphType}
+              graphTypeOptions={graphTypeOptions}
+              selectedMonarchs={selectedMonarchs}
+              monarchyOptions={Object.keys(MONARCH_LISTS)}
+              selectedRoot={{ label: createLabel(ROYAL_TREE[rootId]), value: rootId }}
+              rootOptions={rootOptions}
+              selectRoot={evt => this.onChange({ target: { name: "selectedRoot", value: evt } })}
+              numberOfAncestors={numberOfAncestors}
+              numberOfDescendants={numberOfDescendants}
+              onChange={this.onChange}
+              toggleFilterPanel={() => this.setState(prevState => ({ filterPanelOpen: !prevState.filterPanelOpen }))}
+          />
+        </div>
+    );
+  }
+}
 
 export default RoyalTree;
