@@ -13,12 +13,12 @@ def datetime_encoder(obj):
 
     raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
 
-def saveData(data):
+def saveData(data, file_name):
     print("Saving Data: {}".format(len(data)))
     # Convert dictionary to JSON string using the custom encoder
     json_data = json.dumps(data, default=datetime_encoder, indent=4)
     # Write JSON data to a file
-    with open("royaltree.json", "w") as file:
+    with open("{}.json".format(file_name), "w") as file:
         file.write(json_data)
 
 def getRealId(id):
