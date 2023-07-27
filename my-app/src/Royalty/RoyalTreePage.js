@@ -68,7 +68,7 @@ class RoyalTree extends Component {
     }
     if (name === "graphType" || name === "selectedMonarchs") {
       if (graphType === "family_tree") {
-        rootId = "/wiki/Charlemagne";
+        rootId = "Q3044";
         data = getCertainNumberOfConnections(ROYAL_TREE, rootId, numberOfAncestors, numberOfDescendants);
         highlightedNodes = highlightedNodes;
       } else if (graphType === "monarchs") {

@@ -62,7 +62,6 @@ if __name__ == '__main__':
 			fetched_dict = fetch_wikidata(to_fetch_id_queue)['entities']
 			for id in fetched_dict.keys():
 				# Filter out unimportant people
-
 				if 'P106' in fetched_dict[id]['claims']:
 					fetched_id_queue.add(id)
 				else:

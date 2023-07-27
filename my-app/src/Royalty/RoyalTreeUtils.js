@@ -1,3 +1,5 @@
+import wdk from 'wikibase-sdk/wikidata.org'
+
 export function getFirstNEntries(obj, n) {
   const entries = Object.entries(obj).slice(0, n);
   const result = {};
@@ -81,30 +83,281 @@ export function convertToChart(data, highlightedNodes) {
   return { nodes, edges };
 }
 
-export function getCertainNumberOfConnections(data, rootId, numberOfAncestors, numberOfDescendants) {
-  const nodes = {};
+const propertyMap= {
+  'P106': 'occupation',
+  'P109': 'signature',
+  'P119': 'place of burial',
+  'P140': 'religion or worldview',
+  'P1412': 'languages spoken, written or signed',
+  'P1441': 'present in work',
+  'P1442': 'image of grave',
+  'P1543': 'monogram',
+  'P172': 'ethnic group',
+  'P18': 'image',
+  'P19': 'place of birth',
+  'P20': 'place of death',
+  'P21': 'sex or gender',
+  'P22': 'father',
+  'P2348': 'time period',
+  'P25': 'mother',
+  'P2561': 'name',
+  'P26': 'spouse',
+  'P27': 'country of citizenship',
+  'P31': 'instance of',
+  'P3373': 'sibling',
+  'P39': 'position held',
+  'P40': 'child',
+  'P411': 'canonization status',
+  'P451': 'unmarried partner',
+  'P509': 'cause of death',
+  'P53': 'family',
+  'P569': 'date of birth',
+  'P570': 'date of death',
+  'P580': 'start time',
+  'P582': 'end time',
+  'P841': 'feast day',
+  'P97': 'noble title',
+  'P156': 'followed by',
+  'P155': 'follows',
+  'P1365': 'replace',
+  'P1366': 'replaced by'
+};
+
+/**
+ * Fetch lists of objects from wikidata in batches of 50 (the limit).
+ * @param ids
+ * @returns {{}}
+ */
+export async function fetchIdsFromWikiData(ids) {
+  console.log("Ids to fetch", ids);
+  const toReturn = {};
+  let start = 0;
+  let end = 50;
+  let idsToFetch = ids.slice(start, end);
+  while (idsToFetch.length > 0) {
+    const url = wdk.getEntities({
+      ids: idsToFetch,
+      languages: ['en']
+    });
+    const {entities} = await fetch(url).then(res => res.json());
+    Object.entries(entities).forEach(([key, value]) => toReturn[key] = value);
+    start += 50;
+    end += 50;
+    idsToFetch = ids.slice(start, end);
+  }
+  return toReturn;
+}
+
+/**
+ * Transform data from id to denormalized data
+ *   'noble title' to gather 'start time:P580', 'end time:P582', 'followed by:P156', 'follows:P155'
+ *   'spouse' to gather 'start time:P580', 'end time:P582'
+ *   'unmarried partner' to gather 'start time:P580'
+ *   'position held' to gather 'start time:P580', 'end time:P582', 'replace:P1365', 'replaced by:P1366'
+ * @param propertyData already transformed properties
+ * @param entites just retrieved properties we need to transform
+ * @param property property id ("noble title")
+ * @param valueList list of ids to replace with transformed data
+ */
+function transformPerson(propertyData, entities, personToTransform) {
+  const person = {};
+  console.log("Person to transform", personToTransform);
+  Object.entries(personToTransform).forEach(([property, value]) => {
+    switch (property) {
+      case "label": case "description":
+        person[property] = value;
+        break;
+      case "instance of": case "sex or gender": case "place of birth": case "place of death": case "cause of death":
+      case "canonization status": case "feast day":
+        if (value[0] && value[0].id) {
+          if (!propertyData.hasOwnProperty(value[0].id)) {
+            let propertyValue = entities[value[0].id];
+            propertyValue = {
+              label: propertyValue.labels.en.value,
+              description: propertyValue.descriptions && propertyValue.descriptions.en && propertyValue.descriptions.en.value,
+              id: value[0].id
+            }
+            propertyData[value[0].id] = propertyValue;
+          }
+          person[property] = propertyData[value[0].id]
+        }
+        break;
+      case "country of citizenship": case "place of burial": case "family":
+      case "languages spoken, written or signed": case "occupation": case "ethnic group":
+      case "religion or worldview": case "time period":
+        value.filter(val => !!val.id).forEach(val => {
+          if (!propertyData.hasOwnProperty(val.id)) {
+            let entityValue = entities[val.id];
+            const propertyValue = {
+              label: entityValue.labels.en.value,
+              description: entityValue.descriptions && entityValue.descriptions.en && entityValue.descriptions.en.value,
+              id: val.id
+            }
+            propertyData[val.id] = propertyValue;
+          }
+          person.hasOwnProperty(property)
+              ? person[property].push(propertyData[val.id])
+              : (person[property] = [propertyData[val.id]]);
+        })
+        break;
+      case "noble title": case "position held":
+        // If we have it in propertyData we still need to deal with the qualifiers
+        value.forEach(val => {
+          if (!propertyData.hasOwnProperty(val.id)) {
+            let entityValue = entities[val.id];
+            const propertyValue = {
+              label: entityValue.labels.en.value,
+              description: entityValue.descriptions && entityValue.descriptions.en && entityValue.descriptions.en.value,
+              id: val.id
+            }
+            propertyData[val.id] = propertyValue;
+          }
+          const propData = propertyData[val.id];
+          if (val.hasOwnProperty("qualifiers")) {
+            Object.entries(val.qualifiers).filter(([qKey, qVal]) => !!qVal[0].datavalue).forEach(([qKey, qVal]) => {
+              propData[propertyMap[qKey]] = qVal[0].datatype === 'time' ? qVal[0].datavalue.value.time : qVal[0].datavalue.value.id;
+            })
+          }
+          person.hasOwnProperty(property)
+              ? person[property].push(propData)
+              : (person[property] = [propData]);
+        })
+        break;
+      case "date of birth": case "date of death":
+        if (value.length > 0 && !!value[0]["time"]) {
+          person[property] = value[0]["time"]; // javascript time object?
+        }
+        break;
+      case "mother": case "father":
+        if (value.length > 0 && !!value[0]["id"]) {
+          person[property] = value[0]["id"];
+        }
+        break;
+      case "sibling": case "spouse": case "unmarried partner": case "child":
+        person[property] = value.map(val => {
+          const p = { id: val.id }
+          if (val.hasOwnProperty("qualifiers")) {
+            Object.entries(val.qualifiers).filter(([qKey, qVal]) => !!qVal[0].datavalue).forEach(([qKey, qVal]) => {
+              p[propertyMap[qKey]] = qVal[0].datatype === 'time' ? qVal[0].datavalue.value.time : qVal[0].datavalue.value.id;
+            })
+          }
+          return p;
+        });
+        break;
+      default:
+        if (value) {
+          person[property] = value;
+        }
+        break;
+    }
+  });
+  return person;
+}
+
+/**
+ * Take person and denormalize data.
+ * @param propertyData property to id map, properties that have already been fetched, also update.
+ * @param person to be transformed.
+ */
+export async function fetchProperties(propertyData, person) {
+  // Gather ids for all, fetch ids, then replace
+  const keysToRetrieve = new Set(["instance of", "sex or gender", "country of citizenship", "noble title", "place of birth", "place of death", "cause of death", "place of burial", "family", "languages spoken, written or signed", "occupation", "position held", "ethnic group", "religion or worldview", "canonization status", "feast day", "time period"])
+  const ids = Object.entries(person)
+      .filter(([key, value]) => keysToRetrieve.has(key))
+      .flatMap(([key, value]) => value.filter(entity => entity?.id && !(entity.id in propertyData)))
+      .map(entity => entity.id);
+  const entities = await fetchIdsFromWikiData(ids);
+  const transformedPerson = transformPerson(propertyData, entities, person);
+  return transformedPerson;
+}
+
+/**
+ * Wrapper around fetchPeople() to just get one person
+ * @param nodes
+ * @param id
+ * @returns {Promise<*>} denormalized person
+ */
+export async function fetchPerson(nodes, id) {
+  const n = await fetchPeople(nodes, [id])
+  return n[id];
+}
+
+/**
+ * Fetch lists of people and denormalize them to be displayed.
+ * @param nodes already fetched and denormalized people
+ * @param ids ids of people to fetch
+ * @returns {Promise<*>} map of ids to denormalized people
+ */
+export async function fetchPeople(nodes, ids) {
+  const propertyData = {}; // TODO: pass this in and keep its state outside
+  const idsToFetch = ids.filter(id => !nodes.hasOwnProperty(id));
+  const entities = await fetchIdsFromWikiData(idsToFetch);
+  ids.forEach(id => {
+    if (!entities[id]) {
+      console.log('Data not found or there was an error.');
+      return null;
+    }
+    const person = {
+      label: entities[id].labels.en.value,
+      description: entities[id].descriptions.en.value,
+    };
+
+    for (const p in propertyMap) {
+      if (entities[id].claims.hasOwnProperty(p)) {
+        person[propertyMap[p]] = entities[id].claims[p].filter(e =>
+            e.hasOwnProperty('mainsnak') && e.mainsnak.hasOwnProperty('datavalue') && !!e.mainsnak.datavalue.value)
+            .map(e => {
+          try {
+            const value = e.mainsnak.datavalue.value;
+            if (e.hasOwnProperty("qualifiers") && typeof myVar === 'object') {
+              value["qualifiers"] = e.qualifiers;
+            }
+            return value;
+          } catch (error) {
+            console.error(error);
+            return null;
+          }
+        });
+      } else {
+        person[propertyMap[p]] = [];
+      }
+    }
+    nodes[id] = fetchProperties(propertyData, person); // TODO: Change this to fetch multiple people at a time
+  })
+  return nodes;
+}
+
+export async function getCertainNumberOfConnections(rootId, numberOfAncestors, numberOfDescendants) {
+  const nodes = {}; // TODO: pass this in and keep its memory
   // Get descendants
   let visited = new Set();
   let queue = [{ currentNodeId: rootId, level: 0 }];
-  queue.push(rootId);
   visited.add(rootId);
+  console.log(`Getting ${numberOfDescendants} descendants`);
   while (queue.length > 0) {
+    console.log(queue);
     const { currentNodeId, level } = queue.shift();
+    console.log(`Descendant ${currentNodeId}`);
     if (level === numberOfDescendants) {
       break;
     }
-    if (data[currentNodeId]) {
-      const currentNode = data[currentNodeId];
-      nodes[currentNodeId] = currentNode;
-      if (currentNode.spouseList) {
-        currentNode.spouseList.filter(spouseId => data[spouseId]).forEach(spouseId => nodes[spouseId] = data[spouseId])
-      }
-      if (currentNode.issueList) {
-        currentNode.issueList.filter(childId => !visited.has(childId)).forEach(childId => {
-          visited.add(childId);
-          queue.push({ currentNodeId: childId, level: level + 1 })
-        });
-      }
+    const currentNode = await fetchPerson(nodes, currentNodeId);
+    console.log(currentNode);
+    visited.add(currentNodeId);
+    // if (currentNode.spouse) {
+    //   for (const spouse of currentNode.spouse) {
+    //     fetchPerson(nodes, spouse.id);
+    //   }
+    // }
+    // if (currentNode['unmarried partner']) {
+    //   for (const partner of currentNode['unmarried partner']) {
+    //     fetchPerson(nodes, partner.id);
+    //   }
+    // }
+    if (currentNode.child) {
+      currentNode.child.filter(child => !visited.has(child.id)).forEach(child => {
+        queue.push({ currentNodeId: child.id, level: level + 1 })
+      });
     }
   }
 
@@ -113,22 +366,21 @@ export function getCertainNumberOfConnections(data, rootId, numberOfAncestors, n
   queue = [{ currentNodeId: rootId, level: 0 }];
   queue.push(rootId);
   visited.add(rootId);
+  console.log(`Getting ${numberOfAncestors} ancestors`);
   while (queue.length > 0) {
     const { currentNodeId, level } = queue.shift();
+    console.log(`Ancestor ${currentNodeId}`);
     if (level === numberOfAncestors) {
       break;
     }
-    if (data[currentNodeId]) {
-      const currentNode = data[currentNodeId];
-      nodes[currentNodeId] = currentNode;
-      if (currentNode.father) {
-        visited.add(currentNode.father);
-        queue.push({currentNodeId: currentNode.father, level: level + 1})
-      }
-      if (currentNode.mother) {
-        visited.add(currentNode.mother);
-        queue.push({currentNodeId: currentNode.mother, level: level + 1})
-      }
+    const currentNode = await fetchPerson(nodes, currentNodeId);
+    console.log(currentNode);
+    visited.add(currentNodeId);
+    if (currentNode.father && !visited.has(currentNode.father)) {
+      queue.push({currentNodeId: currentNode.father, level: level + 1})
+    }
+    if (currentNode.mother && !visited.has(currentNode.mother)) {
+      queue.push({currentNodeId: currentNode.mother, level: level + 1})
     }
   }
   return nodes;
