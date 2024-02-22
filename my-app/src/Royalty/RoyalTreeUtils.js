@@ -20,11 +20,50 @@ function getMarriageLabel(father, mother) {
 }
 
 export function createLabel(person) {
-  return person.title ? person.name + '\n' + person.title : person.name
+  let label = person.label;
+  if (person.hasOwnProperty("date of birth") && person.hasOwnProperty("date of death")) {
+    label = label + ` (${new Date(person["date of birth"]).getUTCFullYear()} - ${new Date(person["date of death"]).getUTCFullYear()})`
+  }
+  if (person.hasOwnProperty("position held") && person["position held"].length > 0) {
+    const monarchPositions = person["position held"]
+        .filter(position =>  position.label.toLowerCase().includes("tsar".toLowerCase()) || position.label.toLowerCase().includes("emperor".toLowerCase()) || position.label.toLowerCase().includes("monarch".toLowerCase()) || position.label.toLowerCase().includes("king".toLowerCase()))
+        .map(position => `${position.label}: ${new Date(position['start time']).getUTCFullYear()} - ${new Date(position['end time']).getUTCFullYear()}`)
+    label = label + '\n' + monarchPositions.join('\n')
+  }
+  return label;
+}
+
+const uniqueColors = [
+  "#FF5733", // Vivid Orange
+  "#33FF6A", // Lime Green
+  "#3366FF", // Royal Blue
+  "#FF33E9", // Bright Pink
+  "#33FFFF", // Cyan
+  "#FF33B8", // Magenta
+  "#33FF33", // Green
+  "#FF3366", // Reddish Pink
+  "#33B8FF", // Sky Blue
+  "#FFFF33", // Yellow
+  "#B833FF", // Purple
+  "#FFB833", // Amber
+  "#33FFB8", // Turquoise
+  "#FFB833", // Gold
+  "#B83333"  // Deep Red
+];
+
+function getRandomColor() {
+  const letters = '0123456789ABCDEF';
+  let color = '#';
+  for (let i = 0; i < 6; i++) {
+    color += letters[Math.floor(Math.random() * 16)];
+  }
+  return color;
 }
 
 export function convertToChart(data, highlightedNodes) {
   const highlightedNodeSet = new Set(highlightedNodes.map(node => node.id));
+  const familyColorMap = {};
+  let currentColor = 0;
   const nodeSet = new Set();
   let edges = [];
   const nodes = []
@@ -35,37 +74,60 @@ export function convertToChart(data, highlightedNodes) {
     node['label'] = createLabel(person);
     node['labelCfg'] = { position: "bottom" };
     node['style'] = {};
-    if (person.sex) {
+    if (person.hasOwnProperty("sex or gender")) {
       node.style = {
-        fill: person.sex === 'male' ? 'blue' : 'red',
+        fill: person["sex or gender"].label === 'male' ? 'blue' : 'red',
         stroke: highlightedNodeSet.has(person.id) ? '#e7e312' : 'black',
         opacity: highlightedNodeSet.has(person.id) ? 1 : 0.5,
         lineWidth: 5
       }
     }
-    if (person.picture) {
+    if (person.hasOwnProperty('image') && person.image.length > 0) {
         node['icon'] = {
-          img: process.env.PUBLIC_URL + person.id + '.jpg',
+          img: process.env.PUBLIC_URL + '/wiki/' + person.id + '.jpg',
           width: 45,
           height: 70,
           show: true
         };
     }
+    // TODO: Figure out how badges/halos work
+    // if (person.hasOwnProperty("family") && person.family.length > 0) {
+    //   const familyId = person.family[0].id;
+    //   if (!familyColorMap.hasOwnProperty(familyId)) {
+    //     if (currentColor < uniqueColors.length) {
+    //       familyColorMap[familyId] = uniqueColors[currentColor];
+    //       currentColor += 1;
+    //     } else {
+    //       familyColorMap[familyId] = getRandomColor();
+    //     }
+    //   }
+    //   console.log(node);
+    // }
     nodes.push(node);
-    if (person['spouseList']){
-      person['spouseList'].filter(spouseId => data[spouseId] && !nodeSet.has(getMarriageName(person.id, spouseId)))
-          .forEach(spouseId => {
-            const marriageName = getMarriageName(person.id, spouseId);
-            nodes.push({ id: marriageName, label: getMarriageLabel(person.name, data[spouseId]['name']) });
+    if (person['spouse']){
+      person['spouse'].filter(spouse => data[spouse.id] && !nodeSet.has(getMarriageName(person.id, spouse.id)))
+          .forEach(spouse => {
+            const marriageName = getMarriageName(person.id, spouse.id);
+            nodes.push({ id: marriageName, label: getMarriageLabel(person.label, data[spouse.id]['label']) });
             nodeSet.add(marriageName);
-            edges.push({ source: person.id, target: marriageName, style: { stroke: person.sex === 'male' ? 'blue' : 'red' } })
-            edges.push({ source: spouseId, target: marriageName, style: { stroke: data[spouseId].sex === 'male' ? 'blue' : 'red' }  })
+            edges.push({ source: person.id, target: marriageName, style: { stroke: person["sex or gender"] === 'male' ? 'blue' : 'red' } })
+            edges.push({ source: spouse.id, target: marriageName, style: { stroke: data[spouse.id]["sex or gender"] === 'male' ? 'blue' : 'red' }  })
+          })
+    }
+    if (person['unmarried partner']){
+      person['unmarried partner'].filter(spouse => data[spouse.id] && !nodeSet.has(getMarriageName(person.id, spouse.id)))
+          .forEach(spouse => {
+            const marriageName = getMarriageName(person.id, spouse.id);
+            nodes.push({ id: marriageName, label: getMarriageLabel(person.label, data[spouse.id]['label']) });
+            nodeSet.add(marriageName);
+            edges.push({ source: person.id, target: marriageName, style: { stroke: person["sex or gender"] === 'male' ? 'blue' : 'red' } })
+            edges.push({ source: spouse.id, target: marriageName, style: { stroke: data[spouse.id]["sex or gender"] === 'male' ? 'blue' : 'red' }  })
           })
     }
     if (person['mother'] && data[person['mother']] && person['father'] && data[person['father']]){
       const marriageName = getMarriageName(person['mother'], person['father']);
       if (!nodeSet.has(marriageName)) {
-        nodes.push({ id: marriageName, label: getMarriageLabel(data[person['mother']]['name'], data[person['father']]['name']) });
+        nodes.push({ id: marriageName, label: getMarriageLabel(data[person['mother']]['label'], data[person['father']]['label']) });
         nodeSet.add(marriageName);
       }
       edges.push({ source: person['mother'], target: marriageName, style: { stroke: 'red' } })
@@ -120,7 +182,9 @@ const propertyMap= {
   'P156': 'followed by',
   'P155': 'follows',
   'P1365': 'replace',
-  'P1366': 'replaced by'
+  'P1366': 'replaced by',
+  'P1534': 'end cause',
+  'P1706': 'together with'
 };
 
 /**
@@ -129,28 +193,41 @@ const propertyMap= {
  * @returns {{}}
  */
 export async function fetchIdsFromWikiData(ids) {
-  console.log("Ids to fetch", ids);
+  const dedupedIds = [...new Set(ids)]
+  console.log("Ids to fetch", dedupedIds);
   const toReturn = {};
   let start = 0;
   let end = 50;
-  let idsToFetch = ids.slice(start, end);
+
+  let idsToFetch = dedupedIds.slice(start, end);
   while (idsToFetch.length > 0) {
     const url = wdk.getEntities({
-      ids: idsToFetch,
-      languages: ['en']
+      ids: idsToFetch
     });
     const {entities} = await fetch(url).then(res => res.json());
     Object.entries(entities).forEach(([key, value]) => toReturn[key] = value);
     start += 50;
     end += 50;
-    idsToFetch = ids.slice(start, end);
+    idsToFetch = dedupedIds.slice(start, end);
   }
   return toReturn;
 }
 
 /**
+ * Get english label or next available
+ */
+function getLabel(labels) {
+  if (labels.hasOwnProperty("en")) {
+    return labels.en.value;
+  } else if (labels.length > 0) {
+      return Object.entries(labels)[0].value;
+  }
+  return "No Label";
+}
+
+/**
  * Transform data from id to denormalized data
- *   'noble title' to gather 'start time:P580', 'end time:P582', 'followed by:P156', 'follows:P155'
+ *   'noble title' to gather 'start time:P580', 'end time:P582', 'followed by:P156', 'follows:P155', 'end cause': 1534
  *   'spouse' to gather 'start time:P580', 'end time:P582'
  *   'unmarried partner' to gather 'start time:P580'
  *   'position held' to gather 'start time:P580', 'end time:P582', 'replace:P1365', 'replaced by:P1366'
@@ -161,7 +238,7 @@ export async function fetchIdsFromWikiData(ids) {
  */
 function transformPerson(propertyData, entities, personToTransform) {
   const person = {};
-  console.log("Person to transform", personToTransform);
+  // console.log("Person to transform", personToTransform);
   Object.entries(personToTransform).forEach(([property, value]) => {
     switch (property) {
       case "label": case "description":
@@ -173,8 +250,8 @@ function transformPerson(propertyData, entities, personToTransform) {
           if (!propertyData.hasOwnProperty(value[0].id)) {
             let propertyValue = entities[value[0].id];
             propertyValue = {
-              label: propertyValue.labels.en.value,
-              description: propertyValue.descriptions && propertyValue.descriptions.en && propertyValue.descriptions.en.value,
+              label: getLabel(propertyValue.labels),
+              description: getLabel(propertyValue.descriptions),
               id: value[0].id
             }
             propertyData[value[0].id] = propertyValue;
@@ -189,8 +266,8 @@ function transformPerson(propertyData, entities, personToTransform) {
           if (!propertyData.hasOwnProperty(val.id)) {
             let entityValue = entities[val.id];
             const propertyValue = {
-              label: entityValue.labels.en.value,
-              description: entityValue.descriptions && entityValue.descriptions.en && entityValue.descriptions.en.value,
+              label: getLabel(entityValue.labels),
+              description: getLabel(entityValue.descriptions),
               id: val.id
             }
             propertyData[val.id] = propertyValue;
@@ -206,22 +283,29 @@ function transformPerson(propertyData, entities, personToTransform) {
           if (!propertyData.hasOwnProperty(val.id)) {
             let entityValue = entities[val.id];
             const propertyValue = {
-              label: entityValue.labels.en.value,
-              description: entityValue.descriptions && entityValue.descriptions.en && entityValue.descriptions.en.value,
+              label: getLabel(entityValue.labels),
+              description: getLabel(entityValue.descriptions),
               id: val.id
             }
             propertyData[val.id] = propertyValue;
           }
           const propData = propertyData[val.id];
           if (val.hasOwnProperty("qualifiers")) {
-            Object.entries(val.qualifiers).filter(([qKey, qVal]) => !!qVal[0].datavalue).forEach(([qKey, qVal]) => {
-              propData[propertyMap[qKey]] = qVal[0].datatype === 'time' ? qVal[0].datavalue.value.time : qVal[0].datavalue.value.id;
-            })
+            Object.entries(val.qualifiers)
+                .filter(([qKey, qVal]) => !!qVal[0].datavalue)
+                .forEach(([qKey, qVal]) => {
+                  const { datatype, datavalue } = qVal[0];
+                  propData[propertyMap[qKey]] = datatype === 'time' ? datavalue.value.time : datavalue.value.id;
+                });
           }
+          // TODO: Figure out why this is happening
           person.hasOwnProperty(property)
-              ? person[property].push(propData)
-              : (person[property] = [propData]);
-        })
+              ? person[property].push(JSON.parse(JSON.stringify(propData)))
+              : (person[property] = [JSON.parse(JSON.stringify(propData))]);
+        });
+        if (person.hasOwnProperty(property)) {
+          person[property].sort((a,b) => a['start time'] - b['start time'])
+        }
         break;
       case "date of birth": case "date of death":
         if (value.length > 0 && !!value[0]["time"]) {
@@ -255,20 +339,24 @@ function transformPerson(propertyData, entities, personToTransform) {
 }
 
 /**
- * Take person and denormalize data.
- * @param propertyData property to id map, properties that have already been fetched, also update.
- * @param person to be transformed.
+ * Take a list of people and denormalize them
+ * @param propertyData already fetched properties and their data
+ * @param personList list of people retrieved but not transformed yet
+ * @returns return list of transformed people
  */
-export async function fetchProperties(propertyData, person) {
+export async function fetchProperties(propertyData, personList) {
   // Gather ids for all, fetch ids, then replace
-  const keysToRetrieve = new Set(["instance of", "sex or gender", "country of citizenship", "noble title", "place of birth", "place of death", "cause of death", "place of burial", "family", "languages spoken, written or signed", "occupation", "position held", "ethnic group", "religion or worldview", "canonization status", "feast day", "time period"])
-  const ids = Object.entries(person)
-      .filter(([key, value]) => keysToRetrieve.has(key))
-      .flatMap(([key, value]) => value.filter(entity => entity?.id && !(entity.id in propertyData)))
-      .map(entity => entity.id);
-  const entities = await fetchIdsFromWikiData(ids);
-  const transformedPerson = transformPerson(propertyData, entities, person);
-  return transformedPerson;
+  const idsToFetch = [];
+  personList.forEach(person => {
+    const keysToRetrieve = new Set(["instance of", "sex or gender", "country of citizenship", "noble title", "place of birth", "place of death", "cause of death", "place of burial", "family", "languages spoken, written or signed", "occupation", "position held", "ethnic group", "religion or worldview", "canonization status", "feast day", "time period"])
+    const ids = Object.entries(person)
+        .filter(([key, value]) => keysToRetrieve.has(key))
+        .flatMap(([key, value]) => value.filter(entity => entity?.id && !(entity.id in propertyData)))
+        .map(entity => entity.id);
+    idsToFetch.push(...ids);
+  })
+  const entities = await fetchIdsFromWikiData(idsToFetch);
+  return personList.map(person => transformPerson(propertyData, entities, person));
 }
 
 /**
@@ -277,29 +365,30 @@ export async function fetchProperties(propertyData, person) {
  * @param id
  * @returns {Promise<*>} denormalized person
  */
-export async function fetchPerson(nodes, id) {
-  const n = await fetchPeople(nodes, [id])
+export async function fetchPerson(nodes, propertyData, id) {
+  const n = await fetchPeople(nodes, propertyData,[id])
   return n[id];
 }
 
 /**
  * Fetch lists of people and denormalize them to be displayed.
- * @param nodes already fetched and denormalized people
+ * @param data already fetched and denormalized people
  * @param ids ids of people to fetch
  * @returns {Promise<*>} map of ids to denormalized people
  */
-export async function fetchPeople(nodes, ids) {
-  const propertyData = {}; // TODO: pass this in and keep its state outside
-  const idsToFetch = ids.filter(id => !nodes.hasOwnProperty(id));
-  const entities = await fetchIdsFromWikiData(idsToFetch);
-  ids.forEach(id => {
+export async function fetchPeople(data, propertyData, ids) {
+  const idsToFetch = ids.filter(id => !data.hasOwnProperty(id));
+  const entities = idsToFetch.length > 0 ? await fetchIdsFromWikiData(idsToFetch) : {};
+  const peopleToTransform = [];
+  for (const id of idsToFetch) {
     if (!entities[id]) {
-      console.log('Data not found or there was an error.');
-      return null;
+      console.log('Data not found or there was an error in retrieving: ', id);
+      continue;
     }
     const person = {
-      label: entities[id].labels.en.value,
-      description: entities[id].descriptions.en.value,
+      id,
+      label: getLabel(entities[id].labels),
+      description: getLabel(entities[id].descriptions)
     };
 
     for (const p in propertyMap) {
@@ -309,7 +398,7 @@ export async function fetchPeople(nodes, ids) {
             .map(e => {
           try {
             const value = e.mainsnak.datavalue.value;
-            if (e.hasOwnProperty("qualifiers") && typeof myVar === 'object') {
+            if (e.hasOwnProperty("qualifiers") && typeof value === 'object') {
               value["qualifiers"] = e.qualifiers;
             }
             return value;
@@ -322,67 +411,87 @@ export async function fetchPeople(nodes, ids) {
         person[propertyMap[p]] = [];
       }
     }
-    nodes[id] = fetchProperties(propertyData, person); // TODO: Change this to fetch multiple people at a time
-  })
+    peopleToTransform.push(person);
+  }
+  const transformedPeopleList = await fetchProperties(propertyData, peopleToTransform);
+  transformedPeopleList.forEach(person => data[person.id] = person);
+  const nodes = {};
+  ids.forEach(id => nodes[id] = data[id]);
   return nodes;
 }
 
-export async function getCertainNumberOfConnections(rootId, numberOfAncestors, numberOfDescendants) {
-  const nodes = {}; // TODO: pass this in and keep its memory
+export async function getCertainNumberOfConnections(data, propertyData, rootId, numberOfAncestors, numberOfDescendants) {
   // Get descendants
   let visited = new Set();
-  let queue = [{ currentNodeId: rootId, level: 0 }];
+  let toFetchQueue = [{ currentNodeId: rootId, level: 0 }];
+  let fetchedQueue = [];
+  let partnerIds = [];
   visited.add(rootId);
   console.log(`Getting ${numberOfDescendants} descendants`);
-  while (queue.length > 0) {
-    console.log(queue);
-    const { currentNodeId, level } = queue.shift();
-    console.log(`Descendant ${currentNodeId}`);
-    if (level === numberOfDescendants) {
-      break;
-    }
-    const currentNode = await fetchPerson(nodes, currentNodeId);
-    console.log(currentNode);
-    visited.add(currentNodeId);
-    // if (currentNode.spouse) {
-    //   for (const spouse of currentNode.spouse) {
-    //     fetchPerson(nodes, spouse.id);
-    //   }
-    // }
-    // if (currentNode['unmarried partner']) {
-    //   for (const partner of currentNode['unmarried partner']) {
-    //     fetchPerson(nodes, partner.id);
-    //   }
-    // }
-    if (currentNode.child) {
-      currentNode.child.filter(child => !visited.has(child.id)).forEach(child => {
-        queue.push({ currentNodeId: child.id, level: level + 1 })
-      });
+  while (toFetchQueue.length > 0 || fetchedQueue.length > 0) {
+    if (fetchedQueue.length > 0) {
+      const { currentNodeId, level } = fetchedQueue.shift();
+      console.log(`Descendant ${currentNodeId}`);
+      const currentNode = data[currentNodeId]; // should be fetched already
+      console.log(currentNode);
+      visited.add(currentNodeId);
+      if (currentNode.spouse) {
+        for (const spouse of currentNode.spouse) {
+          partnerIds.push(spouse.id);
+        }
+      }
+      if (currentNode['unmarried partner']) {
+        for (const partner of currentNode['unmarried partner']) {
+          partnerIds.push(partner.id);
+        }
+      }
+      if (currentNode.child) {
+        currentNode.child.filter(child => !visited.has(child.id)).forEach(child => {
+          toFetchQueue.push({ currentNodeId: child.id, level: level + 1 })
+        });
+      }
+    } else {
+      toFetchQueue = toFetchQueue.filter(val => val.level <= numberOfDescendants);
+      await fetchPeople(data, propertyData, toFetchQueue.map(val => val.currentNodeId));
+      fetchedQueue = JSON.parse(JSON.stringify(toFetchQueue));
+      toFetchQueue = [];
     }
   }
+  await fetchPeople(data, propertyData, partnerIds);
+  const nodes = {};
+  visited.forEach(id => nodes[id] = data[id]);
+  partnerIds.forEach(id => nodes[id] = data[id]);
 
   // Get ancestors
   visited = new Set();
-  queue = [{ currentNodeId: rootId, level: 0 }];
-  queue.push(rootId);
+  toFetchQueue = [{ currentNodeId: rootId, level: 0 }];
+  fetchedQueue = [];
   visited.add(rootId);
   console.log(`Getting ${numberOfAncestors} ancestors`);
-  while (queue.length > 0) {
-    const { currentNodeId, level } = queue.shift();
-    console.log(`Ancestor ${currentNodeId}`);
-    if (level === numberOfAncestors) {
-      break;
-    }
-    const currentNode = await fetchPerson(nodes, currentNodeId);
-    console.log(currentNode);
-    visited.add(currentNodeId);
-    if (currentNode.father && !visited.has(currentNode.father)) {
-      queue.push({currentNodeId: currentNode.father, level: level + 1})
-    }
-    if (currentNode.mother && !visited.has(currentNode.mother)) {
-      queue.push({currentNodeId: currentNode.mother, level: level + 1})
+  while (toFetchQueue.length > 0 || fetchedQueue.length > 0) {
+    if (fetchedQueue.length > 0) {
+      const {currentNodeId, level} = fetchedQueue.shift();
+      console.log(`Ancestor ${currentNodeId}`);
+      if (level === numberOfAncestors) {
+        break;
+      }
+      const currentNode = data[currentNodeId];
+      console.log(currentNode);
+      visited.add(currentNodeId);
+      if (currentNode.father && !visited.has(currentNode.father)) {
+        toFetchQueue.push({currentNodeId: currentNode.father, level: level + 1})
+      }
+      if (currentNode.mother && !visited.has(currentNode.mother)) {
+        toFetchQueue.push({currentNodeId: currentNode.mother, level: level + 1})
+      }
+    } else {
+      toFetchQueue = toFetchQueue.filter(val => val.level <= numberOfAncestors);
+      await fetchPeople(data, propertyData, toFetchQueue.map(val => val.currentNodeId));
+      fetchedQueue = JSON.parse(JSON.stringify(toFetchQueue));
+      toFetchQueue = [];
     }
   }
+  visited.forEach(id => nodes[id] = data[id]);
   return nodes;
 }
 
@@ -443,80 +552,183 @@ export function traceBackToRoot(targetNode, root, data) {
   return []; // Return an empty array if the target node is not found
 }
 
+export async function getMonarchListGraph(data, propertyData, monarchList) {
+  const idSet = new Set();
+  Object.values(monarchList).forEach(path => path.forEach(id => idSet.add(id)));
+  const nodes = await fetchPeople(data, propertyData, Array.from(idSet));
+  Object.keys(nodes).forEach(id => {
+    const node = nodes[id];
+    // const lists = ['spouse', 'unmarried partner']; //TODO Better filtering to show less children/siblings
+    // lists.forEach(listKey => {
+    //   if (node.hasOwnProperty(listKey)) {
+    //     node[listKey].forEach(item => {
+    //       idSet.add(item.id);
+    //     });
+    //   }
+    // });
+    ['father', 'mother'].forEach(parentKey => {
+      if (node.hasOwnProperty(parentKey)) {
+        idSet.add(node[parentKey]);
+      }
+    });
+  });
+  return await fetchPeople(data, propertyData, Array.from(idSet));
+}
+
+export async function traceInheritance(nodes, propertyData, listOfMonarchs) {
+  const skipList = new Set(["Q517n "]); // Napolean II
+  const pathMap = { [listOfMonarchs[0]]: [listOfMonarchs[0]]};
+
+  await fetchPeople(nodes, propertyData, listOfMonarchs);
+  for (let i = 1; i < listOfMonarchs.length; i++) {
+    const monarchSet = new Set(listOfMonarchs.slice(0, i));
+    const root = await fetchPerson(nodes, propertyData, listOfMonarchs[i]);
+    if (skipList.has(listOfMonarchs[i])) {
+      continue;
+    }
+    console.log("From: ", root.label);
+    let foundPath = [];
+    // check descendants
+    let queue = [{nodeId: root.id, path: []}]; // Initialize queue with start node and an empty path
+    let visited = new Set(); // Track visited nodes
+    // Search descendants
+    while (queue.length > 0) {
+      const {nodeId, path} = queue.shift();
+      // Skip already visited nodes
+      if (visited.has(nodeId) || path.length > 8) {
+        continue;
+      }
+      const node = await fetchPerson(nodes, propertyData, nodeId);
+      // Add current node to the path
+      const currentPath = [...path, node];
+      console.log("Path: ", currentPath.map(n => n.label));
+      // Check if the target node is found
+      if (listOfMonarchs[i] != node.id && monarchSet.has(node.id)) {
+        foundPath = currentPath; // Return the path to the target node
+        break;
+      }
+      visited.add(node.id);
+      // Add unvisited neighboring nodes to the queue with the updated path
+      if (node.father && !visited.has(node.father)) {
+        queue.push({nodeId: node.father, path: currentPath})
+      }
+      if (node.mother && !visited.has(node.mother)) {
+        queue.push({nodeId: node.mother, path: currentPath})
+      }
+      const childList = node.child;
+      if (childList) {
+        for (const child of childList.filter(child => !visited.has(child.id))) {
+          queue.push({
+            nodeId: child.id,
+            path: currentPath
+          });
+        }
+      }
+      queue.sort((a, b) => a.path.length - b.path.length);
+      await fetchPeople(nodes, propertyData, queue.map(n => n.nodeId));
+    }
+    pathMap[listOfMonarchs[i]] = foundPath.map(p => p.id);
+  }
+  return pathMap;
+}
+
 /**
  * Try and form a connected graph of all the members of the list
  * @param data
  * @param listOfMonarchs
  */
-export function getConnectedGraph(data, listOfMonarchs) {
+export async function getConnectedGraph(nodes, propertyData, listOfMonarchs) {
   // We need to iterate through each monarch and find the path to the next monarch
   // It might not necessarily be the very next monarch in the list (thanks cromwells)
   // So if you come up short find the path to the next monarch (or the next)
   // At the end combine all the nodes from all the paths and return them
-  const pathNodeIds = new Set();
+  const skipList = new Set(["Q7723"]); // Napolean II
+  const pathMap = {};
+
+  await fetchPeople(nodes, propertyData, listOfMonarchs);
+
   // Using a for loop
   for (let i = 0; i < listOfMonarchs.length - 1; i++) {
-    if (data[listOfMonarchs[i]]) {
-      const root = data[listOfMonarchs[i]];
-      console.log("From: ", root);
-      let foundPath = [];
-      for (let j = i + 1; j < listOfMonarchs.length; j++) {
-        if (data[listOfMonarchs[j]]) {
-          const targetNode = data[listOfMonarchs[j]];
-          console.log("To: ", targetNode);
-          let queue = [{node: root, path: []}]; // Initialize queue with start node and an empty path
-          let visited = new Set(); // Track visited nodes
-          // Search relatives
-          while (queue.length > 0) {
-            const {node, path} = queue.shift();
-            // Skip already visited nodes
-            if (visited.has(node.id)) {
-              continue;
-            }
-            // Add current node to the path
-            const currentPath = [...path, node];
-            // Check if the target node is found
-            if (node.id === targetNode.id) {
-              foundPath = currentPath; // Return the path to the target node
-              break;
-            }
-            visited.add(node.id);
-            // Add unvisited neighboring nodes to the queue with the updated path
-            const issueList = node.issueList;
-            if (issueList) {
-              issueList.filter(childId => data[childId] && !visited.has(childId)).forEach(childId => queue.push({
-                node: data[childId],
-                path: currentPath
-              }))
-            }
-            if (node.father && data[node.father] && !visited.has(node.father)) {
-              queue.push({node: data[node.father], path: currentPath})
-            }
-            if (node.mother && data[node.mother] && !visited.has(node.mother)) {
-              queue.push({node: data[node.mother], path: currentPath})
-            }
-          }
-        } else {
-          console.log("Skipping because not in dataset: ", listOfMonarchs[j]);
+    const root = await fetchPerson(nodes, propertyData, listOfMonarchs[i]);
+    if (skipList.has(listOfMonarchs[i])) {
+      continue;
+    }
+    console.log("From: ", root.label);
+    let foundPath = [];
+    const targetNode = await fetchPerson(nodes, propertyData, listOfMonarchs[i + 1]);
+    console.log("To: ", targetNode.label);
+    let queue = [{nodeId: root.id, path: []}]; // Initialize queue with start node and an empty path
+    let visited = new Set(); // Track visited nodes
+    // Search relatives
+    while (queue.length > 0) {
+      const {nodeId, path} = queue.shift();
+      // Skip already visited nodes
+      if (visited.has(nodeId) || path.length > 10) {
+        continue;
+      }
+      const node = await fetchPerson(nodes, propertyData, nodeId);
+      // Add current node to the path
+      const currentPath = [...path, node];
+      console.log("Path: ", currentPath.map(n => n.label));
+      // Add previous ruler
+      // if ((j - currentPath.length) >= 0 && !visited.has(listOfMonarchs[j - currentPath.length])) {
+      //   queue.push({nodeId: listOfMonarchs[j - currentPath.length], path: currentPath})
+      // }
+      // Check if the target node is found
+      if (node.id === targetNode.id) {
+        foundPath = currentPath; // Return the path to the target node
+        break;
+      }
+      visited.add(node.id);
+      // Add unvisited neighboring nodes to the queue with the updated path
+      const childList = node.child;
+      if (childList) {
+        for (const child of childList.filter(child => !visited.has(child.id))) {
+          queue.push({
+            nodeId: child.id,
+            path: currentPath
+          });
         }
       }
-      foundPath.forEach(node => pathNodeIds.add(node.id));
-    } else {
-      console.log("Skipping because not in dataset: ", listOfMonarchs[i]);
+      const siblingList = node.sibling;
+      if (siblingList) {
+        for (const sibling of siblingList.filter(sibling => !visited.has(sibling.id))) {
+          queue.push({
+            nodeId: sibling.id,
+            path: currentPath
+          });
+        }
+      }
+      const spouseList = node.spouse;
+      if (spouseList) {
+        for (const spouse of spouseList.filter(spouse => !visited.has(spouse.id))) {
+          queue.push({
+            nodeId: spouse.id,
+            path: currentPath
+          });
+        }
+      }
+      const partnerList = node["unmarried partner"];
+      if (partnerList) {
+        for (const partner of partnerList.filter(partner => !visited.has(partner.id))) {
+          queue.push({
+            nodeId: partner.id,
+            path: currentPath
+          });
+        }
+      }
+      if (node.father && !visited.has(node.father)) {
+        queue.push({nodeId: node.father, path: currentPath})
+      }
+      if (node.mother && !visited.has(node.mother)) {
+        queue.push({nodeId: node.mother, path: currentPath})
+      }
+      queue.sort((a, b) => a.path.length - b.path.length);
+      await fetchPeople(nodes, propertyData, queue.map(n => n.nodeId));
     }
+    pathMap[listOfMonarchs[i]] = foundPath.map(p => p.id);
   }
-  const newData = {};
-  pathNodeIds.forEach(nodeId => {
-    newData[nodeId] = data[nodeId];
-    if (data[nodeId].father && !pathNodeIds.has(data[nodeId].father) && data[data[nodeId].father]) {
-      newData[data[nodeId].father] = data[data[nodeId].father];
-    }
-    if (data[nodeId].mother && !pathNodeIds.has(data[nodeId].mother) && data[data[nodeId].mother]) {
-      newData[data[nodeId].mother] = data[data[nodeId].mother];
-    }
-  });
-  console.log(newData);
-  return newData;
+  return pathMap;
 }
 
 function topologicalSort(nodes, edges) {
@@ -610,8 +822,8 @@ function findLargestTree(people) {
           if (curPerson.spouseList) {
             curPerson.spouseList.filter(spouseId => people[spouseId] && !visited.has(spouseId)).forEach(spouseId => queue.push(spouseId));
           }
-          if (curPerson.issueList) {
-            curPerson.issueList.filter(childId => people[childId] && !visited.has(childId)).forEach(childId => queue.push(childId));
+          if (curPerson.child) {
+            curPerson.childList.filter(childId => people[childId] && !visited.has(childId)).forEach(childId => queue.push(childId));
           }
         }
       }

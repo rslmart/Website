@@ -1,5 +1,5 @@
 import React, {Component} from "react";
-import {fetchPerson, getCertainNumberOfConnections} from "./RoyalTreeUtils";
+import {convertToChart, fetchPerson, getCertainNumberOfConnections} from "./RoyalTreeUtils";
 
 class TestPage extends Component {
     constructor(props) {
@@ -9,8 +9,10 @@ class TestPage extends Component {
         };
     }
     async componentDidMount() {
-        const person = getCertainNumberOfConnections( "Q3044", 2, 2);
-        this.setState({data: person });
+        fetchPerson({}, {}, "Q160337").then(data => {
+            console.log(data);
+            this.setState({data });
+        });
     }
 
     render() {

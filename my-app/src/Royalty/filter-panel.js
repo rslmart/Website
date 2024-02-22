@@ -3,7 +3,7 @@ import Select from 'react-select';
 
 function FilterPanel(props) {
     const {filterPanelOpen, graphType, graphTypeOptions, selectedMonarchs, monarchyOptions, selectedRoot, rootOptions, selectRoot, numberOfAncestors, numberOfDescendants, onChange,
-        toggleFilterPanel} = props;
+        toggleFilterPanel, loading} = props;
     if (!filterPanelOpen) {
         return (<button onClick={evt => toggleFilterPanel(evt)} style={{position: "absolute", top: 20, right: 20}}>+</button>);
     }
@@ -17,6 +17,7 @@ function FilterPanel(props) {
                         value={selectedRoot}
                         onChange={selectRoot}
                         options={rootOptions}
+                        isDisabled={loading}
                     />
                 </div>
                 <div key={'numberOfAncestors'} className="input">
@@ -28,6 +29,7 @@ function FilterPanel(props) {
                         min={0}
                         max={200}
                         onChange={evt => onChange(evt)}
+                        disabled={loading}
                     />
                 </div>
                 <div key={'numberOfDescendants'} className="input">
@@ -39,6 +41,7 @@ function FilterPanel(props) {
                         min={0}
                         max={200}
                         onChange={evt => onChange(evt)}
+                        disabled={loading}
                     />
                 </div>
             </div>
@@ -52,6 +55,7 @@ function FilterPanel(props) {
                     <select name="selectedMonarchs" value={selectedMonarchs} onChange={onChange}>
                         {monarchyOptions.map(option =>
                             <option key={option} value={option}>{option}</option>)}
+                        disabled={loading}
                     </select>
                 </div>
             </div>
@@ -60,7 +64,7 @@ function FilterPanel(props) {
     return (
         <div className="control-panel">
             <div style={{height: "25px", marginBottom: 0, paddingBottom: 0}}>
-                <h3 style={{float: "left", marginTop: 0, marginBottom: 0}}>Filter Data</h3>
+                <h3 style={{float: "left", marginTop: 0, marginBottom: 0}}>Filter Data {loading && <div className="loader"></div>}</h3>
                 <button onClick={evt => toggleFilterPanel(evt)} style={{float: "right", }}>-</button>
             </div>
              <div key={'selectRoot'} className="select" style={{marginTop: 10}}>
@@ -68,6 +72,7 @@ function FilterPanel(props) {
                 <select name="graphType" value={graphType} onChange={onChange}>
                     {Object.values(graphTypeOptions).map(option =>
                         <option key={option.value} value={option.value}>{option.label}</option>)}
+                    disabled={loading}
                 </select>
             </div>
             {content}

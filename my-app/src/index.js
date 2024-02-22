@@ -11,7 +11,7 @@ const rootElement = document.getElementById("root");
 ReactDOM.render(
     <BrowserRouter>
         <Routes>
-            <Route exact path="/" element={<TestPage/>} />
+            <Route exact path="/" element={<Home/>} />
             <Route path="/Bio" element={<Bio/>} />
             <Route path="/Hurricane" element={<Hurricane/>} />
             <Route path="/RoyalTree" element={<RoyalTree/>} />
