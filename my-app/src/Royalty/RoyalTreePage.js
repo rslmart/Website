@@ -1,8 +1,8 @@
 import React, { Component } from 'react';
 import Graphin, { GraphinContext, Behaviors } from '@antv/graphin';
-import ROYAL_TREE from './trimmed_monarch_data.json';
-import MONARCH_PATHS from './monarch_list_paths.json'
-import MONARCH_LISTS from './monarch_list_v2_fixed.json';
+import ROYAL_TREE from './Data/trimmed_monarch_data.json';
+import MONARCH_PATHS from './Data/monarch_list_paths.json'
+import MONARCH_LISTS from './Data/monarch_list_v2_fixed.json';
 import FilterPanel from "./filter-panel";
 import G6 from "@antv/g6";
 import NodeToolTip from "./NodeToolTip";

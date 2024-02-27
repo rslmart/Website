@@ -7,12 +7,21 @@ function Bio() {
     return (
         <div className="resume-container">
             <h1 className="resume-title">Russell Makoa Martin</h1>
+            <div style={{ textAlign: "center", marginBottom: "10px" }}><a href="https://github.com/rslmart">My Github</a>{" | "}
+                <a href="https://www.linkedin.com/in/russell-makoa-martin/">My LinkedIn</a></div>
             <div className="section">
                 <h2>Work Experience</h2>
                 <div className="work-experience">
                     <div className="job-details">
-                        <h3 className="job-title">Software Engineer II</h3>
-                        <p className="dates">Jan 2022-Current</p>
+                        <h3 className="job-title">Software Engineer</h3>
+                        <p className="dates">Nov 2023-Current</p>
+                        <p className="company">Stealth Startup, Seattle, WA</p>
+                    </div>
+                </div>
+                <div className="work-experience">
+                    <div className="job-details">
+                        <h3 className="job-title">Software Development Engineer II</h3>
+                        <p className="dates">Jan 2022-Sept 2023</p>
                         <p className="company">Amazon Web Services, London, UK</p>
                     </div>
                     <ul>
@@ -22,14 +31,14 @@ function Bio() {
                 </div>
                 <div className="work-experience">
                     <div className="job-details">
-                        <h3 className="job-title">Software Engineer II</h3>
-                        <p className="dates">Jan 2022-Current</p>
+                        <h3 className="job-title">Software Development Engineer II</h3>
+                       <p className="dates">July 2019-Dec 2022</p>
                         <p className="company">Amazon Web Services, Arlington, VA</p>
                     </div>
                 </div>
                 <div className="work-experience">
                     <div className="job-details">
-                        <h3 className="job-title">Software Engineer I</h3>
+                        <h3 className="job-title">Software Development Engineer I</h3>
                         <p className="dates">July 2019-July 2021</p>
                         <p className="company">Amazon Web Services, Arlington, VA</p>
                     </div>
@@ -77,7 +86,7 @@ function Bio() {
                 <h2>Skills</h2>
                 <div className="skills">
                     <ul className="skills-list">
-                        <li>(Proficient): Java, Python, Javascript, React, C++, Linux, Git</li>
+                        <li>(Proficient): Java, Python, Javascript, React, Go, C++, Linux, Git</li>
                         <li>(Familiar): Keras, C, CUDA, SQL, Matlab, AWS Lambda, API Gateway, DynamoDB, S3, Athena, Glue,
                             Quicksight, Route 53, Cloudwatch, X-Ray
                         </li>

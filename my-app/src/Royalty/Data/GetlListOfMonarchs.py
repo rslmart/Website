@@ -153,3 +153,6 @@ if __name__ == '__main__':
     bavarian_monarchs = [h for h in bavarian_monarchs if h.startswith('/wiki/') and not h.startswith('/wiki/File:') and not h.startswith('/wiki/Pope')][:-18]
     bavarian_monarchs = [x for i, x in enumerate(bavarian_monarchs) if x not in bavarian_monarchs[:i]]
     saveData('Bavaria', bavarian_monarchs)
+
+    # List_of_emperors_of_Japan
+    saveData('Japan', get_monarch_list("https://en.wikipedia.org/wiki/List_of_emperors_of_Japan", '23x15px&#124;border&#124;link=Japan&#124;alt=Japan_Emperors_of_Japan_(list)', ['navbox-list-with-group', 'navbox-list']))

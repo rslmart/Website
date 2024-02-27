@@ -315,7 +315,7 @@ class Hurricane extends Component {
         data: STORMS,
         name: "",
         minYear: 1851,
-        maxYear: 2021,
+        maxYear: 2022,
         minMonth: 1,
         maxMonth: 12,
         minWind: 0,

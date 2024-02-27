@@ -55,7 +55,7 @@ function FilterPanel(props) {
                                 type="number"
                                 value={minYear}
                                 min={1851}
-                                max={2021}
+                                max={2022}
                                 onChange={evt => onChange(evt)}
                             />
                         </div>
@@ -67,7 +67,7 @@ function FilterPanel(props) {
                                 type="number"
                                 value={maxYear}
                                 min={1851}
-                                max={2021}
+                                max={2022}
                                 onChange={evt => onChange(evt)}
                             />
                         </div>

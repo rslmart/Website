@@ -2,7 +2,8 @@ import {fetchPeople, fetchPerson, getConnectedGraph, traceInheritance} from "./R
 import * as fs from 'fs';
 import * as util from 'util';
 
-async function getMonarchs(monarchId, titleIds) {
+async function
+getMonarchs(monarchId, titleIds) {
     const getList = async (monarchList, forward) => {
         const propertyId = forward ? "replaced by" : "replace";
         const nodes = {};
@@ -283,6 +284,44 @@ async function findCommonRelations(listOfMonarchLists) {
     }
     const foundPathsJsonString = JSON.stringify(foundPaths);
     await writeFileAsync(`./${listOfMonarchLists.join("_")}CombinedTree.json`, foundPathsJsonString, 'utf8');
+}
+
+async function getMonarchData() {
+    try {
+        const propertyData = {};
+
+        const monarch_list_v2_fixed_string = await readFileAsync("./monarch_list_v2_fixed.json", 'utf8');
+        const monarchIdListMap = JSON.parse(monarch_list_v2_fixed_string);
+
+        const monarch_data_string = await readFileAsync("./monarch_data.json", 'utf8');
+        const monarchData = JSON.parse(monarch_data_string);
+
+        const monarch_list_paths_string = await readFileAsync("./monarch_list_paths.json", 'utf8');
+        const monarchListPaths = JSON.parse(monarch_list_paths_string);
+
+        for (const key of Object.keys(monarchIdListMap)) {
+            try {
+                if (!monarchListPaths.hasOwnProperty(key)) {
+                    console.log("Starting on Monarch List: ", key);
+                    const monarchList = monarchIdListMap[key];
+                    const result = await traceInheritance(monarchData, propertyData, monarchList);
+                    monarchListPaths[key] = result;
+                    const monarchListPathsJsonString = JSON.stringify(monarchListPaths);
+                    const monarchDataJsonString = JSON.stringify(monarchData);
+
+                    await writeFileAsync('./monarch_list_paths.json', monarchListPathsJsonString, 'utf8');
+                    await writeFileAsync('./monarch_data.json', monarchDataJsonString, 'utf8');
+                    console.log('JSON file has been modified and saved successfully.');
+                } else {
+                    console.log("Already fetched data for ", key);
+                }
+            } catch (err) {
+                console.error('Error reading or parsing files:', err);
+            }
+        }
+    } catch (err) {
+        console.error('Error reading the file:', err);
+    }
 }
 
 findCommonRelations(["England", "France"]);
