@@ -202,6 +202,7 @@ export function getConnectedGraph(data, listOfMonarchs) {
   // So if you come up short find the path to the next monarch (or the next)
   // At the end combine all the nodes from all the paths and return them
   const pathNodeIds = new Set();
+
   // Using a for loop
   for (let i = 0; i < listOfMonarchs.length - 1; i++) {
     if (data[listOfMonarchs[i]]) {
