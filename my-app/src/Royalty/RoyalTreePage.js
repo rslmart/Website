@@ -1,7 +1,7 @@
 import React, { Component } from 'react';
 import Graphin, { GraphinContext, Behaviors } from '@antv/graphin';
-import ROYAL_TREE from './royaltree_fixed.json';
-import MONARCH_LISTS from './monarch_list.json';
+import ROYAL_TREE from './Data/data/England_labelled.json';
+import MONARCH_LISTS from './Data/data/monarch_list.json';
 import FilterPanel from "./filter-panel";
 import G6 from "@antv/g6";
 import NodeToolTip from "./NodeToolTip";
