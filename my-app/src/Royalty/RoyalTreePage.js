@@ -1,5 +1,4 @@
 import React, { Component } from 'react';
-import Graphin, { GraphinContext, Behaviors } from '@antv/graphin';
 import ROYAL_TREE from './Data/data/England_labelled.json';
 import MONARCH_LISTS from './Data/data/monarch_list.json';
 import FilterPanel from "./filter-panel";
@@ -9,10 +8,12 @@ import {
   convertToChart,
   createLabel,
   getCertainNumberOfConnections,
-  getConnectedGraph,
   getFirstNEntries,
   traceBackToRoot
 } from './RoyalTreeUtils';
+import {
+  getConnectedGraph,
+} from './Data/get-data';
 
 const graphTypeOptions = [
   { label: "Family Tree", value: "family_tree"},
