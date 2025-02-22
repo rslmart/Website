@@ -1,8 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import pic from "./Travel/Pics/Me_Matterhorn.png";
 import './index.css';
-import '../node_modules/react-vis/dist/style.css';
 
 const childStyle = {"width": "100%", "height": "100%", "fontSize": "50px"}
 

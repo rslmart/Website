@@ -1,17 +1,19 @@
 import * as React from 'react';
 import {
-    XYPlot,
+    LineChart,
     XAxis,
     YAxis,
-    HorizontalGridLines,
-    VerticalGridLines,
-    LineSeries,
-    MarkSeries
-} from 'react-vis';
-import {getColorFromWindSpeed} from "./Hurricane";
+    CartesianGrid,
+    Line,
+    Scatter,
+    ComposedChart,
+    Tooltip,
+    ResponsiveContainer
+} from 'recharts';
+import { getColorFromWindSpeed } from "./Hurricane";
 
 function StormInfo(props) {
-    const {stormInfo, selectedPoint, onChange, exitStormInfo} = props;
+    const { stormInfo, selectedPoint, onChange, exitStormInfo } = props;
 
     function getColorToHex(windSpeed) {
         const color = getColorFromWindSpeed(windSpeed);
@@ -20,76 +22,97 @@ function StormInfo(props) {
 
     const pointInfo = stormInfo.track_points[selectedPoint];
 
+    // Prepare chart data
+    const chartData = stormInfo.track_points.map((point, i) => ({
+        x: new Date(point.date_time).getTime(),
+        y: point.wind,
+        pressure: point.pressure || 1000,
+        fill: getColorToHex(point.wind),
+        opacity: i === selectedPoint ? 1 : 0.75,
+        stroke: i === selectedPoint ? "#000000" : "#FFFFFF"
+    }));
+
     return (
         <div className="storm-info">
-            <div style={{marginBottom: "20px"}}>
-                <h3 style={{float: "left", marginTop: 0, marginBottom: 0}}>{stormInfo["name"]} {stormInfo["season"]}</h3>
-                <button onClick={evt => exitStormInfo(evt)} style={{float: "right", }}>&times;</button>
+            {/* Header and close button remains the same */}
+            <div style={{ marginBottom: "20px" }}>
+                <h3 style={{ float: "left", marginTop: 0, marginBottom: 0 }}>{stormInfo["name"]} {stormInfo["season"]}</h3>
+                <button onClick={evt => exitStormInfo(evt)} style={{ float: "right" }}>&times;</button>
             </div>
-            {pointInfo["ir_image_url"] &&
+
+            {/* IR Image remains the same */}
+            {pointInfo["ir_image_url"] && (
                 <div>
-                    <img src={pointInfo["ir_image_url"]} style={{width: "300px"}}/>
+                    <img src={pointInfo["ir_image_url"]} style={{ width: "300px" }} />
                 </div>
-            }
-            <div>
-                <XYPlot
-                    xType="time"
-                    width={300}
-                    height={150}
-                    style={{marginBottom: "10px"}}
-                >
-                    <XAxis title="Time" />
-                    <YAxis title="Wind Speed (knots)" />
-                    <LineSeries
-                        stroke="black"
-                        data={stormInfo.track_points.map((point, i) => ({
-                            x: new Date(point.date_time).getTime(),
-                            y: point.wind,
-                        }))}
-                    />
-                    <MarkSeries
-                        fillType="literal"
-                        strokeType="literal"
-                        data={stormInfo.track_points.map((point, i) => ({
-                            x: new Date(point.date_time).getTime(),
-                            y: point.wind,
-                            fill: getColorToHex(point.wind),
-                            opacity: i === selectedPoint ? 1 : 0.75,
-                            stroke: i === selectedPoint ? "#000000" : "#FFFFFF"
-                        }))}
-                        size="4px"
-                    />
-                </XYPlot>
-                {stormInfo.min_pressure &&
-                    <XYPlot
-                        xType="time"
-                        width={300}
-                        height={150}
-                        colorType="literal"
-                    >
-                        <YAxis title="Pressure (mb)" />
-                        {stormInfo.min_pressure && // For some reason this breaks if you remove the conditions
-                            <LineSeries
-                                color="#000000"
-                                data={stormInfo.track_points.map(point => ({
-                                    x: new Date(point.date_time).getTime(),
-                                    y: point.pressure ? point.pressure : 1000
-                                }))}
-                            />
-                        }
-                        {stormInfo.min_pressure && <MarkSeries
-                            colorType="literal"
-                            data={[{
-                                x: new Date(pointInfo.date_time).getTime(),
-                                y: pointInfo.pressure ? pointInfo.pressure : 1000,
-                                color: "#000000"
-                            }]}
-                            size="4px"
+            )}
+
+            {/* Wind Speed Chart */}
+            <div style={{ width: 300, height: 150, marginBottom: 10 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis
+                            dataKey="x"
+                            type="number"
+                            domain={['auto', 'auto']}
+                            tickFormatter={(unixTime) => new Date(unixTime).toLocaleDateString()}
                         />
-                        }
-                    </XYPlot>
-                }
+                        <YAxis dataKey="y" />
+                        <Line
+                            type="linear"
+                            dataKey="y"
+                            stroke="#000"
+                            dot={false}
+                        />
+                        <Scatter
+                            data={chartData}
+                            fill="#8884d8"
+                            shape={({ cx, cy, payload }) => (
+                                <circle
+                                    cx={cx}
+                                    cy={cy}
+                                    r={4}
+                                    fill={payload.fill}
+                                    stroke={payload.stroke}
+                                    opacity={payload.opacity}
+                                />
+                            )}
+                        />
+                    </ComposedChart>
+                </ResponsiveContainer>
             </div>
+
+            {/* Pressure Chart */}
+            {stormInfo.min_pressure && (
+                <div style={{ width: 300, height: 150 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={chartData}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis
+                                dataKey="x"
+                                type="number"
+                                domain={['auto', 'auto']}
+                                tickFormatter={(unixTime) => new Date(unixTime).toLocaleDateString()}
+                            />
+                            <YAxis dataKey="pressure" />
+                            <Line
+                                type="linear"
+                                dataKey="pressure"
+                                stroke="#000"
+                                dot={false}
+                            />
+                            <Scatter
+                                data={[chartData[selectedPoint]]}
+                                fill="#000"
+                                shape={<circle r={4} />}
+                            />
+                        </ComposedChart>
+                    </ResponsiveContainer>
+                </div>
+            )}
+
+            {/* Rest of the component remains the same */}
             <div key={'selectedPoint'} className="input">
                 <label>{"Select Point:  "}</label>
                 <button name="backwardSelectedPoint" onClick={evt => onChange(evt)}>{"<"}</button>
