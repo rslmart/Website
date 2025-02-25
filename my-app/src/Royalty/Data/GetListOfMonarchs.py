@@ -243,4 +243,4 @@ monarchies = [
 ]
 
 if __name__ == '__main__':
-    get_monarch_lists(["Yuan", "Ming", "Qing", "Ottoman"])
+    get_monarch_lists(monarchies)

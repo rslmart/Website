@@ -168,6 +168,7 @@ class PropertyRetriever:
       return data
 
   def add_labels_to_people(self, monarchy):
+    print("./data/"+monarchy+".json")
     people = {}
     with open("./data/"+monarchy+".json") as json_file:
       people = json.load(json_file)
@@ -321,7 +322,7 @@ def bfs(start_id, target_id, data_retriever, max_depth):
   return None
 
 def construct_family_tree_from_monarch_list(monarchy, save_file_path):
-  retriever = DataRetriever(local_file=monarchy + ".json")
+  retriever = DataRetriever(local_file="./data/" + monarchy + ".json")
 
   list_of_monarch_ids = []
   with open("data/monarch_list.json") as json_file:
@@ -365,7 +366,7 @@ def get_monarch_data(skip):
   monarchy_lists = [m for m in monarchy_lists.keys() if m not in skip]
   for monarchy in monarchy_lists:
     print(monarchy)
-    construct_family_tree_from_monarch_list(monarchy, monarchy + "family_tree.json")
+    construct_family_tree_from_monarch_list(monarchy, "./data/" + monarchy + "_family_tree.json")
 
 def get_monarch_list(monarchy, position_set, start_person_id):
   retriever = DataRetriever(save=False)
@@ -475,16 +476,18 @@ def get_monarch_list(monarchy, position_set, start_person_id):
   with open("data/monarch_list.json", 'w') as json_file:
     json.dump(monarch_lists, json_file, indent=4)
 
-monarchies = [
-    "England","France","Holy_Roman_Empire","Germany",
-    "Spain","Russia","Sweden","Denmark","Scotland","Norway","Iceland","Bohemia","Austria","Hungary","Naples",
-    "Portugal","Poland","Bavaria","Japan","Joseon","Shang", "Zhou", "Han", "Tang", "Yuan", "Ming", "Qing", "Ottoman",
-]
+monarchies = ['Austria', 'Bavaria', 'Bohemia', 'Denmark', 'England', 'France', 'Germany', 'Han', 'Holy_Roman_Empire',
+               'Hungary', 'Iceland', 'Japan', 'Joseon', 'Ming', 'Naples', 'Norway', 'Ottoman', 'Poland', 'Portugal',
+               'Qing', 'Russia', 'Scotland', 'Shang', 'Spain', 'Sweden', 'Tang', 'Yuan', 'Zhou']
 def label_people():
   for monarchy in monarchies:
     PropertyRetriever().add_labels_to_people(monarchy)
 
 if __name__ == '__main__':
+  # monarchies.sort()
+  # print(monarchies)
   # retriever = DataRetriever(save=False)
-  # get_monarch_data({"England", "France", "Germany", "Holy_Roman_Empire", "Russia", "Spain", "Sweden", "Denmark", "Scotland", "Norway", "Iceland", "Bohemia", "Austria", "Hungary", "Naples", "Portugal"})
+  # get_monarch_data({'Bavaria', 'Bohemia', 'Denmark', 'England', 'France', 'Germany', 'Han', 'Holy_Roman_Empire',
+  #              'Hungary', 'Iceland', 'Japan', 'Joseon', 'Ming', 'Norway', 'Ottoman', 'Poland', 'Portugal',
+  #              'Qing', 'Russia', 'Scotland', 'Shang', 'Spain', 'Sweden', 'Tang', 'Yuan', 'Zhou'})
   label_people()
