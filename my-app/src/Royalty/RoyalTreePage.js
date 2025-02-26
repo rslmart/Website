@@ -34,7 +34,7 @@ class RoyalTree extends Component {
       highlightedNodes: [],
       rootId: MONARCH_LISTS["England"][0],
       selectedNode: EMPTY_NODE,
-      rootOptions: Object.values(ROYAL_TREE).map(node => ({ value: node.id, label: createLabel(node) })),
+      rootOptions: Object.values(ROYAL_TREE).map(node => ({ value: node.id, label: node.label })),
       numberOfAncestors: 10,
       numberOfDescendants: 10,
       filterPanelOpen: true,
@@ -159,7 +159,7 @@ class RoyalTree extends Component {
               graphTypeOptions={graphTypeOptions}
               selectedMonarchs={selectedMonarchs}
               monarchyOptions={Object.keys(MONARCH_LISTS)}
-              selectedRoot={{ label: createLabel(ROYAL_TREE[rootId]), value: rootId }}
+              selectedRoot={{ label: ROYAL_TREE[rootId].label, value: rootId }}
               rootOptions={rootOptions}
               selectRoot={evt => this.onChange({ target: { name: "selectedRoot", value: evt } })}
               numberOfAncestors={numberOfAncestors}

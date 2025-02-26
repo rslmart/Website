@@ -274,13 +274,13 @@ class Hurricane extends Component {
     state = {
         height: 0,
         width: 0,
-        viewState: new WebMercatorViewport({
+        viewState: {
             longitude: -64,
             latitude: 26,
             zoom: 3,
             pitch: 0,
             bearing: 0
-        }),
+        },
         scatterplotSettings: {
             name: "scatterplotSettings",
             radiusScale: 3,
@@ -390,8 +390,19 @@ class Hurricane extends Component {
         }
         else if (evt.target.name === "selectStorm") {
             await this.setState({ stormInfo: STORMS[evt.target.value.id] });
-            const {minLat, maxLat, minLon, maxLon} = getNewViewPort(this.state.stormInfo.track_points);
-            await this.setState(prevState => ({ viewState: prevState.viewState.fitBounds([[minLon, minLat],[maxLon, maxLat]], {padding: 80})}))
+            const { minLat, maxLat, minLon, maxLon } = getNewViewPort(this.state.stormInfo.track_points);
+            const viewport = new WebMercatorViewport(this.state.viewState);
+            const newViewport = viewport.fitBounds([[minLon, minLat], [maxLon, maxLat]], {padding: 80});
+            const newViewState = {
+                longitude: newViewport.longitude,
+                latitude: newViewport.latitude,
+                zoom: newViewport.zoom,
+                pitch: newViewport.pitch,
+                bearing: newViewport.bearing,
+                // Include padding if necessary (check if newViewport.padding exists)
+                ...(newViewport.padding && { padding: { ...newViewport.padding } })
+            };
+            await this.setState({ viewState: newViewState });
         }
         else if (evt.target.name === "selectedPoint") {
             await this.setState({ selectedPoint: parseInt(evt.target.value) });
@@ -543,8 +554,9 @@ class Hurricane extends Component {
         return (
             <div style={{width: "100vw", height: "100vh"}} ref={ (divElement) => { this.divElement = divElement } }>
                 <DeckGL
-                    initialViewState={this.state.viewState}
+                    viewState={this.state.viewState}
                     controller={true}
+                    onViewStateChange={({ viewState }) => this.setState({ viewState })}
                     layers={this.state.layers}
                     getTooltip={({object}) => this.getToolTip(object)}
                 >

@@ -17,10 +17,6 @@ function getMarriageLabel(father, mother) {
   return [father, mother].sort().join(' + ');
 }
 
-export function createLabel(person) {
-  return person.title ? person.name + '\n' + person.title : person.name
-}
-
 export function convertToChart(data, highlightedNodes) {
   const highlightedNodeSet = new Set(highlightedNodes.map(node => node.id));
   const nodeSet = new Set();
@@ -30,7 +26,7 @@ export function convertToChart(data, highlightedNodes) {
     const node = {...person};
     node['type'] = 'circle';
     node['size'] = 80;
-    node['label'] = createLabel(person);
+    node['label'] = person.label;
     node['labelCfg'] = { position: "bottom" };
     node['style'] = {};
     if (person.sex) {

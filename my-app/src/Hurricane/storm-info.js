@@ -1,14 +1,14 @@
 import * as React from 'react';
 import {
-    LineChart,
+    ResponsiveContainer,
+    ComposedChart,
+    Line,
+    Scatter,
     XAxis,
     YAxis,
     CartesianGrid,
-    Line,
-    Scatter,
-    ComposedChart,
     Tooltip,
-    ResponsiveContainer
+    Legend
 } from 'recharts';
 import { getColorFromWindSpeed } from "./Hurricane";
 
@@ -32,6 +32,10 @@ function StormInfo(props) {
         stroke: i === selectedPoint ? "#000000" : "#FFFFFF"
     }));
 
+    // Calculate min/max values separately
+    const pressureValues = chartData.map(d => d.pressure).filter(Boolean);
+    const hasPressureData = pressureValues.length > 0;
+
     return (
         <div className="storm-info">
             {/* Header and close button remains the same */}
@@ -47,70 +51,87 @@ function StormInfo(props) {
                 </div>
             )}
 
-            {/* Wind Speed Chart */}
-            <div style={{ width: 300, height: 150, marginBottom: 10 }}>
+            <div style={{ width: 300, height: 300 }}>
                 <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={chartData}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis
                             dataKey="x"
-                            type="number"
-                            domain={['auto', 'auto']}
                             tickFormatter={(unixTime) => new Date(unixTime).toLocaleDateString()}
                         />
-                        <YAxis dataKey="y" />
-                        <Line
-                            type="linear"
-                            dataKey="y"
-                            stroke="#000"
-                            dot={false}
+
+                        {/* Wind Speed Axis */}
+                        <YAxis
+                            yAxisId="left"
+                            domain={[0, dataMax => Math.ceil(dataMax * 1.1 / 10) * 10]}
+                            allowDecimals={false}
+                            label={{ value: 'Wind Speed (kts)', angle: -90 }}
                         />
-                        <Scatter
-                            data={chartData}
-                            fill="#8884d8"
-                            shape={({ cx, cy, payload }) => (
+
+                        {/* Pressure Axis */}
+                        {hasPressureData && (
+                            <YAxis
+                                yAxisId="right"
+                                orientation="right"
+                                domain={[dataMin => Math.floor(dataMin * 0.98), dataMax => Math.ceil(dataMax * 1.02)]}
+                                allowDecimals={false}
+                                label={{ value: 'Pressure (mb)', angle: 90 }}
+                            />
+                        )}
+
+                        {/* Wind Speed Line with Custom Colored Dots */}
+                        <Line
+                            yAxisId="left"
+                            dataKey="y"
+                            stroke="#8884d8"
+                            dot={({ index, payload, ...props }) => (
                                 <circle
-                                    cx={cx}
-                                    cy={cy}
-                                    r={4}
+                                    {...props}
+                                    r={index === selectedPoint ? 6 : 4}
                                     fill={payload.fill}
-                                    stroke={payload.stroke}
-                                    opacity={payload.opacity}
+                                    stroke={index === selectedPoint ? '#ff0000' : 'none'}
+                                    strokeWidth={2}
+                                    opacity={index === selectedPoint ? 1 : 0.8}
                                 />
+                            )}
+                            name="Wind Speed"
+                        />
+
+                        {/* Pressure Line with Conditional Dots */}
+                        {hasPressureData && (
+                            <Line
+                                yAxisId="right"
+                                dataKey="pressure"
+                                stroke="#ff7300"
+                                dot={({ index, payload, ...props }) => payload.pressure && (
+                                    <circle
+                                        {...props}
+                                        r={index === selectedPoint ? 6 : 4}
+                                        fill={payload.fill}
+                                        stroke={index === selectedPoint ? '#000' : 'none'}
+                                        strokeWidth={1}
+                                        opacity={index === selectedPoint ? 1 : 0.8}
+                                    />
+                                )}
+                                name="Pressure"
+                            />
+                        )}
+
+                        <Legend />
+                        <Tooltip
+                            content={({ payload }) => (
+                                <div className="custom-tooltip">
+                                    {payload?.map((entry, index) => (
+                                        <p key={index} style={{ color: entry.color }}>
+                                            {entry.name}: {Math.round(entry.value)}{entry.name === 'Wind Speed' ? ' kts' : ' mb'}
+                                        </p>
+                                    ))}
+                                </div>
                             )}
                         />
                     </ComposedChart>
                 </ResponsiveContainer>
             </div>
-
-            {/* Pressure Chart */}
-            {stormInfo.min_pressure && (
-                <div style={{ width: 300, height: 150 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={chartData}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis
-                                dataKey="x"
-                                type="number"
-                                domain={['auto', 'auto']}
-                                tickFormatter={(unixTime) => new Date(unixTime).toLocaleDateString()}
-                            />
-                            <YAxis dataKey="pressure" />
-                            <Line
-                                type="linear"
-                                dataKey="pressure"
-                                stroke="#000"
-                                dot={false}
-                            />
-                            <Scatter
-                                data={[chartData[selectedPoint]]}
-                                fill="#000"
-                                shape={<circle r={4} />}
-                            />
-                        </ComposedChart>
-                    </ResponsiveContainer>
-                </div>
-            )}
 
             {/* Rest of the component remains the same */}
             <div key={'selectedPoint'} className="input">
