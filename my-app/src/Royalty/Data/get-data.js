@@ -24,12 +24,12 @@ export function getConnectedGraph(data, listOfMonarchs) {
     for (let i = 0; i < listOfMonarchs.length - 1; i++) {
         if (data[listOfMonarchs[i]]) {
             const root = data[listOfMonarchs[i]];
-            console.log("From: ", root);
+            // console.log("From: ", root);
             let foundPath = [];
             for (let j = i + 1; j < listOfMonarchs.length; j++) {
                 if (data[listOfMonarchs[j]]) {
                     const targetNode = data[listOfMonarchs[j]];
-                    console.log("To: ", targetNode);
+                    // console.log("To: ", targetNode);
                     let queue = [{node: root, path: []}]; // Initialize queue with start node and an empty path
                     let visited = new Set(); // Track visited nodes
                     // Search relatives
@@ -81,7 +81,7 @@ export function getConnectedGraph(data, listOfMonarchs) {
             newData[data[nodeId].mother] = data[data[nodeId].mother];
         }
     });
-    console.log(newData);
+    // console.log(newData);
     return newData;
 }
 

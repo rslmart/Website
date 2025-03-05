@@ -1,78 +1,89 @@
 import React from 'react';
-import Select from 'react-select';
+import PropTypes from 'prop-types';
+
+// Constants
+const PANEL_STYLES = {
+    toggleButton: {
+        position: "absolute",
+        top: 20,
+        right: 20,
+        padding: "5px 10px",
+        cursor: "pointer",
+    },
+    header: {
+        height: "25px",
+        marginBottom: 0,
+        paddingBottom: 0,
+    },
+    panelTitle: {
+        float: "left",
+        marginTop: 0,
+        marginBottom: 0,
+    },
+    selectContainer: {
+        marginTop: 10,
+    },
+};
 
 function FilterPanel(props) {
-    const {filterPanelOpen, graphType, graphTypeOptions, selectedMonarchs, monarchyOptions, selectedRoot, rootOptions, selectRoot, numberOfAncestors, numberOfDescendants, onChange,
-        toggleFilterPanel} = props;
+    const {
+        filterPanelOpen,
+        selectedMonarchs,
+        monarchyOptions,
+        onChange,
+        toggleFilterPanel,
+    } = props;
+
     if (!filterPanelOpen) {
-        return (<button onClick={evt => toggleFilterPanel(evt)} style={{position: "absolute", top: 20, right: 20}}>+</button>);
-    }
-    let content = (<div/>);
-    if (graphType === "family_tree") {
-        content = (
-            <div>
-                <div key={'plotType'} className="select" style={{marginTop: 10}}>
-                    <label>Root: </label>
-                    <Select
-                        value={selectedRoot}
-                        onChange={selectRoot}
-                        options={rootOptions}
-                    />
-                </div>
-                <div key={'numberOfAncestors'} className="input">
-                    <label>Number of Ancestors: </label>
-                    <input
-                        name="numberOfAncestors"
-                        type="number"
-                        value={numberOfAncestors}
-                        min={0}
-                        max={200}
-                        onChange={evt => onChange(evt)}
-                    />
-                </div>
-                <div key={'numberOfDescendants'} className="input">
-                    <label>Number of Descendants: </label>
-                    <input
-                        name="numberOfDescendants"
-                        type="number"
-                        value={numberOfDescendants}
-                        min={0}
-                        max={200}
-                        onChange={evt => onChange(evt)}
-                    />
-                </div>
-            </div>
+        return (
+            <button
+                onClick={toggleFilterPanel}
+                style={PANEL_STYLES.toggleButton}
+                aria-label="Open filters"
+            >
+                +
+            </button>
         );
     }
-    if (graphType === "monarchs") {
-        content = (
-            <div>
-                <div key={'selectMonarchy'} className="select" style={{marginTop: 10}}>
-                    <label>Monarchy: </label>
-                    <select name="selectedMonarchs" value={selectedMonarchs} onChange={onChange}>
-                        {monarchyOptions.map(option =>
-                            <option key={option} value={option}>{option}</option>)}
-                    </select>
-                </div>
-            </div>
-        );
-    }
+
     return (
         <div className="control-panel">
-            <div style={{height: "25px", marginBottom: 0, paddingBottom: 0}}>
-                <h3 style={{float: "left", marginTop: 0, marginBottom: 0}}>Filter Data</h3>
-                <button onClick={evt => toggleFilterPanel(evt)} style={{float: "right", }}>-</button>
+            <div style={PANEL_STYLES.header}>
+                <h3 style={PANEL_STYLES.panelTitle}>Filter Data</h3>
+                {/*<button*/}
+                {/*    onClick={toggleFilterPanel}*/}
+                {/*    style={PANEL_STYLES.toggleButton}*/}
+                {/*    aria-label="Close filters"*/}
+                {/*>*/}
+                {/*    -*/}
+                {/*</button>*/}
             </div>
-             <div key={'selectRoot'} className="select" style={{marginTop: 10}}>
-                <label>Graph Type: </label>
-                <select name="graphType" value={graphType} onChange={onChange}>
-                    {Object.values(graphTypeOptions).map(option =>
-                        <option key={option.value} value={option.value}>{option.label}</option>)}
+
+            <div style={PANEL_STYLES.selectContainer}>
+                <label htmlFor="monarchySelect">Monarchy: </label>
+                <select
+                    id="monarchySelect"
+                    name="selectedMonarchs"
+                    value={selectedMonarchs}
+                    onChange={(e) => onChange("selectedMonarchs", e.target.value)}
+                >
+                    {monarchyOptions.map(option => (
+                        <option key={option} value={option}>
+                            {option}
+                        </option>
+                    ))}
                 </select>
             </div>
-            {content}
         </div>
     );
 }
+
+FilterPanel.propTypes = {
+    filterPanelOpen: PropTypes.bool.isRequired,
+    selectedMonarchs: PropTypes.string.isRequired,
+    monarchyOptions: PropTypes.arrayOf(PropTypes.string).isRequired,
+    onChange: PropTypes.func.isRequired,
+    toggleFilterPanel: PropTypes.func.isRequired,
+};
 
 export default React.memo(FilterPanel);

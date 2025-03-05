@@ -1,5 +1,7 @@
 import json
 import sys
+from datetime import datetime
+
 
 def datetime_encoder(obj):
     if isinstance(obj, datetime):
@@ -8,14 +10,14 @@ def datetime_encoder(obj):
     raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
 
 def saveData(data, filename):
-	print("Saving {} datapoints to ".format(len(data), filename))
-	# Convert dictionary to JSON string using the custom encoder
-	json_data = json.dumps(data, default=datetime_encoder, indent=4)
-	# Write JSON data to a file
-	with open(filename, "w") as file:
-		file.write(json_data)
+    print("Saving {} datapoints to ".format(len(data), filename))
+    # Convert dictionary to JSON string using the custom encoder
+    json_data = json.dumps(data, default=datetime_encoder, indent=4)
+    # Write JSON data to a file
+    with open(filename, "w") as file:
+        file.write(json_data)
 
-if __name__ == '__main__':
+def cleanRoyalTreeData():
     with open(sys.argv[1], 'r') as file:
         data = json.load(file)
 
@@ -96,3 +98,39 @@ if __name__ == '__main__':
                     data[childId] = child
     print("Data Added: ", data_added)
     saveData(data, "royaltree_fixed.json")
+
+def flatten(xss):
+    return [x for xs in xss for x in xs]
+
+if __name__ == '__main__':
+    monarch_lists = {}
+    with open("./data/monarch_list.json", 'r') as file:
+        monarch_lists = json.load(file)
+    new_data = {}
+    family_trees = {}
+    for monarchy in monarch_lists:
+        succession_list = []
+        with open("./data/" + monarchy + "_family_tree.json", 'r') as file:
+            data = json.load(file)
+            family_trees[monarchy] = data[monarchy]
+            succession_list = set(flatten(data[monarchy]))
+        monarchy_data = {}
+        with open("./data/" + monarchy + "_labelled.json", 'r') as file:
+            monarchy_data = json.load(file)
+        importantNodes = set()
+        for nodeId in succession_list:
+            if nodeId in monarchy_data:
+                person = monarchy_data[nodeId]
+                importantNodes.add(nodeId)
+                importantNodes.add(person.get("father", nodeId))
+                importantNodes.add(person.get("mother", nodeId))
+                importantNodes.update(person.get("spouse", []))
+                importantNodes.update(person.get("sibling", []))
+                importantNodes.update(person.get("unmarried partner", []))
+        for nodeId in importantNodes:
+            if nodeId in monarchy_data:
+                new_data[nodeId] = monarchy_data[nodeId]
+    with open("./data/monarchy_data.json", 'w') as json_file:
+        json.dump(new_data, json_file)
+    with open("./data/monarchy_family_trees.json", 'w') as json_file:
+        json.dump(family_trees, json_file, indent=4)

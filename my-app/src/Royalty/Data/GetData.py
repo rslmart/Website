@@ -36,6 +36,7 @@ class DataRetriever:
         to_retrieve.append(item_id)
     retrieved_item_data = utils.get_wikidata_data_for_list(to_retrieve)
     for item_id in to_retrieve:
+
       item_data = retrieved_item_data[item_id]
       person = {}
       if item_data:

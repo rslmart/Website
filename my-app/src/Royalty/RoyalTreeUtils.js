@@ -17,64 +17,182 @@ function getMarriageLabel(father, mother) {
   return [father, mother].sort().join(' + ');
 }
 
+export function extractImportantNodes(data, successionList) {
+  let importantNodes = successionList.flat();
+  importantNodes.forEach(nodeId => {
+    if (nodeId in data) {
+      if ("father" in data[nodeId]) {
+        importantNodes.push(data[nodeId].father);
+      }
+      if ("mother" in data[nodeId]) {
+        importantNodes.push(data[nodeId].mother);
+      }
+    } else {
+      console.log(nodeId);
+    }
+  });
+  let nodeSet = new Set(importantNodes);
+  const newData = {};
+  Object.keys(data).forEach(nodeId => {
+    if (nodeSet.has(nodeId)) {
+      newData[nodeId] = data[nodeId];
+  }});
+  return newData;
+}
+
+function extractYear(dateString) {
+  const cleanDateString = dateString.replace("+", "");
+  const month = cleanDateString.substring(5, 7);
+  const day = cleanDateString.substring(8, 10);
+
+  if (month === "00" || day === "00") {
+    return parseInt(cleanDateString.substring(0, 4));
+  }
+
+  const date = new Date(cleanDateString);
+  if (isNaN(date)) {
+    return "Invalid Date";
+  }
+  return date.getUTCFullYear();
+}
+
+function createLabel(person) {
+  let label = person.label;
+  if ('date of birth' in person) {
+    label = label + '\n' + extractYear(person['date of birth'])
+  } else {
+    label = label + '\n Unknown'
+  }
+  if ('date of death' in person) {
+    label = label + '-' + extractYear(person['date of death'])
+  } else {
+    label = label + '-Unknown'
+  }
+  return label
+}
+
 export function convertToChart(data, highlightedNodes) {
-  const highlightedNodeSet = new Set(highlightedNodes.map(node => node.id));
+  const SEX_COLORS = {
+    male: 'blue',
+    female: 'red'
+  };
+
+  const highlightedNodeSet = new Set(highlightedNodes);
   const nodeSet = new Set();
-  let edges = [];
-  const nodes = []
+  const edges = [];
+  const nodes = [];
+
   Object.values(data).forEach(person => {
-    const node = {...person};
-    node['type'] = 'circle';
-    node['size'] = 80;
-    node['label'] = person.label;
-    node['labelCfg'] = { position: "bottom" };
-    node['style'] = {};
-    if (person.sex) {
-      node.style = {
-        fill: person.sex === 'male' ? 'blue' : 'red',
+    // Create person node
+    const node = {
+      ...person,
+      type: 'circle',
+      size: 80,
+      label: createLabel(person),
+      labelCfg: { position: "bottom" },
+      style: {
+        fill: person["sex or gender"] ? SEX_COLORS[person["sex or gender"]] : undefined,
         stroke: highlightedNodeSet.has(person.id) ? '#e7e312' : 'black',
         opacity: highlightedNodeSet.has(person.id) ? 1 : 0.5,
         lineWidth: 5
       }
+    };
+
+    if ('image' in person && person.image.length > 0) {
+      node.icon = {
+        img: process.env.PUBLIC_URL + '/monarchy/' + person.id + '.jpg',
+        width: 45,
+        height: 70,
+        show: true
+      };
     }
-    if (person.picture) {
-        node['icon'] = {
-          img: process.env.PUBLIC_URL + person.id + '.jpg',
-          width: 45,
-          height: 70,
-          show: true
-        };
-    }
+
     nodes.push(node);
-    if (person['spouseList']){
-      person['spouseList'].filter(spouseId => data[spouseId] && !nodeSet.has(getMarriageName(person.id, spouseId)))
-          .forEach(spouseId => {
-            const marriageName = getMarriageName(person.id, spouseId);
-            nodes.push({ id: marriageName, label: getMarriageLabel(person.name, data[spouseId]['name']) });
-            nodeSet.add(marriageName);
-            edges.push({ source: person.id, target: marriageName, style: { stroke: person.sex === 'male' ? 'blue' : 'red' } })
-            edges.push({ source: spouseId, target: marriageName, style: { stroke: data[spouseId].sex === 'male' ? 'blue' : 'red' }  })
-          })
+    nodeSet.add(node.id); // Track all nodes immediately
+
+    // Process spouses
+    if (Array.isArray(person.spouse)) {
+      person.spouse.forEach(spouseId => {
+        if (!data[spouseId]) return;
+
+        const marriageName = getMarriageName(person.id, spouseId);
+        if (!nodeSet.has(marriageName)) {
+          const spouse = data[spouseId];
+          nodes.push({
+            id: marriageName,
+            label: getMarriageLabel(person.label, spouse.label)
+          });
+          nodeSet.add(marriageName);
+
+          // Add edges once when creating marriage node
+          edges.push({
+            source: person.id,
+            target: marriageName,
+            style: { stroke: SEX_COLORS[person["sex or gender"]] }
+          });
+          edges.push({
+            source: spouseId,
+            target: marriageName,
+            style: { stroke: SEX_COLORS[spouse["sex or gender"]] }
+          });
+        }
+      });
     }
-    if (person['mother'] && data[person['mother']] && person['father'] && data[person['father']]){
-      const marriageName = getMarriageName(person['mother'], person['father']);
+
+    // Process parents
+    const motherId = person.mother;
+    const fatherId = person.father;
+    const hasMother = motherId && data[motherId];
+    const hasFather = fatherId && data[fatherId];
+
+    if (hasMother && hasFather) {
+      const marriageName = getMarriageName(motherId, fatherId);
       if (!nodeSet.has(marriageName)) {
-        nodes.push({ id: marriageName, label: getMarriageLabel(data[person['mother']]['name'], data[person['father']]['name']) });
+        nodes.push({
+          id: marriageName,
+          label: getMarriageLabel(data[motherId].label, data[fatherId].label)
+        });
         nodeSet.add(marriageName);
+
+        // Add parent edges only once
+        edges.push({
+          source: motherId,
+          target: marriageName,
+          style: { stroke: SEX_COLORS.female }
+        });
+        edges.push({
+          source: fatherId,
+          target: marriageName,
+          style: { stroke: SEX_COLORS.male }
+        });
       }
-      edges.push({ source: person['mother'], target: marriageName, style: { stroke: 'red' } })
-      edges.push({ source: person['father'], target: marriageName, style: { stroke: 'blue' } })
-      edges.push({ source: marriageName, target: person.id, style: { stroke: 'black' } })
-    } else if (person['mother'] && data[person['mother']]){
-      edges.push({ source: person['mother'], target: person.id, style: { stroke: 'red' } })
-    } else if (person['father'] && data[person['father']]){
-      edges.push({ source: person['father'], target: person.id, style: { stroke: 'blue' } })
+      // Add child edge always
+      edges.push({
+        source: marriageName,
+        target: person.id,
+        style: { stroke: 'black' }
+      });
+    } else if (hasMother) {
+      edges.push({
+        source: motherId,
+        target: person.id,
+        style: { stroke: SEX_COLORS.female }
+      });
+    } else if (hasFather) {
+      edges.push({
+        source: fatherId,
+        target: person.id,
+        style: { stroke: SEX_COLORS.male }
+      });
     }
   });
-  // Need to filter out edges to missing nodes
-  nodes.forEach(node => nodeSet.add(node.id));
-  edges = edges.filter(edge => nodeSet.has(edge.target) && nodeSet.has(edge.source));
-  return { nodes, edges };
+
+  // Final edge validation
+  const validEdges = edges.filter(edge =>
+      nodeSet.has(edge.source) && nodeSet.has(edge.target)
+  );
+
+  return { nodes, edges: validEdges };
 }
 
 export function getCertainNumberOfConnections(data, rootId, numberOfAncestors, numberOfDescendants) {
@@ -92,8 +210,8 @@ export function getCertainNumberOfConnections(data, rootId, numberOfAncestors, n
     if (data[currentNodeId]) {
       const currentNode = data[currentNodeId];
       nodes[currentNodeId] = currentNode;
-      if (currentNode.spouseList) {
-        currentNode.spouseList.filter(spouseId => data[spouseId]).forEach(spouseId => nodes[spouseId] = data[spouseId])
+      if (currentNode.spouse) {
+        currentNode.spouse.filter(spouseId => data[spouseId]).forEach(spouseId => nodes[spouseId] = data[spouseId])
       }
       if (currentNode.issueList) {
         currentNode.issueList.filter(childId => !visited.has(childId)).forEach(childId => {
@@ -275,8 +393,8 @@ function findLargestTree(people) {
           if (curPerson.father && people[curPerson.father] && !visited.has(curPerson.father)) {
             queue.push(curPerson.father);
           }
-          if (curPerson.spouseList) {
-            curPerson.spouseList.filter(spouseId => people[spouseId] && !visited.has(spouseId)).forEach(spouseId => queue.push(spouseId));
+          if (curPerson.spouse) {
+            curPerson.spouse.filter(spouseId => people[spouseId] && !visited.has(spouseId)).forEach(spouseId => queue.push(spouseId));
           }
           if (curPerson.issueList) {
             curPerson.issueList.filter(childId => people[childId] && !visited.has(childId)).forEach(childId => queue.push(childId));
