@@ -8,6 +8,8 @@
     "@testing-library/jest-dom": "^5.16.4",
     "@testing-library/react": "^13.1.1",
     "@testing-library/user-event": "^13.5.0",
+    "cytoscape": "^3.31.2",
+    "cytoscape-dagre": "^2.5.0",
     "deck.gl": "^8.9.36",
     "lodash": "^4.17.21",
     "mapbox-gl": "2.8.2",

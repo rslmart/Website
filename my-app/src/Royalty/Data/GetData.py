@@ -334,6 +334,26 @@ def construct_family_tree_from_monarch_list(monarchy, save_file_path):
 
   result = []
 
+  '''
+  For Russian dynasty after Feodor II
+  ["Q206459",
+         "Q181915"
+        ],
+        [
+            "Q181915",
+            "Q170172",
+            "Q260663",
+            "Q4397050",
+            "Q2328037",
+            "Q547759",
+            "Q7731"
+        ],
+        [
+            "Q7731",
+            "Q184868"
+        ],
+  '''
+
   for i in range(len(list_of_monarch_ids)):
     current_id = list_of_monarch_ids[i]
     path_found = None

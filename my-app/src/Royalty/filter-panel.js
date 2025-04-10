@@ -1,5 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import './RoyalTreeStyle.css'
 
 // Constants
 const PANEL_STYLES = {
@@ -27,36 +28,15 @@ const PANEL_STYLES = {
 
 function FilterPanel(props) {
     const {
-        filterPanelOpen,
         selectedMonarchs,
         monarchyOptions,
         onChange,
-        toggleFilterPanel,
     } = props;
 
-    if (!filterPanelOpen) {
-        return (
-            <button
-                onClick={toggleFilterPanel}
-                style={PANEL_STYLES.toggleButton}
-                aria-label="Open filters"
-            >
-                +
-            </button>
-        );
-    }
-
     return (
-        <div className="control-panel">
+        <div>
             <div style={PANEL_STYLES.header}>
                 <h3 style={PANEL_STYLES.panelTitle}>Filter Data</h3>
-                {/*<button*/}
-                {/*    onClick={toggleFilterPanel}*/}
-                {/*    style={PANEL_STYLES.toggleButton}*/}
-                {/*    aria-label="Close filters"*/}
-                {/*>*/}
-                {/*    -*/}
-                {/*</button>*/}
             </div>
 
             <div style={PANEL_STYLES.selectContainer}>
@@ -79,11 +59,9 @@ function FilterPanel(props) {
 }
 
 FilterPanel.propTypes = {
-    filterPanelOpen: PropTypes.bool.isRequired,
     selectedMonarchs: PropTypes.string.isRequired,
     monarchyOptions: PropTypes.arrayOf(PropTypes.string).isRequired,
     onChange: PropTypes.func.isRequired,
-    toggleFilterPanel: PropTypes.func.isRequired,
 };
 
 export default React.memo(FilterPanel);

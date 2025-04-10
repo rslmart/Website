@@ -1,33 +1,29 @@
 import React, { Component } from 'react';
+import cytoscape from 'cytoscape';
+import dagre from 'cytoscape-dagre';
 import ROYAL_TREE from './Data/data/monarchy_data.json';
 import SUCCESSION_TREE from './Data/data/monarchy_family_trees.json';
 import MONARCH_LISTS from './Data/data/monarch_list.json';
 import FilterPanel from "./filter-panel";
-import G6 from "@antv/g6";
 import NodeToolTip from "./NodeToolTip";
 import {
-  convertToChart, extractImportantNodes,
+  convertToChart,
+  extractImportantNodes,
   getCertainNumberOfConnections,
   traceBackToRoot
 } from './RoyalTreeUtils';
-import { getConnectedGraph } from './Data/get-data';
+import './RoyalTreeStyle.css';
+
+cytoscape.use(dagre);
 
 // Constants
-const TOOLTIP_OFFSET_X = -75;
-const TOOLTIP_OFFSET_Y = 15;
 const EMPTY_NODE = { id: '' };
-const DEFAULT_LAYOUT_CONFIG = {
-  type: "dagre",
-  // rankdir: "LR",
-  nodesep: 50,
-  ranksep: 100
-};
 
 class RoyalTree extends Component {
   constructor(props) {
     super(props);
     this.containerRef = React.createRef();
-    this.graph = null;
+    this.cy = null;
 
     this.state = {
       selectedMonarchs: "England",
@@ -41,110 +37,159 @@ class RoyalTree extends Component {
       })),
       numberOfAncestors: 10,
       numberOfDescendants: 10,
-      filterPanelOpen: true,
       showNodeToolTip: false,
-      nodeTooltipX: 0,
-      nodeTooltipY: 0,
     };
   }
 
-  handleNodeClick = (nodeModel) => {
-    const { rootId, data } = this.state;
-    const currentRootNode = data[rootId];
-
-    let newSelectedNode = EMPTY_NODE;
-    let newHighlightedNodes = [];
-
-    if (nodeModel.id !== this.state.selectedNode.id) {
-      newSelectedNode = nodeModel;
-      newHighlightedNodes = currentRootNode
-          ? traceBackToRoot(newSelectedNode, currentRootNode, data)
-          : [];
-    }
-
-    this.setState(
-        { selectedNode: newSelectedNode, highlightedNodes: newHighlightedNodes },
-        () => this.updateGraph(data, newHighlightedNodes)
-    );
-  };
-
-  bindGraphEvents = (graphInstance) => {
-    graphInstance.on('node:mouseenter', (evt) => {
-      const model = evt.item.getModel();
-      const point = graphInstance.getCanvasByPoint(model.x, model.y);
+  bindGraphEvents = (cyInstance) => {
+    cyInstance.on('mouseover', 'node', (evt) => {
+      const node = evt.target;
+      const { x, y } = node.renderedPosition();
+      const zoom = cyInstance.zoom();
 
       this.setState({
         showNodeToolTip: true,
-        nodeTooltipX: point.x + TOOLTIP_OFFSET_X,
-        nodeTooltipY: point.y + TOOLTIP_OFFSET_Y
+        tooltipData: node.data()
       });
     });
 
-    graphInstance.on('node:mouseleave', () => {
-      this.setState({ showNodeToolTip: false });
+    cyInstance.on('mouseout', 'node', () => {
+      this.setState({showNodeToolTip: false});
     });
 
-    graphInstance.on('node:click', (evt) => {
-      this.handleNodeClick(evt.item.getModel());
+    // Add these to handle zoom/pan interactions
+    cyInstance.on('tapstart', (evt) => {
+      if (evt.target === cyInstance) {
+        this.setState({ showNodeToolTip: false });
+      }
+    });
+
+    cyInstance.on('drag', 'node', () => {
+      this.setState({ showNodeToolTip: false });
     });
   };
 
   initializeGraph = (containerEl) => {
-    const graphInstance = new G6.Graph({
+    const cy = cytoscape({
       container: containerEl,
-      width: window.innerWidth,
-      height: window.innerHeight,
-      modes: {
-        default: ["drag-canvas", "zoom-canvas"]
-      },
-      layout: {
-        ...DEFAULT_LAYOUT_CONFIG,
-        controlPoints: true
-      },
-      defaultNode: {
-        type: 'circle',
-        size: 30,
-      },
-      defaultEdge: {
-        type: 'polyline',
-        style: {
-          stroke: '#A3B1BF',
-          lineWidth: 1.5,
-          endArrow: {
-            path: G6.Arrow.triangle(8, 6, 12),
-            fill: '#A3B1BF'
+      style: [
+        {
+          selector: 'node',
+          style: {
+            'shape': 'rectangle',
+            'width': 80,
+            'height': 100,
+            'label': 'data(label)',
+            'text-valign': 'bottom',
+            'text-wrap': 'wrap',
+            'text-max-width': 120,
+            'text-margin-y': 5,
+            'background-color': 'data(color)',
+            'border-color': 'data(borderColor)',
+            'border-width': 5,
+            'background-image': 'data(image)',
+            'background-fit': 'cover',
+            'opacity': 'data(opacity)',
+            'padding': '10px'
           }
-        }
-      }
+        },
+        {
+          selector: 'edge',
+          style: {
+            'width': 1.5,
+            'line-color': '#A3B1BF',
+            'target-arrow-color': '#A3B1BF',
+            'target-arrow-shape': 'triangle',
+            'curve-style': 'bezier'
+          }
+        },
+        {
+          selector: 'node[type = "marriage"]',
+          style: {
+            'width': 5,
+            'height': 5,
+            'shape': 'circle',
+            'background-color': '#888',
+            'border-color': '#666',
+            'border-width': 2,
+            'label': ''  // Ensure no label
+          }
+        },
+      ],
+      textureOnViewport: false,
+      hideEdgesOnViewport: false,
+      hideLabelsOnViewport: false
     });
 
-    this.bindGraphEvents(graphInstance);
-    return graphInstance;
+    this.bindGraphEvents(cy);
+
+    // Force initial resize
+    setTimeout(() => {
+      cy.resize();
+      cy.fit();
+    }, 0);
+
+    return cy;
   };
 
   updateGraph = (data, highlightedNodes) => {
     try {
-      const convertedData = convertToChart(data, highlightedNodes);
+      const convertedData = this.convertToCytoscapeFormat(
+          convertToChart(data, highlightedNodes)
+      );
 
-      if (!this.graph) {
-        this.graph = this.initializeGraph(this.containerRef.current);
+      if (!this.cy) {
+        this.cy = this.initializeGraph(this.containerRef.current);
       }
 
-      this.graph.data(convertedData);
+      this.cy.elements().remove();
+      this.cy.add(convertedData);
 
-      // Use the 'afterlayout' event to ensure fitView runs after layout completion
-      this.graph.once('afterlayout', () => {
-        this.graph.fitView([20, 20, 20, 20]); // Add padding to ensure visibility
-      });
+      this.cy.layout({
+        name: 'dagre',
+        nodeSep: 50,
+        rankSep: 100,
+        animate: true
+      }).run();
 
-      this.graph.render();
+      this.cy.fit();
 
     } catch (error) {
       console.error('Graph rendering error:', error);
     }
   };
 
-  // Add resize handler
+  convertToCytoscapeFormat = (chartData) => {
+    const elements = [];
+
+    chartData.nodes.forEach(node => {
+      elements.push({
+        group: 'nodes',
+        data: {
+          ...node,
+          color: node.style?.fill,
+          borderColor: node.style?.stroke,
+          opacity: node.style?.opacity,
+          image: node.icon?.img
+        }
+      });
+    });
+
+    chartData.edges.forEach(edge => {
+      elements.push({
+        group: 'edges',
+        data: {
+          ...edge,
+          source: edge.source,
+          target: edge.target,
+          color: edge.style?.stroke
+        }
+      });
+    });
+
+    return elements;
+  };
+
   componentDidMount() {
     this.handleFilterChange("selectedMonarchs", "England");
     window.addEventListener('resize', this.handleResize);
@@ -152,75 +197,79 @@ class RoyalTree extends Component {
 
   componentWillUnmount() {
     window.removeEventListener('resize', this.handleResize);
-    if (this.graph) {
-      this.graph.destroy();
+    if (this.cy) {
+      this.cy.destroy();
     }
   }
 
   handleResize = () => {
-    if (this.graph) {
-      this.graph.changeSize(window.innerWidth, window.innerHeight);
-      this.graph.fitView();
+    if (this.cy) {
+      this.cy.resize();
+      this.cy.fit();
     }
   };
 
   handleFilterChange = (name, value) => {
     if (name === "selectedMonarchs") {
-        const selectedMonarchs = value;
-        let newData, newHighlightedNodes, newRootId;
+      const selectedMonarchs = value;
+      let newData, newHighlightedNodes, newRootId;
 
-        const monarchList = MONARCH_LISTS[selectedMonarchs] || [];
-        const successionList = SUCCESSION_TREE[selectedMonarchs] || [];
-        newData = extractImportantNodes(ROYAL_TREE, successionList)
-        console.log(newData)
-        newHighlightedNodes = monarchList;
-        newRootId = monarchList[0] || '';
+      const monarchList = MONARCH_LISTS[selectedMonarchs] || [];
+      const successionList = SUCCESSION_TREE[selectedMonarchs] || [];
+      newData = extractImportantNodes(ROYAL_TREE, successionList);
+      newHighlightedNodes = monarchList;
+      newRootId = monarchList[0] || '';
 
-        this.setState(
-            {
-              data: newData,
-              highlightedNodes: newHighlightedNodes,
-              rootId: newRootId,
-              selectedMonarchs
-            },
-            () => this.updateGraph(newData, newHighlightedNodes)
-        );
+      this.setState(
+          {
+            data: newData,
+            highlightedNodes: newHighlightedNodes,
+            rootId: newRootId,
+            selectedMonarchs
+          },
+          () => this.updateGraph(newData, newHighlightedNodes)
+      );
     }
   };
 
   render() {
     const {
-      data,
-      rootId,
       selectedMonarchs,
-      numberOfAncestors,
-      numberOfDescendants,
-      filterPanelOpen,
       showNodeToolTip,
-      nodeTooltipX,
-      nodeTooltipY
     } = this.state;
 
     return (
-        <div style={{ width: "100vw", height: "100vh" }} ref={this.containerRef}>
-          {showNodeToolTip && <NodeToolTip x={nodeTooltipX} y={nodeTooltipY} />}
+        <div className="royal-tree-container" style={{ position: 'relative' }}>
+          {/* Graph container */}
+          <div
+              ref={this.containerRef}
+              className="cytoscape-container"
+          >
+          </div>
 
-          <FilterPanel
-              filterPanelOpen={filterPanelOpen}
-              selectedMonarchs={selectedMonarchs}
-              monarchyOptions={Object.keys(MONARCH_LISTS)}
-              selectedRoot={{
-                label: data[rootId]?.label || '',
-                value: rootId
-              }}
-              rootOptions={this.state.rootOptions}
-              numberOfAncestors={numberOfAncestors}
-              numberOfDescendants={numberOfDescendants}
-              onChange={(name, value) => this.handleFilterChange(name, value)}
-              toggleFilterPanel={() => this.setState(prev => ({
-                filterPanelOpen: !prev.filterPanelOpen
-              }))}
-          />
+          {(
+              <div className="node-tooltips">
+                <NodeToolTip
+                  data={this.state.tooltipData}
+                />
+              </div>
+          )}
+
+          {/* Filter panel */}
+          <div className="filter-panel-container">
+            <FilterPanel
+                selectedMonarchs={selectedMonarchs}
+                monarchyOptions={Object.keys(MONARCH_LISTS)}
+                selectedRoot={{
+                  label: this.state.data[this.state.rootId]?.label || '',
+                  value: this.state.rootId
+                }}
+                rootOptions={this.state.rootOptions}
+                numberOfAncestors={this.state.numberOfAncestors}
+                numberOfDescendants={this.state.numberOfDescendants}
+                onChange={(name, value) => this.handleFilterChange(name, value)}
+            />
+          </div>
         </div>
     );
   }

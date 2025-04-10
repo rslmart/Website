@@ -28,7 +28,7 @@ export function extractImportantNodes(data, successionList) {
         importantNodes.push(data[nodeId].mother);
       }
     } else {
-      console.log(nodeId);
+      console.error(nodeId);
     }
   });
   let nodeSet = new Set(importantNodes);
@@ -40,35 +40,22 @@ export function extractImportantNodes(data, successionList) {
   return newData;
 }
 
-function extractYear(dateString) {
-  const cleanDateString = dateString.replace("+", "");
-  const month = cleanDateString.substring(5, 7);
-  const day = cleanDateString.substring(8, 10);
-
-  if (month === "00" || day === "00") {
-    return parseInt(cleanDateString.substring(0, 4));
+function extractYear(dateStr) {
+  if (!dateStr) return '?';
+  try {
+    const [datePart] = dateStr.split('T');
+    const [yearStr] = datePart.split('-');
+    const year = parseInt(yearStr, 10);
+    return year < 1 ? `${Math.abs(year - 1)} BCE` : `${year}`;
+  } catch (e) {
+    return '?';
   }
-
-  const date = new Date(cleanDateString);
-  if (isNaN(date)) {
-    return "Invalid Date";
-  }
-  return date.getUTCFullYear();
 }
 
 function createLabel(person) {
-  let label = person.label;
-  if ('date of birth' in person) {
-    label = label + '\n' + extractYear(person['date of birth'])
-  } else {
-    label = label + '\n Unknown'
-  }
-  if ('date of death' in person) {
-    label = label + '-' + extractYear(person['date of death'])
-  } else {
-    label = label + '-Unknown'
-  }
-  return label
+  const birth = extractYear(person['date of birth']) ?? '?';
+  const death = extractYear(person['date of death']) ?? '?';
+  return `${person.label}\n${birth}-${death}`;
 }
 
 export function convertToChart(data, highlightedNodes) {
@@ -93,7 +80,7 @@ export function convertToChart(data, highlightedNodes) {
       style: {
         fill: person["sex or gender"] ? SEX_COLORS[person["sex or gender"]] : undefined,
         stroke: highlightedNodeSet.has(person.id) ? '#e7e312' : 'black',
-        opacity: highlightedNodeSet.has(person.id) ? 1 : 0.5,
+        opacity: highlightedNodeSet.has(person.id) ? 1 : 0.9,
         lineWidth: 5
       }
     };
@@ -120,7 +107,8 @@ export function convertToChart(data, highlightedNodes) {
           const spouse = data[spouseId];
           nodes.push({
             id: marriageName,
-            label: getMarriageLabel(person.label, spouse.label)
+            label: getMarriageLabel(person.label, spouse.label),
+            type: 'marriage',
           });
           nodeSet.add(marriageName);
 
@@ -150,7 +138,8 @@ export function convertToChart(data, highlightedNodes) {
       if (!nodeSet.has(marriageName)) {
         nodes.push({
           id: marriageName,
-          label: getMarriageLabel(data[motherId].label, data[fatherId].label)
+          label: getMarriageLabel(data[motherId].label, data[fatherId].label),
+          type: 'marriage',
         });
         nodeSet.add(marriageName);
 
