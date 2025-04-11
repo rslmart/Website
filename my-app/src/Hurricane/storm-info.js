@@ -12,6 +12,22 @@ import {
 } from 'recharts';
 import { getColorFromWindSpeed } from "./Hurricane";
 
+const stormInfoStyles = {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    maxWidth: '320px',
+    backgroundColor: '#fff',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+    padding: '6px 12px',
+    margin: '20px',
+    fontSize: '13px',
+    lineHeight: 2,
+    color: '#6b6b76',
+    outline: 'none',
+    zIndex: 9999,
+};
+
 function StormInfo(props) {
     const { stormInfo, selectedPoint, onChange, exitStormInfo } = props;
 
@@ -37,7 +53,7 @@ function StormInfo(props) {
     const hasPressureData = pressureValues.length > 0;
 
     return (
-        <div className="storm-info">
+        <div style={stormInfoStyles}>
             {/* Header and close button remains the same */}
             <div style={{ marginBottom: "20px" }}>
                 <h3 style={{ float: "left", marginTop: 0, marginBottom: 0 }}>{stormInfo["name"]} {stormInfo["season"]}</h3>

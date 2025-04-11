@@ -1,6 +1,22 @@
 import * as React from 'react';
 import {PLOT_TYPES} from "./Hurricane";
 
+const settingsPanelStyles = {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    maxWidth: '320px',
+    backgroundColor: '#fff',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+    padding: '6px 12px',
+    margin: '20px',
+    fontSize: '13px',
+    lineHeight: 2,
+    color: '#6b6b76',
+    outline: 'none',
+    zIndex: 9999,
+};
+
 function SettingsPanel(props) {
     const {settingsOpen, onSettingsChange, toggleSettingsPanel, scatterplotSettings, lineSettings, gridSettings,
         heatmapSettings, plotType
@@ -211,7 +227,7 @@ function SettingsPanel(props) {
     }
 
     return (settingsOpen ?
-        <div className="settings-panel">
+        <div style={settingsPanelStyles}>
             <div style={{height: "40px", marginBottom: 0, paddingBottom: 0}}>
                 <h3 style={{float: "left", marginTop: 0, marginBottom: 0}}>Settings</h3>
                 <button onClick={evt => toggleSettingsPanel(evt)} style={{float: "right", }}>-</button>

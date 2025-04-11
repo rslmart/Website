@@ -9,7 +9,6 @@ import FilterPanel from "./filter-panel";
 import CREDENTIALS from "../credentials.json"
 import StormInfo from "./storm-info";
 import SettingsPanel from "./settings-panel";
-import styles from './Hurricane.module.css'
 
 /*
 /Settings
@@ -558,7 +557,6 @@ class Hurricane extends Component {
         return (
             <div style={{width: "100vw", height: "100vh"}} ref={ (divElement) => { this.divElement = divElement } }>
                 <DeckGL
-                    className={styles.deckglWrapper}
                     viewState={this.state.viewState}
                     controller={true}
                     onViewStateChange={({ viewState }) => this.setState({ viewState })}
@@ -573,8 +571,19 @@ class Hurricane extends Component {
 
                     {this.state.hoverInfo && this.state.hoverInfo.object && (
                         <div
-                            className="tool-tip row"
-                            style={{position: 'absolute', zIndex: 1, pointerEvents: 'none', left: this.state.hoverInfo.x, top: this.state.hoverInfo.y}}
+                            style={{position: 'absolute',
+                                left: this.state.hoverInfo.x,
+                                top: this.state.hoverInfo.y,
+                                backgroundColor: '#fff',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                                padding: '6px 12px',
+                                margin: '20px',
+                                fontSize: '13px',
+                                lineHeight: 2,
+                                color: '#6b6b76',
+                                outline: 'none',
+                                zIndex: 9999,
+                                pointerEvents: 'none',}}
                         >
                             <div className="column">
                                 <p>Name: {STORMS[this.state.hoverInfo.object["id"]]["name"]}</p>
@@ -605,7 +614,6 @@ class Hurricane extends Component {
                     />)
                 }
                 <FilterPanel
-                    className={styles.filterPanel}
                     filterPanelOpen={this.state.filterPanelOpen}
                     plotType={this.state.plotType}
                     plotTypeOptions={PLOT_TYPES}
@@ -631,7 +639,6 @@ class Hurricane extends Component {
                     toggleFilterPanel={evt => {this.setState(prevState => ({ filterPanelOpen: !prevState.filterPanelOpen}))}}
                 />
                 <SettingsPanel
-                    className={styles.settingsPanel}
                     settingsOpen={this.state.settingsOpen}
                     onSettingsChange={this.onSettingsChange}
                     toggleSettingsPanel={evt => {this.setState(prevState => ({ settingsOpen: !prevState.settingsOpen}))}}

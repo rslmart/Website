@@ -14,8 +14,24 @@ function FilterPanel(props) {
         MAX_WIND_GRID: "Showing bar graph from the max wind of all individual points in the column area."
     }
 
+    const controlPanelStyles = {
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        maxWidth: '320px',
+        backgroundColor: '#fff',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+        padding: '6px 12px',
+        margin: '20px',
+        fontSize: '13px',
+        lineHeight: 2,
+        color: '#6b6b76',
+        outline: 'none',
+        zIndex: 9999,
+    };
+
     return (filterPanelOpen ?
-                <div className="control-panel">
+                <div style={controlPanelStyles}>
                     <div style={{height: "25px", marginBottom: 0, paddingBottom: 0}}>
                         <h3 style={{float: "left", marginTop: 0, marginBottom: 0}}>Hurdat Hurricane Data</h3>
                         <button onClick={evt => toggleFilterPanel(evt)} style={{float: "right", }}>-</button>
