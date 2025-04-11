@@ -259,7 +259,7 @@ class RoyalTree extends Component {
           <div className="filter-panel-container">
             <FilterPanel
                 selectedMonarchs={selectedMonarchs}
-                monarchyOptions={Object.keys(MONARCH_LISTS)}
+                monarchyOptions={Object.keys(MONARCH_LISTS).sort()}
                 selectedRoot={{
                   label: this.state.data[this.state.rootId]?.label || '',
                   value: this.state.rootId

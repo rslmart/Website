@@ -22,6 +22,18 @@ def get_monarch_list(url, div_name, td_classes, name_filter={}):
     wiki_data_list = convert_wiki_list_to_wiki_data_list(wiki_list, name_filter=name_filter)
     return wiki_data_list
 
+def get_monarch_list_with_i(url, div_name, td_classes, name_filter={}):
+    response = requests.get(url=url)
+    soup = BeautifulSoup(response.content, 'html.parser')
+    div_element = soup.find('div', attrs={'aria-labelledby': div_name})
+    td_elements = div_element.find_all('td', attrs={'class': td_classes})
+    li_tags = flatten([td_element.find_all('li') for td_element in td_elements])
+    a_tags = flatten([li_tag.find_all(lambda tag: tag.name == 'a') for li_tag in li_tags])
+    monarchs = [a_tag.get('href') for a_tag in a_tags]
+    wiki_list = [x for i, x in enumerate(monarchs) if x not in monarchs[:i]]
+    wiki_data_list = convert_wiki_list_to_wiki_data_list(wiki_list, name_filter=name_filter)
+    return wiki_data_list
+
 
 def convert_wiki_list_to_wiki_data_list(wiki_list, name_filter={}):
     wiki_data_list = []
@@ -109,7 +121,7 @@ def get_monarch_lists(monarchies):
                                             ['navbox-list-with-group', 'navbox-list']))
     if "Denmark" in monarchies:
         # Danish Monarchs
-        saveData('Denmark', get_monarch_list("https://en.wikipedia.org/wiki/List_of_Danish_monarchs", 'Monarchs_of_Denmark885',
+        saveData('Denmark', get_monarch_list_with_i("https://en.wikipedia.org/wiki/List_of_Danish_monarchs", 'Monarchs_of_Denmark885',
                                              ['navbox-list-with-group', 'navbox-list']))
     if "Scotland" in monarchies:
         # Scottish Monarchs
@@ -243,4 +255,4 @@ monarchies = [
 ]
 
 if __name__ == '__main__':
-    get_monarch_lists(monarchies)
+    get_monarch_lists(["Denmark"])

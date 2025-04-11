@@ -103,11 +103,13 @@ def flatten(xss):
     return [x for xs in xss for x in xs]
 
 if __name__ == '__main__':
-    monarch_lists = {}
-    with open("./data/monarch_list.json", 'r') as file:
-        monarch_lists = json.load(file)
+    monarch_lists = {"Denmark"}
     new_data = {}
+    with open("./data/monarchy_data.json", 'r') as json_file:
+        new_data = json.load(json_file)
     family_trees = {}
+    with open("./data/monarchy_family_trees.json", 'r') as json_file:
+        family_trees = json.load(json_file)
     for monarchy in monarch_lists:
         succession_list = []
         with open("./data/" + monarchy + "_family_tree.json", 'r') as file:

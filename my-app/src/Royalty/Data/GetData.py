@@ -380,11 +380,11 @@ def construct_family_tree_from_monarch_list(monarchy, save_file_path):
   with open(save_file_path, 'w') as json_file:
     json.dump(family_tree_data, json_file)
 
-def get_monarch_data(skip):
+def get_monarch_data(inclde):
   monarchy_lists = {}
   with open("data/monarch_list.json") as json_file:
     monarchy_lists = json.load(json_file)
-  monarchy_lists = [m for m in monarchy_lists.keys() if m not in skip]
+  monarchy_lists = [m for m in monarchy_lists.keys() if m in inclde]
   for monarchy in monarchy_lists:
     print(monarchy)
     construct_family_tree_from_monarch_list(monarchy, "./data/" + monarchy + "_family_tree.json")
@@ -497,10 +497,10 @@ def get_monarch_list(monarchy, position_set, start_person_id):
   with open("data/monarch_list.json", 'w') as json_file:
     json.dump(monarch_lists, json_file, indent=4)
 
-monarchies = ['Austria', 'Bavaria', 'Bohemia', 'Denmark', 'England', 'France', 'Germany', 'Han', 'Holy_Roman_Empire',
+monarchies_list = ['Austria', 'Bavaria', 'Bohemia', 'Denmark', 'England', 'France', 'Germany', 'Han', 'Holy_Roman_Empire',
                'Hungary', 'Iceland', 'Japan', 'Joseon', 'Ming', 'Naples', 'Norway', 'Ottoman', 'Poland', 'Portugal',
                'Qing', 'Russia', 'Scotland', 'Shang', 'Spain', 'Sweden', 'Tang', 'Yuan', 'Zhou']
-def label_people():
+def label_people(monarchies):
   for monarchy in monarchies:
     PropertyRetriever().add_labels_to_people(monarchy)
 
@@ -508,7 +508,5 @@ if __name__ == '__main__':
   # monarchies.sort()
   # print(monarchies)
   # retriever = DataRetriever(save=False)
-  # get_monarch_data({'Bavaria', 'Bohemia', 'Denmark', 'England', 'France', 'Germany', 'Han', 'Holy_Roman_Empire',
-  #              'Hungary', 'Iceland', 'Japan', 'Joseon', 'Ming', 'Norway', 'Ottoman', 'Poland', 'Portugal',
-  #              'Qing', 'Russia', 'Scotland', 'Shang', 'Spain', 'Sweden', 'Tang', 'Yuan', 'Zhou'})
-  label_people()
+  # get_monarch_data({'Denmark'})
+  label_people(["Denmark"])
