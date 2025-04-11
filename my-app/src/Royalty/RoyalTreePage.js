@@ -97,10 +97,15 @@ class RoyalTree extends Component {
           selector: 'edge',
           style: {
             'width': 1.5,
-            'line-color': '#A3B1BF',
-            'target-arrow-color': '#A3B1BF',
+            'label': 'data(family)',
+            'line-color': 'data(color)',
+            'target-arrow-color': 'data(color)',
             'target-arrow-shape': 'triangle',
-            'curve-style': 'bezier'
+            'curve-style': 'bezier',
+            'text-rotation': 'autorotate',
+            'text-max-width': '5',
+            'text-wrap': 'wrap',
+            'font-size': '14'
           }
         },
         {
@@ -182,7 +187,7 @@ class RoyalTree extends Component {
           ...edge,
           source: edge.source,
           target: edge.target,
-          color: edge.style?.stroke
+          color: edge.color
         }
       });
     });

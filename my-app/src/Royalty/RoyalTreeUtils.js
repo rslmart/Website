@@ -181,6 +181,29 @@ export function convertToChart(data, highlightedNodes) {
       nodeSet.has(edge.source) && nodeSet.has(edge.target)
   );
 
+  let colors = ['#e6194B', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#42d4f4', '#f032e6', '#fabed4', '#469990', '#dcbeff', '#9A6324', '#fffac8', '#800000', '#aaffc3', '#000075', '#a9a9a9', '#ffffff', '#000000']
+  let familyColors = {}
+  edges.forEach(edge => {
+    var family = ""
+    if (edge.source in data && 'family' in data[edge.source]) {
+      family = data[edge.source]['family']
+    }
+    else if (edge.target in data && 'family' in data[edge.target]) {
+      family = data[edge.target]['family']
+    }
+    if (family) {
+      edge['family'] = family
+      if (family in familyColors){
+        edge['color'] = familyColors[family]
+      }
+      else {
+        let color = colors[Object.keys(familyColors).length % colors.length];
+        familyColors[family] = color
+        edge['color'] = color
+      }
+    }
+  })
+
   return { nodes, edges: validEdges };
 }
 
