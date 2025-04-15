@@ -44,9 +44,6 @@ class RoyalTree extends Component {
   bindGraphEvents = (cyInstance) => {
     cyInstance.on('mouseover', 'node', (evt) => {
       const node = evt.target;
-      const { x, y } = node.renderedPosition();
-      const zoom = cyInstance.zoom();
-
       this.setState({
         showNodeToolTip: true,
         tooltipData: node.data()
@@ -66,6 +63,10 @@ class RoyalTree extends Component {
 
     cyInstance.on('drag', 'node', () => {
       this.setState({ showNodeToolTip: false });
+    });
+
+    cyInstance.on('click', 'node', (evt) => {
+      console.log(evt.target.data())
     });
   };
 

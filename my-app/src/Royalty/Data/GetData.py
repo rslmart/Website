@@ -509,4 +509,4 @@ if __name__ == '__main__':
   # print(monarchies)
   # retriever = DataRetriever(save=False)
   # get_monarch_data({'Denmark'})
-  label_people(["Denmark"])
+  # label_people(["Denmark"])
