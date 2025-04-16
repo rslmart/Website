@@ -30,6 +30,11 @@ function home() {
                     RoyalTree
                 </button>
             </Link>
+            <Link to="/Snow" style={{ width: "80%", margin: "10px" }}>
+                <button className="menu-button">
+                    Snow
+                </button>
+            </Link>
         </div>
     );
 
