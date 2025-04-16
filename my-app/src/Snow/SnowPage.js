@@ -14,13 +14,13 @@ Add forecast?
  */
 
 
-const passNames = [
-    'Blewett_Pass_US-97',
-    'Sherman_Pass_SR-20',
-    'Stevens_Pass_US-2',
-    'Snoqualmie_Pass_I-90',
-    'White_Pass_US-12'
-]
+const passNames = {
+    'Blewett_Pass_US-97': 'Blewett Pass US-97',
+    'Sherman_Pass_SR-20': 'Sherman Pass SR-20',
+    'Stevens_Pass_US-2': 'Stevens Pass US-2',
+    'Snoqualmie_Pass_I-90': 'Snoqualmie Pass I-90',
+    'White_Pass_US-12': 'White Pass US-12'
+}
 
 const months = ['Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May']
 const days_in_a_month = [31, 30, 31, 31, 28, 31, 30, 31]
@@ -203,7 +203,6 @@ class Snow extends Component {
         })
 
         finalData.sort(customDateSort)
-        console.log(finalData)
         // name: month-day, latest_accumulated: X, latest_total: X, highest_accumulated: X, ...
 
         this.setState({
@@ -217,7 +216,7 @@ class Snow extends Component {
 
     renderLineChart(title, dataKey) {
         return (
-            <div style={{ height: '33vh', marginBottom: '20px' }}>
+            <div style={{ height: '33vh'}}>
                 <h4 style={{ textAlign: 'center', margin: '10px 0' }}>{title}</h4>
                 <ResponsiveContainer width="100%" height="80%">
                     <LineChart
@@ -234,7 +233,7 @@ class Snow extends Component {
                                 return (day === '1' || day === '15') ? `${month} ${day}` : '';
                             }}
                         />
-                        <YAxis />
+                        <YAxis label={{ value: 'Inches', angle: -90, dx: -15}} />
                         <Tooltip />
                         <Legend />
                         <Line
@@ -301,11 +300,11 @@ class Snow extends Component {
         return (
             <div>
                 <div style={titleBarStyle}>
-                    <div style={titleStyle}>{this.state.passName}</div>
+                    <div style={titleStyle}>{passNames[this.state.passName]}</div>
                     <div style={selectContainerStyle}>
                         <select style={selectStyle} name="passNameSelect" value={this.state.passName} onChange={evt => this.onChange(evt)}>
-                            {passNames.map(name =>
-                                <option key={name} value={name}>{name}</option>)}
+                            {Object.keys(passNames).map(name =>
+                                <option key={name} value={name}>{passNames[name]}</option>)}
                         </select>
                         <select style={selectStyle} name="seasonSelect" value={this.state.currentSeason} onChange={evt => this.onChange(evt)}>
                             {Object.keys(snowFallData[this.state.passName]).map(season =>
@@ -321,7 +320,7 @@ class Snow extends Component {
                     boxSizing: 'border-box'
                 }}>
                     {this.renderLineChart(
-                        `Total Snowfall`,
+                        `Snow Depth`,
                         `totalSnowFall`
                     )}
 
@@ -330,7 +329,7 @@ class Snow extends Component {
                         `accumulatedSnowFall`
                     )}
 
-                        <div style={{ height: '33vh', marginBottom: '20px' }}>
+                        <div style={{ height: '33vh'}}>
                             <h4 style={{ textAlign: 'center', margin: '10px 0' }}>New Daily Snowfall</h4>
                             <ResponsiveContainer width="100%" height="80%">
                                 <BarChart
@@ -349,7 +348,7 @@ class Snow extends Component {
                                             return (day === '1' || day === '15') ? `${month} ${day}` : '';
                                         }}
                                     />
-                                    <YAxis />
+                                    <YAxis label={{ value: 'Inches', angle: -90, dx: -15}} />
                                     <Tooltip />
                                     <Legend />
                                     <Bar
@@ -372,6 +371,21 @@ class Snow extends Component {
                                     />
                                 </BarChart>
                             </ResponsiveContainer>
+                        </div>
+                        <div style={{
+                            textAlign: 'center',
+                            fontSize: '0.9rem',
+                            color: '#666'
+                        }}>
+                            Data Source: {' '}
+                            <a
+                                href="https://wsdot.com/travel/real-time/mountainpasses/snowfallreport"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ color: '#8884d8', textDecoration: 'none' }}
+                            >
+                                WSDOT Snowfall Data
+                            </a>
                         </div>
                     </div>
             </div>
