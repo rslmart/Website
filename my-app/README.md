@@ -1,70 +1,84 @@
-# Getting Started with Create React App
+# My React Project
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+This project was bootstrapped with [Vite](https://vitejs.dev/), a next-generation frontend tooling.
 
-## Available Scripts
+## 🚀 Getting Started
+
+### Prerequisites
+- Node.js 18+
+- npm 9+ or yarn 1.22+
+
+### Installation
+1. Clone the repository
+2. Install dependencies:
+   \```bash
+npm install
+\```
+
+## 📦 Available Scripts
 
 In the project directory, you can run:
 
-### `npm start`
+### \`npm run dev\`
+Runs the app in development mode.\\
+Open [http://localhost:5173](http://localhost:5173) to view it in your browser.
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+- Features:
+    - Instant server start (<1s)
+    - Lightning-fast Hot Module Replacement (HMR)
+    - Real-time error overlays
+    - TypeScript support out of the box
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+### \`npm run build\`
+Builds the app for production to the \`dist\` folder.\\
+The build is optimized and minified for best performance.
 
-### `npm test`
+- Features:
+    - Code splitting automatically handled by Rollup
+    - Assets hash naming for cache optimization
+    - Modern bundle format (ES modules) + legacy support
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+### \`npm run preview\`
+Locally preview the production build. Great for final checks before deployment.
 
-### `npm run build`
+### \`npm test\`
+Launches your test runner (requires test setup).\\
+*Note: You'll need to configure [Vitest](https://vitest.dev/) or Jest for testing*
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## ⚙️ Configuration
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+Vite offers flexible configuration through:
+- \`vite.config.ts\` - Main configuration file
+- \`.env\` files - Environment variables (prefix with \`VITE_\`)
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+## 🌟 Key Features
+- Blazing fast development experience
+- Native ES Modules support
+- Optimized production builds
+- Easy customization without ejecting
+- First-class TypeScript support
 
-### `npm run eject`
+## 📚 Learn More
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+### Vite Resources
+- [Vite Documentation](https://vitejs.dev/guide/)
+- [Vite Configuration Reference](https://vitejs.dev/config/)
+- [Vite Community Plugins](https://github.com/vitejs/awesome-vite#plugins)
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+### React Resources
+- [React Documentation](https://react.dev/learn)
+- [TypeScript with React](https://react-typescript-cheatsheet.netlify.app/)
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+## 🛠 Recommended Vite Plugins
+- [@vitejs/plugin-react](https://www.npmjs.com/package/@vitejs/plugin-react) - Official React plugin
+- [vite-plugin-svgr](https://www.npmjs.com/package/vite-plugin-svgr) - SVG component support
+- [vite-plugin-checker](https://www.npmjs.com/package/vite-plugin-checker) - TypeScript checking during dev
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+## 🚨 Troubleshooting
+If you encounter issues:
+1. Delete \`node_modules\` and reinstall dependencies
+2. Check the [Vite Troubleshooting Guide](https://vitejs.dev/guide/troubleshooting.html)
+3. Ensure you're using supported Node.js version (18+)
 
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+## ⚖️ License
+[MIT](https://choosealicense.com/licenses/mit/)
