@@ -6,7 +6,7 @@ import {WebMercatorViewport} from '@deck.gl/core';
 import {Map} from 'react-map-gl';
 import STORMS from './data/storms_with_ir.json';
 import FilterPanel from "./filter-panel";
-import CREDENTIALS from "../credentials.json"
+import CREDENTIALS from "../../../Temp/credentials.json"
 import StormInfo from "./storm-info";
 import SettingsPanel from "./settings-panel";
 

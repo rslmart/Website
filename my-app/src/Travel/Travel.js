@@ -3,7 +3,7 @@ import {useNavigate} from 'react-router-dom';
 import DeckGL from '@deck.gl/react';
 import {PathLayer} from '@deck.gl/layers';
 import {Map} from "react-map-gl";
-import CREDENTIALS from "../credentials.json";
+import CREDENTIALS from "../../../Temp/credentials.json";
 // import Thirlmere_to_Ambleside from "./MapData/Helvellyn/Thirlmere_to_Ambleside";
 
 /*

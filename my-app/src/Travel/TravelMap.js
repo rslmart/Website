@@ -3,7 +3,7 @@ import Map, {Marker, Popup, Source, Layer} from 'react-map-gl';
 import "mapbox-gl/dist/mapbox-gl.css";
 import Pin from "../pin";
 import PIC_DATA from "./Pics/Colorado/data.json";
-import CREDENTIALS from "../credentials.json";
+import CREDENTIALS from "../../../Temp/credentials.json";
 
 function gpxToGeoJson(gpxFile) {
     const parser = new DOMParser();
