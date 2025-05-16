@@ -35,8 +35,6 @@ class RoyalTree extends Component {
         value: node.id,
         label: node.label
       })),
-      numberOfAncestors: 10,
-      numberOfDescendants: 10,
       showNodeToolTip: false,
     };
   }
@@ -63,10 +61,6 @@ class RoyalTree extends Component {
 
     cyInstance.on('drag', 'node', () => {
       this.setState({ showNodeToolTip: false });
-    });
-
-    cyInstance.on('click', 'node', (evt) => {
-      console.log(evt.target.data())
     });
   };
 
@@ -239,14 +233,8 @@ class RoyalTree extends Component {
   };
 
   render() {
-    const {
-      selectedMonarchs,
-      showNodeToolTip,
-    } = this.state;
-
     return (
         <div className="royal-tree-container" style={{ position: 'relative' }}>
-          {/* Graph container */}
           <div
               ref={this.containerRef}
               className="cytoscape-container"
@@ -261,18 +249,15 @@ class RoyalTree extends Component {
               </div>
           )}
 
-          {/* Filter panel */}
           <div className="filter-panel-container">
             <FilterPanel
-                selectedMonarchs={selectedMonarchs}
+                selectedMonarchs={this.state.selectedMonarchs}
                 monarchyOptions={Object.keys(MONARCH_LISTS).sort()}
                 selectedRoot={{
                   label: this.state.data[this.state.rootId]?.label || '',
                   value: this.state.rootId
                 }}
                 rootOptions={this.state.rootOptions}
-                numberOfAncestors={this.state.numberOfAncestors}
-                numberOfDescendants={this.state.numberOfDescendants}
                 onChange={(name, value) => this.handleFilterChange(name, value)}
             />
           </div>
