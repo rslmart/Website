@@ -24,6 +24,7 @@ const Bio: React.FC = () => {
                 </div>
             </header>
 
+
             <section className={styles.section}>
                 <h2 className={styles.sectionTitle}>Work Experience</h2>
                 {/* Job items structure same as before, converted to use styles */}
