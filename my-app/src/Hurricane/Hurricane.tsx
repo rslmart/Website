@@ -2,12 +2,13 @@ import React, { Component } from 'react';
 import DeckGL from '@deck.gl/react';
 import { GridLayer, HeatmapLayer } from '@deck.gl/aggregation-layers';
 import { LineLayer, PolygonLayer, ScatterplotLayer } from '@deck.gl/layers';
-import { WebMercatorViewport } from '@deck.gl/core';
-import Map from 'react-map-gl';
-import STORMS from './data/storms_with_ir.json';
-import FilterPanel from "./FilterPanel.tsx";
+import { WebMercatorViewport, MapViewState } from '@deck.gl/core';
+import Map from 'react-map-gl/mapbox';
+import FilterPanel from "./FilterPanel";
 import CREDENTIALS from "../credentials.json";
-import SettingsPanel from "./SettingsPanel.tsx";
+import SettingsPanel from "./SettingsPanel";
+import STORMSJson from './data/storms_with_ir.json';
+const STORMS = STORMSJson as Record<string, Storm>;
 
 // Types
 type Point = {
@@ -47,14 +48,6 @@ type LineData = {
     to: [number, number];
 };
 
-type ViewState = {
-    longitude: number;
-    latitude: number;
-    zoom: number;
-    pitch: number;
-    bearing: number;
-    padding?: any;
-};
 
 type ScatterplotSettings = {
     name: string;
@@ -91,7 +84,7 @@ type HeatmapSettings = {
 type HurricaneState = {
     height: number;
     width: number;
-    viewState: ViewState;
+    viewState: MapViewState;
     scatterplotSettings: ScatterplotSettings;
     lineSettings: LineSettings;
     gridSettings: GridSettings;
@@ -130,7 +123,7 @@ type StormInfoProps = {
     exitStormInfo: (evt: any) => void;
 };
 
-const PLOT_TYPES = {
+export const PLOT_TYPES = {
     STORM: "Storm",
     SCATTER_PLOT: "Scatter Plot",
     HEATMAP: "Heatmap",
@@ -157,7 +150,7 @@ const SYSTEM_STATUSES: Record<string, string> = {
     "Disturbance": "DB"
 };
 
-const getColorFromWindSpeed = (windspeed: number): [number, number, number] => {
+export const getColorFromWindSpeed = (windspeed: number): [number, number, number] => {
     if (windspeed >= 137) {
         return [196, 100, 217];
     }
@@ -212,8 +205,7 @@ const getMaxWindAreaLayer = (track_points: Point[]): PolygonLayer => new Polygon
     lineWidthMinPixels: 1,
     getPolygon: (point: Point) => point.max_wind_poly,
     getFillColor: (d: Point) => {
-        const color = [...getColorFromWindSpeed(d.wind), 60] as [number, number, number, number];
-        return color;
+        return [...getColorFromWindSpeed(d.wind), 60] as [number, number, number, number];
     },
     getLineColor: [0, 0, 0, 0]
 });
@@ -231,7 +223,7 @@ const getWindAreaLayer = (track_points: Point[], key: string, selectedPoint: Poi
     lineWidthMinPixels: 1,
     getPolygon: (point: Point) => point[key],
     getFillColor: (d: Point) => {
-        let color: [number, number, number, number] = [0, 0, 0, 0];
+        let color: [number, number, number, number];
         if (key.startsWith("64")) {
             color = [255, 247, 149, 40];
         } else if (key.startsWith("50")) {
@@ -257,11 +249,11 @@ const getScatterplotLayer = (
     id: 'scatterplot-layer',
     getPosition: (d: Point) => [d.longitude, d.latitude],
     getFillColor: (d: Point) => {
-        let color = [...getColorFromWindSpeed(d.wind), selectedPoint && d.date_time === selectedPoint.date_time ? 255 : 128];
+        let color = [...getColorFromWindSpeed(d.wind), selectedPoint && d.date_time === selectedPoint.date_time ? 255 : 128] as [number, number, number, number];
         if (selectedPoint && d.date_time === selectedPoint.date_time) {
             color = [255, 255, 255, 255];
         }
-        return color as [number, number, number, number];
+        return color;
     },
     getLineColor: (d: Point) => {
         let color: [number, number, number, number] = [0, 0, 0, 0];
@@ -325,9 +317,9 @@ const getStormLayers = (
 ) => {
     const track_points = Object.values(storms).flatMap(storm => storm["track_points"]);
     const selectedPointActual = stormInfo ? stormInfo.track_points[selectedPoint] : null;
-    const layers = [
+    const layers: (ScatterplotLayer<any, {}> | LineLayer<any, {}> | PolygonLayer<any, {}>)[] = [
         getScatterplotLayer(track_points, setHoverInfo, onChange, selectedPointActual, scatterplotSettings),
-        getStormLineLayer(storms, lineSettings)
+        getStormLineLayer(Object.values(storms), lineSettings)
     ];
     if (showMaxWindPoly) {
         layers.push(
@@ -361,6 +353,15 @@ const getNewViewPort = (track_points: Point[]) => {
     });
     return { minLat, maxLat, minLon, maxLon };
 };
+
+const isMapViewState = (obj: any): obj is MapViewState => {
+    return (
+        obj != null &&
+        typeof obj.longitude === 'number' &&
+        typeof obj.latitude === 'number' &&
+        typeof obj.zoom === 'number'
+    );
+}
 
 class StormInfo extends Component<StormInfoProps> {
     render() {
@@ -487,157 +488,188 @@ class Hurricane extends Component<{}, HurricaneState> {
         layers: []
     };
 
-    onChange = async (evt: React.ChangeEvent<HTMLInputElement> | { target: { name: string; value?: any; checked?: boolean } }) => {
-        if (evt.target.name === "name") {
-            await this.setState({ name: evt.target.value });
-        }
-        if (evt.target.name === "minYear") {
-            await this.setState({ minYear: evt.target.value });
-        }
-        else if (evt.target.name === "maxYear") {
-            await this.setState({ maxYear: evt.target.value });
-        }
-        else if (evt.target.name === "minMonth") {
-            await this.setState({ minMonth: evt.target.value });
-        }
-        else if (evt.target.name === "maxMonth") {
-            await this.setState({ maxMonth: evt.target.value });
-        }
-        else if (evt.target.name === "minWind") {
-            await this.setState({ minWind: evt.target.value });
-        }
-        else if (evt.target.name === "maxWind") {
-            await this.setState({ maxWind: evt.target.value });
-        }
-        else if (evt.target.name === "filterByPressure") {
-            await this.setState({ filterByPressure: evt.target.checked as boolean });
-        }
-        else if (evt.target.name === "minPressure") {
-            await this.setState({ minPressure: evt.target.value });
-        }
-        else if (evt.target.name === "maxPressure") {
-            await this.setState({ maxPressure: evt.target.value });
-        }
-        else if (evt.target.name === "systemStatus") {
-            await this.setState({ systemStatus: evt.target.value });
-        }
-        else if (evt.target.name === "landfall") {
-            await this.setState({ landfall: evt.target.checked as boolean });
-        }
-        else if (evt.target.name === "showMaxWindPoly") {
-            await this.setState({ showMaxWindPoly: evt.target.checked as boolean });
-        }
-        else if (evt.target.name === "showWindPoly") {
-            await this.setState({ showWindPoly: evt.target.checked as boolean });
-        }
-        else if (evt.target.name === "only6Hour") {
-            await this.setState({ only6Hour: evt.target.checked as boolean });
-        }
-        else if (evt.target.name === "plotType") {
-            await this.setState({ plotType: evt.target.value });
-        }
-        else if (evt.target.name === "basin") {
-            await this.setState({ basin: evt.target.value });
-        }
-        else if (evt.target.name === "selectStorm") {
-            await this.setState({ stormInfo: STORMS[evt.target.value.id] });
-            const { minLat, maxLat, minLon, maxLon } = getNewViewPort(this.state.stormInfo!.track_points);
-            const viewport = new WebMercatorViewport(this.state.viewState);
-            const newViewport = viewport.fitBounds([[minLon, minLat], [maxLon, maxLat]], { padding: 80 });
-            const newViewState = {
-                longitude: newViewport.longitude,
-                latitude: newViewport.latitude,
-                zoom: newViewport.zoom,
-                pitch: newViewport.pitch,
-                bearing: newViewport.bearing,
-                ...(newViewport.padding && { padding: { ...newViewport.padding } })
-            };
-            await this.setState({ viewState: newViewState });
-        }
-        else if (evt.target.name === "selectedPoint") {
-            await this.setState({ selectedPoint: parseInt(evt.target.value) });
-        }
-        else if (evt.target.name === "backwardSelectedPoint" && this.state.selectedPoint > 0) {
-            await this.setState(prevState => ({ selectedPoint: (prevState.selectedPoint - 1) }));
-        }
-        else if (evt.target.name === "forwardSelectedPoint" && this.state.selectedPoint < this.state.stormInfo!.track_points.length - 1) {
-            await this.setState(prevState => ({ selectedPoint: (prevState.selectedPoint + 1) }));
+    onChange = (
+        evt: React.ChangeEvent<HTMLInputElement | HTMLSelectElement> | { target: { name: string; value?: any; checked?: boolean } }
+    ) => {
+        const target = evt.target;
+        const name = target.name;
+
+        // Narrow the target type to safely access checked or value
+        let value: any;
+        let checked: boolean | undefined;
+
+        if (target instanceof HTMLInputElement) {
+            value = target.value;
+            checked = target.checked;
+        } else if (target instanceof HTMLSelectElement) {
+            value = target.value;
+            checked = undefined;
+        } else {
+            // fallback for your custom type with 'checked' optional
+            value = target.value;
+            checked = target.checked;
         }
 
+        // Now handle the state updates using the narrowed values
+        if (name === "name") {
+            this.setState({ name: value as string });
+        } else if (name === "minYear") {
+            this.setState({ minYear: Number(value) });
+        } else if (name === "maxYear") {
+            this.setState({ maxYear: Number(value) });
+        } else if (name === "minMonth") {
+            this.setState({ minMonth: Number(value) });
+        } else if (name === "maxMonth") {
+            this.setState({ maxMonth: Number(value) });
+        } else if (name === "minWind") {
+            this.setState({ minWind: Number(value) });
+        } else if (name === "maxWind") {
+            this.setState({ maxWind: Number(value) });
+        } else if (name === "filterByPressure") {
+            this.setState({ filterByPressure: checked as boolean });
+        } else if (name === "minPressure") {
+            this.setState({ minPressure: Number(value) });
+        } else if (name === "maxPressure") {
+            this.setState({ maxPressure: Number(value) });
+        } else if (name === "systemStatus") {
+            this.setState({ systemStatus: value as string });
+        } else if (name === "landfall") {
+            this.setState({ landfall: checked as boolean });
+        } else if (name === "showMaxWindPoly") {
+            this.setState({ showMaxWindPoly: checked as boolean });
+        } else if (name === "showWindPoly") {
+            this.setState({ showWindPoly: checked as boolean });
+        } else if (name === "only6Hour") {
+            this.setState({ only6Hour: checked as boolean });
+        } else if (name === "plotType") {
+            this.setState({ plotType: value as string });
+        } else if (name === "basin") {
+            this.setState({ basin: value as string });
+        } else if (name === "selectStorm") {
+            const storm = STORMS[value.id];
+            this.setState({ stormInfo: storm, selectedPoint: 0 }, () => {
+                if (!storm) return;
+
+                const { minLat, maxLat, minLon, maxLon } = getNewViewPort(storm.track_points);
+                const viewport = new WebMercatorViewport({
+                    width: this.state.width,
+                    height: this.state.height,
+                    ...this.state.viewState,
+                });
+                const newViewport = viewport.fitBounds(
+                    [
+                        [minLon, minLat],
+                        [maxLon, maxLat],
+                    ],
+                    { padding: 80 }
+                );
+                this.setState({
+                    viewState: {
+                        ...this.state.viewState,
+                        longitude: newViewport.longitude,
+                        latitude: newViewport.latitude,
+                        zoom: newViewport.zoom,
+                        pitch: newViewport.pitch,
+                        bearing: newViewport.bearing,
+                        ...(newViewport.padding && { padding: { ...newViewport.padding } }),
+                    },
+                });
+            });
+        } else if (name === "selectedPoint") {
+            this.setState({ selectedPoint: parseInt(value) });
+        } else if (name === "backwardSelectedPoint" && this.state.stormInfo && this.state.selectedPoint > 0) {
+            this.setState((prevState) => ({ selectedPoint: prevState.selectedPoint - 1 }));
+        } else if (name === "forwardSelectedPoint" && this.state.stormInfo && this.state.selectedPoint < this.state.stormInfo.track_points.length - 1) {
+            this.setState((prevState) => ({ selectedPoint: prevState.selectedPoint + 1 }));
+        }
+
+        this.updateDataAndLayers();
+    };
+
+    updateDataAndLayers = () => {
+        const {
+            plotType, basin, name, minYear, maxYear, minMonth, maxMonth, minWind, maxWind,
+            filterByPressure, minPressure, maxPressure, systemStatus, landfall, only6Hour,
+            stormInfo, scatterplotSettings, lineSettings, gridSettings, heatmapSettings,
+            showMaxWindPoly, showWindPoly, selectedPoint
+        } = this.state;
+
         let dataSource: any;
-        if (this.state.plotType === PLOT_TYPES.STORM) {
+        if (plotType === PLOT_TYPES.STORM) {
             dataSource = STORMS;
         } else {
-            dataSource = Object.values(STORMS).flatMap(storm => storm["track_points"]);
-            if (this.state.plotType === PLOT_TYPES.HEATMAP || this.state.plotType === PLOT_TYPES.GRID) {
-                await this.setState({ only6Hour: true });
-            }
-            if (this.state.landfall) {
-                await this.setState({ only6Hour: false });
-            }
+            dataSource = Object.values(STORMS).flatMap((storm: Storm) => storm["track_points"]);
         }
 
         let data: any;
         if (Array.isArray(dataSource)) {
             data = dataSource
-                .filter((point: Point) =>
-                    (this.state.basin === "ALL" ? true : STORMS[point.id].basin === this.state.basin)
-                    && point.year >= this.state.minYear
-                    && point.year <= this.state.maxYear
-                    && point.month >= this.state.minMonth
-                    && point.month <= this.state.maxMonth
-                    && point.wind >= this.state.minWind
-                    && point.wind <= this.state.maxWind
-                    && (this.state.filterByPressure ? point.pressure && point.pressure >= this.state.minPressure : true)
-                    && (this.state.filterByPressure ? point.pressure && point.pressure <= this.state.maxPressure : true)
-                    && (SYSTEM_STATUSES[this.state.systemStatus] ? point.status === SYSTEM_STATUSES[this.state.systemStatus] : true)
-                    && (this.state.landfall ? point.record_type === "L" : true)
-                    && (this.state.only6Hour ? point.minutes === 0 && point.hours % 6 === 0 : true));
+                .filter((point: Point) => {
+                    const storm = STORMS[point.id];
+                    return (
+                        (basin === "ALL" ? true : storm.basin === basin) &&
+                        point.year >= minYear &&
+                        point.year <= maxYear &&
+                        point.month >= minMonth &&
+                        point.month <= maxMonth &&
+                        point.wind >= minWind &&
+                        point.wind <= maxWind &&
+                        (!filterByPressure || (point.pressure && point.pressure >= minPressure)) &&
+                        (!filterByPressure || (point.pressure && point.pressure <= maxPressure)) &&
+                        (SYSTEM_STATUSES[systemStatus] ? point.status === SYSTEM_STATUSES[systemStatus] : true) &&
+                        (!landfall || point.record_type === "L") &&
+                        (!only6Hour || (point.minutes === 0 && point.hours % 6 === 0))
+                    );
+                });
         } else {
             data = Object.fromEntries(Object.entries(dataSource)
-                .filter(([k, storm]: [string, Storm]) =>
-                    (this.state.stormInfo ? this.state.stormInfo["id"] === storm["id"] : true)
-                    && (this.state.basin === "ALL" ? true : storm.basin === this.state.basin)
-                    && (this.state.name ? storm.name.startsWith(this.state.name.toUpperCase()) : true)
-                    && storm.season >= this.state.minYear
-                    && storm.season <= this.state.maxYear
-                    && storm.track_points[0].month >= this.state.minMonth
-                    && storm.track_points[storm.track_points.length - 1].month <= this.state.maxMonth
-                    && storm.max_wind >= this.state.minWind
-                    && storm.max_wind <= this.state.maxWind
-                    && (this.state.filterByPressure ? storm.min_pressure && storm.min_pressure >= this.state.minPressure : true)
-                    && (this.state.filterByPressure ? storm.min_pressure && storm.min_pressure <= this.state.maxPressure : true)
-                    && (SYSTEM_STATUSES[this.state.systemStatus] ? storm.status_list.includes(SYSTEM_STATUSES[this.state.systemStatus]) : true)
-                    && (this.state.landfall ? storm.record_type_list.includes("L") : true));
+                .filter(([_, storm]: [string, any]) => {
+                    const s = storm as Storm;
+                    return (
+                        (stormInfo ? stormInfo.id === s.id : true) &&
+                        (basin === "ALL" ? true : s.basin === basin) &&
+                        (name ? s.name.startsWith(name.toUpperCase()) : true) &&
+                        s.season >= minYear &&
+                        s.season <= maxYear &&
+                        s.track_points[0].month >= minMonth &&
+                        s.track_points[s.track_points.length - 1].month <= maxMonth &&
+                        s.max_wind >= minWind &&
+                        s.max_wind <= maxWind &&
+                        (!filterByPressure || (s.min_pressure && s.min_pressure >= minPressure)) &&
+                        (!filterByPressure || (s.min_pressure && s.min_pressure <= maxPressure)) &&
+                        (SYSTEM_STATUSES[systemStatus] ? s.status_list.includes(SYSTEM_STATUSES[systemStatus]) : true) &&
+                        (!landfall || s.record_type_list.includes("L"))
+                    );
+                }));
         }
 
         let layers: any[];
-        if (this.state.plotType === PLOT_TYPES.STORM) {
+        if (plotType === PLOT_TYPES.STORM) {
             layers = getStormLayers(
                 data,
                 (hoverInfo: any) => this.setState({ hoverInfo }),
                 this.onChange,
-                this.state.showMaxWindPoly,
-                this.state.showWindPoly,
-                this.state.stormInfo,
-                this.state.selectedPoint,
-                this.state.scatterplotSettings,
-                this.state.lineSettings
+                showMaxWindPoly,
+                showWindPoly,
+                stormInfo,
+                selectedPoint,
+                scatterplotSettings,
+                lineSettings
             );
-        } else if (this.state.plotType === PLOT_TYPES.HEATMAP) {
-            layers = getHeatmapLayer(data, this.state.heatmapSettings);
-        } else if (this.state.plotType === PLOT_TYPES.GRID) {
-            layers = getGridLayer(data, this.state.gridSettings);
-        } else if (this.state.plotType === PLOT_TYPES.MAX_WIND_GRID) {
-            layers = getGridLayerMaxWind(data, this.state.gridSettings);
+        } else if (plotType === PLOT_TYPES.HEATMAP) {
+            layers = [getHeatmapLayer(data, heatmapSettings)];
+        } else if (plotType === PLOT_TYPES.GRID) {
+            layers = [getGridLayer(data, gridSettings)];
+        } else if (plotType === PLOT_TYPES.MAX_WIND_GRID) {
+            layers = [getGridLayerMaxWind(data, gridSettings)];
         } else {
-            layers = getScatterplotLayer(
+            layers = [getScatterplotLayer(
                 data,
                 (hoverInfo: any) => this.setState({ hoverInfo }),
                 () => { },
                 null,
-                this.state.scatterplotSettings
-            );
+                scatterplotSettings
+            )];
         }
 
         this.setState({
@@ -647,14 +679,16 @@ class Hurricane extends Component<{}, HurricaneState> {
         });
     };
 
-    onSettingsChange = async (evt: React.ChangeEvent<HTMLInputElement>, settings: any) => {
-        await this.setState(prevState => ({
+    onSettingsChange = (evt: React.ChangeEvent<HTMLInputElement>, settings: any) => {
+        const name = evt.target.name;
+        const value = parseFloat(evt.target.value);
+
+        this.setState(prevState => ({
             [settings.name]: {
-                ...prevState[settings.name],
-                [evt.target.name]: parseFloat(evt.target.value)
+                ...prevState[settings.name as keyof HurricaneState],
+                [name]: value
             }
-        }));
-        await this.onChange({ target: { name: this.state.plotType } });
+        } as any), this.updateDataAndLayers);
     };
 
     updateDimensions = () => {
@@ -663,16 +697,7 @@ class Hurricane extends Component<{}, HurricaneState> {
             const width = this.divElement.clientWidth;
             this.setState({
                 height,
-                width,
-                viewState: new WebMercatorViewport({
-                    height,
-                    width,
-                    longitude: -64,
-                    latitude: 26,
-                    zoom: 3,
-                    pitch: 0,
-                    bearing: 0
-                }),
+                width
             });
         }
     };
@@ -682,7 +707,7 @@ class Hurricane extends Component<{}, HurricaneState> {
         let maxW = 0;
         let minP = 9999;
         let maxP = 0;
-        Object.values(STORMS).flatMap((storm: Storm) => storm["track_points"]).forEach((point: Point) => {
+        Object.values(STORMS).flatMap((storm: any) => storm["track_points"]).forEach((point: any) => {
             if (point.wind < minW) {
                 minW = point.wind;
             }
@@ -698,7 +723,6 @@ class Hurricane extends Component<{}, HurricaneState> {
                 }
             }
         });
-        console.log(minW, maxW, minP, maxP);
         window.addEventListener('resize', () => {
             if (this.resizeTimeout) {
                 clearTimeout(this.resizeTimeout);
@@ -706,7 +730,7 @@ class Hurricane extends Component<{}, HurricaneState> {
             this.resizeTimeout = window.setTimeout(this.updateDimensions, 100);
         });
         this.updateDimensions();
-        this.onChange({ target: { name: PLOT_TYPES.STORM } });
+        this.updateDataAndLayers();
     }
 
     componentWillUnmount() {
@@ -716,25 +740,34 @@ class Hurricane extends Component<{}, HurricaneState> {
         }
     }
 
-    getToolTip = (object: any) => {
-        if (!object) { return; }
-        if (this.state.plotType === "Max Wind Grid") {
-            return `Max Wind: ${object.colorValue}`;
-        }
-        if (this.state.plotType === "Grid") {
-            return `# of track points: ${object.colorValue}`;
-        }
-    };
-
     render() {
+        const { hoverInfo, stormInfo, selectedPoint, filterPanelOpen, settingsOpen } = this.state;
+        const hoveredObject = hoverInfo?.object;
+
+        // @ts-ignore
         return (
             <div style={{ width: "100vw", height: "100vh" }} ref={(divElement) => { this.divElement = divElement }}>
                 <DeckGL
                     viewState={this.state.viewState}
                     controller={true}
-                    onViewStateChange={({ viewState }) => this.setState({ viewState })}
+                    onViewStateChange={({ viewState }) => {
+                        if (isMapViewState(viewState)) {
+                            this.setState({ viewState });
+                        }
+                    }}
                     layers={this.state.layers}
-                    getTooltip={({ object }) => this.getToolTip(object)}
+                    getTooltip={({ object }) => {
+                        if (!object) return null;
+
+                        if (this.state.plotType === PLOT_TYPES.MAX_WIND_GRID) {
+                            return { text: `Max Wind: ${object.colorValue}` };
+                        }
+                        if (this.state.plotType === PLOT_TYPES.GRID) {
+                            return { text: `# of track points: ${object.colorValue}` };
+                        }
+
+                        return null;
+                    }}
                 >
                     <Map
                         reuseMaps
@@ -742,12 +775,12 @@ class Hurricane extends Component<{}, HurricaneState> {
                         mapStyle="mapbox://styles/mapbox/dark-v9"
                     />
 
-                    {this.state.hoverInfo && this.state.hoverInfo.object && (
+                    {hoveredObject && (
                         <div
                             style={{
                                 position: 'absolute',
-                                left: this.state.hoverInfo.x,
-                                top: this.state.hoverInfo.y,
+                                left: hoverInfo.x,
+                                top: hoverInfo.y,
                                 backgroundColor: '#fff',
                                 boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
                                 padding: '6px 12px',
@@ -761,35 +794,32 @@ class Hurricane extends Component<{}, HurricaneState> {
                             }}
                         >
                             <div className="column">
-                                <p>Name: {STORMS[this.state.hoverInfo.object["id"]]["name"]}</p>
-                                <p>Date: {this.state.hoverInfo.object["date_time"].split(" ")[0]}</p>
-                                <p>Longitude: {this.state.hoverInfo.object["longitude"]}</p>
-                                <p>Wind: {this.state.hoverInfo.object["wind"]}</p>
-                                {this.state.hoverInfo.object["max_wind_radius"] && <p>Max Wind Radius: {this.state.hoverInfo.object["max_wind_radius"]}</p>}
+                                <p>Name: {STORMS[hoveredObject["id"]]?.["name"]}</p>
+                                <p>Date: {hoveredObject["date_time"].split(" ")[0]}</p>
+                                <p>Longitude: {hoveredObject["longitude"]}</p>
+                                <p>Wind: {hoveredObject["wind"]}</p>
+                                {hoveredObject["max_wind_radius"] && <p>Max Wind Radius: {hoveredObject["max_wind_radius"]}</p>}
                             </div>
                             <div className="column" style={{ paddingLeft: 10 }}>
-                                <p>Season: {STORMS[this.state.hoverInfo.object["id"]]["season"]}</p>
-                                <p>Time: {this.state.hoverInfo.object["date_time"].split(" ")[1]}</p>
-                                <p>Latitude: {this.state.hoverInfo.object["latitude"]}</p>
-                                <p>Status: {this.state.hoverInfo.object["status"]}</p>
-                                {this.state.hoverInfo.object["pressure"] && <p>Pressure: {this.state.hoverInfo.object["pressure"]}</p>}
+                                <p>Season: {STORMS[hoveredObject["id"]]?.["season"]}</p>
+                                <p>Time: {hoveredObject["date_time"].split(" ")[1]}</p>
+                                <p>Latitude: {hoveredObject["latitude"]}</p>
+                                <p>Status: {hoveredObject["status"]}</p>
+                                {hoveredObject["pressure"] && <p>Pressure: {hoveredObject["pressure"]}</p>}
                             </div>
                         </div>
                     )}
                 </DeckGL>
-                {this.state.stormInfo && (
+                {stormInfo && (
                     <StormInfo
-                        stormInfo={this.state.stormInfo}
-                        selectedPoint={this.state.selectedPoint}
+                        stormInfo={stormInfo}
+                        selectedPoint={selectedPoint}
                         onChange={this.onChange}
-                        exitStormInfo={async (evt) => {
-                            await this.setState({ stormInfo: null, selectedPoint: 0 });
-                            this.onChange(evt);
-                        }}
+                        exitStormInfo={() => this.setState({ stormInfo: null, selectedPoint: 0 })}
                     />
                 )}
                 <FilterPanel
-                    filterPanelOpen={this.state.filterPanelOpen}
+                    filterPanelOpen={filterPanelOpen}
                     plotType={this.state.plotType}
                     plotTypeOptions={PLOT_TYPES}
                     basin={this.state.basin}
@@ -810,13 +840,13 @@ class Hurricane extends Component<{}, HurricaneState> {
                     showMaxWindPoly={this.state.showMaxWindPoly}
                     showWindPoly={this.state.showWindPoly}
                     only6Hour={this.state.only6Hour}
-                    onChange={(evt: React.ChangeEvent<HTMLInputElement>) => this.onChange(evt)}
-                    toggleFilterPanel={() => { this.setState(prevState => ({ filterPanelOpen: !prevState.filterPanelOpen })) }}
+                    onChange={(evt: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => this.onChange(evt)}
+                    toggleFilterPanel={() => this.setState(prevState => ({ filterPanelOpen: !prevState.filterPanelOpen }))}
                 />
                 <SettingsPanel
-                    settingsOpen={this.state.settingsOpen}
+                    settingsOpen={settingsOpen}
                     onSettingsChange={this.onSettingsChange}
-                    toggleSettingsPanel={() => { this.setState(prevState => ({ settingsOpen: !prevState.settingsOpen })) }}
+                    toggleSettingsPanel={() => this.setState(prevState => ({ settingsOpen: !prevState.settingsOpen }))}
                     scatterplotSettings={this.state.scatterplotSettings}
                     lineSettings={this.state.lineSettings}
                     gridSettings={this.state.gridSettings}

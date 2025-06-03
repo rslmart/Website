@@ -27,7 +27,7 @@ interface SettingsPanelProps {
         intensity: number;
         threshold: number;
     };
-    plotType: keyof typeof PLOT_TYPES;
+    plotType: string;
 }
 
 const settingsPanelStyles: React.CSSProperties = {
@@ -262,26 +262,27 @@ const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
         </div>
     );
 
-    const getSettingsDiv = (plotType: keyof typeof PLOT_TYPES) => {
-        switch (plotType) {
-            case PLOT_TYPES.STORM:
-                return (
-                    <div>
-                        {scatterplotDiv}
-                        {lineDiv}
-                    </div>
-                );
-            case PLOT_TYPES.SCATTER_PLOT:
-                return scatterplotDiv;
-            case PLOT_TYPES.HEATMAP:
-                return heatmapDiv;
-            case PLOT_TYPES.GRID:
-            case PLOT_TYPES.MAX_WIND_GRID:
-                return gridDiv;
-            default:
-                return <div />;
+    const getSettingsDiv = (plotType: string) => {
+        if (plotType === PLOT_TYPES.STORM) {
+            return (
+                <div>
+                    {scatterplotDiv}
+                    {lineDiv}
+                </div>
+            );
         }
+        if (plotType === PLOT_TYPES.SCATTER_PLOT) {
+            return scatterplotDiv
+        }
+        if (plotType === PLOT_TYPES.HEATMAP) {
+            return heatmapDiv
+        }
+        if (plotType === PLOT_TYPES.GRID || plotType === PLOT_TYPES.MAX_WIND_GRID) {
+            return gridDiv
+        }
+        return <div/>;
     }
+
 
     return settingsOpen ? (
         <div style={settingsPanelStyles}>

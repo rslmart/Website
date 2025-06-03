@@ -53,13 +53,13 @@ const FilterPanel: React.FC<FilterPanelProps> = (props) => {
         toggleFilterPanel
     } = props;
 
-    const PLOT_TYPE_DESCRIPTIONS: Record<string, string> = {
-        STORM: "Showing the entire tracks of storm systems.",
-        SCATTER_PLOT: "Showing individual track points.",
-        HEATMAP: "Showing heatmap from individual track points.",
-        GRID: "Showing bar graph from sum of individual points in the column area.",
-        MAX_WIND_GRID: "Showing bar graph from the max wind of all individual points in the column area."
-    };
+    // const PLOT_TYPE_DESCRIPTIONS: Record<string, string> = {
+    //     STORM: "Showing the entire tracks of storm systems.",
+    //     SCATTER_PLOT: "Showing individual track points.",
+    //     HEATMAP: "Showing heatmap from individual track points.",
+    //     GRID: "Showing bar graph from sum of individual points in the column area.",
+    //     MAX_WIND_GRID: "Showing bar graph from the max wind of all individual points in the column area."
+    // };
 
     const controlPanelStyles: React.CSSProperties = {
         position: 'absolute',
@@ -231,6 +231,16 @@ const FilterPanel: React.FC<FilterPanelProps> = (props) => {
                         {Object.keys(systemStatusOptions).map(option =>
                             <option key={option} value={option}>{option}</option>)}
                     </select>
+                </div>
+
+                <div key={'landfall'} className="input">
+                    <label>Landfall:</label>
+                    <input
+                        type="checkbox"
+                        name="landfall"
+                        checked={landfall}
+                        onChange={evt => onChange(evt)}
+                    />
                 </div>
 
                 {plotType === "Storm" && <div>

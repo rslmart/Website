@@ -3,7 +3,6 @@ import {
     ResponsiveContainer,
     ComposedChart,
     Line,
-    Scatter,
     XAxis,
     YAxis,
     CartesianGrid,

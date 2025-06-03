@@ -4,6 +4,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import Home from "./Home.tsx";
 import Bio from "./Bio/Bio.tsx";
 import Snow from "./Snow/SnowPage.tsx";
+import Hurricane from "./Hurricane/Hurricane.tsx";
 
 const rootElement = document.getElementById("root");
 
@@ -16,6 +17,7 @@ if (rootElement) {
                     <Route path="/" element={<Home />} />
                     <Route path="/Bio" element={<Bio />} />
                     <Route path="/Snow" element={<Snow />} />
+                    <Route path="/Hurricane" element={<Hurricane />} />
                 </Routes>
             </BrowserRouter>
         </StrictMode>
