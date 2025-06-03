@@ -8,6 +8,7 @@ import STORMS from './data/storms_with_ir.json';
 import FilterPanel from "./filter-panel";
 import CREDENTIALS from "../credentials.json"
 import SettingsPanel from "./settings-panel";
+import StormInfo from "./storm-info";
 
 /*
 /Settings

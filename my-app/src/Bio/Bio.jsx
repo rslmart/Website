@@ -9,16 +9,17 @@ function Bio() {
             <header className={styles.header}>
                 <h1 className={styles.title}>Russell Makoa Martin</h1>
                 <div className={styles.contactInfo}>
-                    makoa1693@gmail.com | 757-323-5802 | <a href="makoa.link"
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className={styles.link}>www.makoa.link</a>
-                    <br/>
-                    <a href="github.com/rslmart"
+                    makoa1693@gmail.com | 757-323-5802 |
+                    <a href="https://makoa.link"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       className={styles.link}>www.makoa.link</a>
+                    <br />
+                    <a href="https://github.com/rslmart"
                        target="_blank"
                        rel="noopener noreferrer"
                        className={styles.link}>GitHub</a> |
-                    <a href="www.linkedin.com/in/russell-makoa-martin/"
+                    <a href="https://www.linkedin.com/in/russell-makoa-martin/"
                        target="_blank"
                        rel="noopener noreferrer"
                        className={styles.link}>LinkedIn</a>
