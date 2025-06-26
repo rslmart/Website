@@ -102,8 +102,7 @@ def cleanRoyalTreeData():
 def flatten(xss):
     return [x for xs in xss for x in xs]
 
-def clean_and_combine():
-    monarch_lists = {"Denmark"}
+def clean_and_combine(monarch_lists):
     new_data = {}
     with open("./data/monarchy_data.json", 'r') as json_file:
         new_data = json.load(json_file)
@@ -138,4 +137,4 @@ def clean_and_combine():
         json.dump(family_trees, json_file, indent=4)
 
 if __name__ == '__main__':
-
+    clean_and_combine({"Spain"})

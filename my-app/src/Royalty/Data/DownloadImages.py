@@ -1,3 +1,5 @@
+import time
+
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
@@ -57,14 +59,14 @@ def download_image_from_page(image_id, save_path, max_retries=3):
     # If all retries failed
     raise Exception(f"Failed to download image after {max_retries} attempts")
 
-def download_all_monarch_iamges():
+def download_all_monarch_images():
     with open('./data/monarchy_data.json', 'r') as file:
         data = json.load(file)
     for person in data.values():
-
         if 'image' in person and len(person['image']) > 0:
             image_path = '../../../public/monarchy/{}.{}'.format(person['id'], person['image'][0].split('.')[-1])
-            if not os.path.exists(image_path):
+            image_jpg_path = '../../../public/monarchy/{}.{}'.format(person['id'], 'jpg')
+            if not os.path.exists(image_path) and not os.path.exists(image_jpg_path):
                 try:
                     download_image_from_page(person['image'][0], image_path)
                 except Exception as e:
@@ -123,4 +125,5 @@ def convert_to_jpg(directory, quality=85):
     print(f"\nConversion complete! {converted_count} files converted, {error_count} errors")
 
 if __name__ == '__main__':
+    download_all_monarch_images()
     convert_to_jpg('../../../public/monarchy')

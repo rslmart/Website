@@ -388,6 +388,7 @@ def get_monarch_data(inclde):
   for monarchy in monarchy_lists:
     print(monarchy)
     construct_family_tree_from_monarch_list(monarchy, "./data/" + monarchy + "_family_tree.json")
+    print("Finished:", monarchy)
 
 def get_monarch_list(monarchy, position_set, start_person_id):
   retriever = DataRetriever(save=False)
@@ -507,6 +508,6 @@ def label_people(monarchies):
 if __name__ == '__main__':
   # monarchies.sort()
   # print(monarchies)
-  # retriever = DataRetriever(save=False)
-  # get_monarch_data({'Denmark'})
-  # label_people(["Denmark"])
+  retriever = DataRetriever(save=False)
+  get_monarch_data({'Spain'})
+  label_people(["Spain"])

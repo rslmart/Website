@@ -108,7 +108,13 @@ def get_monarch_lists(monarchies):
                                              ['navbox-list-with-group', 'navbox-list', 'hlist']))
 
     if "Spain" in monarchies:
-        saveData('Spain', get_monarch_list("https://en.wikipedia.org/wiki/List_of_Spanish_monarchs", 'Monarchs_of_Spain174', 'navbox-list-with-group navbox-list navbox-odd hlist'))
+        kings_of_asturias = get_monarch_list("https://en.wikipedia.org/wiki/Kingdom_of_Asturias",
+                                         'Monarchs_of_Asturias74', ['navbox-list-with-group', 'navbox-list', 'hlist'])[:-2]
+        kings_of_leon = get_monarch_list("https://en.wikipedia.org/wiki/Kingdom_of_Le%C3%B3n",
+                                          'Monarchs_of_León226', ['navbox-list-with-group', 'navbox-list', 'hlist'])[:-5]
+        kings_of_spain = get_monarch_list("https://en.wikipedia.org/wiki/List_of_Spanish_monarchs", 'Monarchs_of_Spain279', ['navbox-list-with-group', 'navbox-list', 'hlist'])
+        kings_of_spain.remove("Q7726")
+        saveData('Spain', kings_of_asturias + kings_of_leon + kings_of_spain)
 
     if "Russia" in monarchies:
         # Russian Monarchs
@@ -255,4 +261,4 @@ monarchies = [
 ]
 
 if __name__ == '__main__':
-    get_monarch_lists(["Denmark"])
+    get_monarch_lists(["Spain"])
