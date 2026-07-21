@@ -10,7 +10,7 @@ def datetime_encoder(obj):
     raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
 
 def saveData(data, filename):
-    print("Saving {} datapoints to ".format(len(data), filename))
+    print("Saving {} datapoints to {}".format(len(data), filename))
     # Convert dictionary to JSON string using the custom encoder
     json_data = json.dumps(data, default=datetime_encoder, indent=4)
     # Write JSON data to a file

@@ -1,5 +1,5 @@
 import React from "react";
-import ReactDOM from "react-dom";
+import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import Home from "./Home";
 import Bio from "./Bio/Bio";
@@ -8,7 +8,8 @@ import RoyalTree from "./Royalty/RoyalTreePage";
 import SnowPage from "./Snow/SnowPage";
 
 const rootElement = document.getElementById("root");
-ReactDOM.render(
+const root = createRoot(rootElement);
+root.render(
     <BrowserRouter>
         <Routes>
             <Route exact path="/" element={<Home/>} />
@@ -17,6 +18,5 @@ ReactDOM.render(
             <Route path="/RoyalTree" element={<RoyalTree/>} />
             <Route path="/Snow" element={<SnowPage/>} />
         </Routes>
-    </BrowserRouter>,
-    rootElement
+    </BrowserRouter>
 );

@@ -8,9 +8,7 @@ import FilterPanel from "./filter-panel";
 import NodeToolTip from "./NodeToolTip";
 import {
   convertToChart,
-  extractImportantNodes,
-  getCertainNumberOfConnections,
-  traceBackToRoot
+  extractImportantNodes
 } from './RoyalTreeUtils';
 import './RoyalTreeStyle.css';
 

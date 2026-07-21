@@ -11,6 +11,7 @@
     "cytoscape": "^3.31.2",
     "cytoscape-dagre": "^2.5.0",
     "mapbox-gl": "2.8.2",
+    "prop-types": "^15.8.1",
     "react": "^18.1.0",
     "react-dom": "^18.1.0",
     "react-map-gl": "^7.0.12",
@@ -22,21 +23,13 @@
     "@svgr/core": "^8.1.0",
     "@svgr/plugin-jsx": "^8.1.0",
     "@vitejs/plugin-react": "^4.3.4",
-    "react-scripts": "^5.0.1",
     "vite": "^6.1.0"
   },
   "scripts": {
     "start": "vite",
     "build": "vite build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject",
-    "dev": "vite"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
+    "dev": "vite",
+    "preview": "vite preview"
   },
   "browserslist": {
     "production": [

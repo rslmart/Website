@@ -17,8 +17,6 @@ passYear = {
     'White_Pass_US-12': 2005
 }
 
-months = ['Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Apr', 'May']
-
 def download_data():
     data = {}
     for passName in passId.keys():
@@ -31,14 +29,11 @@ def download_data():
         json.dump(data, json_file)
 
 if __name__ == '__main__':
-    data = {}
+    # Read the raw WSDOT response and re-emit it pretty-printed. The heavy
+    # per-day transformation is done at render time in SnowPage.jsx, so this
+    # step is intentionally just a formatting pass.
     with open('./pass_snowfall_data_raw.json', 'r') as json_file:
         data = json.load(json_file)
-
-    new_data = {}
-    for passName in data.keys():
-        new_data[passName] = {}
-
 
     with open('./pass_snowfall_data.json', 'w') as json_file:
         json.dump(data, json_file, indent=4)

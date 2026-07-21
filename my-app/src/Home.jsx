@@ -4,7 +4,7 @@ import './index.css';
 
 const childStyle = {"width": "100%", "height": "100%", "fontSize": "50px"}
 
-function home() {
+function Home() {
     return (
         <div style={{
             minHeight: "100vh",
@@ -40,4 +40,4 @@ function home() {
 
 }
 
-export default home;
+export default Home;

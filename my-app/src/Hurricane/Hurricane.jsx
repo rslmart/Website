@@ -6,7 +6,6 @@ import {WebMercatorViewport} from '@deck.gl/core';
 import {Map} from 'react-map-gl';
 import STORMS from './data/storms_with_ir.json';
 import FilterPanel from "./filter-panel";
-import CREDENTIALS from "../credentials.json"
 import SettingsPanel from "./settings-panel";
 import StormInfo from "./storm-info";
 
@@ -104,7 +103,7 @@ const getLineDataFromStormTrackPoints = (storms) => {
         for (let i = 0; i < trackpoints.length - 1; i++) {
             const line = {
                 color: [...getColorFromWindSpeed(trackpoints[i].wind), 200],
-                id: trackpoints["id"],
+                id: trackpoints[i]["id"],
                 from: [trackpoints[i]["longitude"], trackpoints[i]["latitude"]],
                 to: [trackpoints[i + 1]["longitude"], trackpoints[i + 1]["latitude"]]
             }
@@ -126,7 +125,7 @@ const getStormLineLayer = (storms, settings) => new LineLayer({
 });
 
 const getMaxWindAreaLayer = (track_points) => new PolygonLayer({
-    id: 'polygon-layer',
+    id: 'max-wind-polygon-layer',
     data: track_points,
     lineWidthMinPixels: 1,
     getPolygon: point => point.max_wind_poly,
@@ -145,7 +144,7 @@ const getWindAreaLayers = (track_points, selectedPoint) => {
     return wind_area_keys.map(key => getWindAreaLayer(track_points.filter(point => point[key]), key, selectedPoint));
 }
 const getWindAreaLayer = (track_points, key, selectedPoint) => new PolygonLayer({
-    id: 'polygon-layer',
+    id: `wind-area-polygon-layer-${key}`,
     data: track_points,
     lineWidthMinPixels: 1,
     getPolygon: point => point[key],
@@ -213,7 +212,7 @@ const getGridLayer = (track_points, settings) => new GridLayer({
 
 
 const getGridLayerMaxWind = (track_points, settings) => new GridLayer({
-    id: 'new-grid-layer',
+    id: 'max-wind-grid-layer',
     data: track_points,
     pickable: true,
     extruded: true,
@@ -267,8 +266,6 @@ const getNewViewPort = (track_points) => {
     })
     return {minLat, maxLat, minLon, maxLon}
 }
-
-let doit;
 
 class Hurricane extends Component {
     state = {
@@ -389,8 +386,8 @@ class Hurricane extends Component {
             await this.setState({ basin: evt.target.value });
         }
         else if (evt.target.name === "selectStorm") {
-            await this.setState({ stormInfo: STORMS[evt.target.value.id] });
-            const { minLat, maxLat, minLon, maxLon } = getNewViewPort(this.state.stormInfo.track_points);
+            const selectedStorm = STORMS[evt.target.value.id];
+            const { minLat, maxLat, minLon, maxLon } = getNewViewPort(selectedStorm.track_points);
             const viewport = new WebMercatorViewport(this.state.viewState);
             const newViewport = viewport.fitBounds([[minLon, minLat], [maxLon, maxLat]], {padding: 80});
             const newViewState = {
@@ -402,7 +399,7 @@ class Hurricane extends Component {
                 // Include padding if necessary (check if newViewport.padding exists)
                 ...(newViewport.padding && { padding: { ...newViewport.padding } })
             };
-            await this.setState({ viewState: newViewState });
+            await this.setState({ stormInfo: selectedStorm, viewState: newViewState });
         }
         else if (evt.target.name === "selectedPoint") {
             await this.setState({ selectedPoint: parseInt(evt.target.value) });
@@ -509,38 +506,20 @@ class Hurricane extends Component {
         }
     };
 
+    handleResize = () => {
+        clearTimeout(this.resizeTimer);
+        this.resizeTimer = setTimeout(this.updateDimensions, 100);
+    };
+
     componentDidMount() {
-        let minW = 999;
-        let maxW = 0;
-        let minP = 9999;
-        let maxP = 0;
-        Object.values(STORMS).flatMap(storm => storm["track_points"]).forEach(point => {
-            if (point.wind < minW) {
-                minW = point.wind
-            }
-            if (point.wind > maxW) {
-                maxW = point.wind
-            }
-            if (point.pressure) {
-                if (point.pressure < minP) {
-                    minP = point.pressure
-                }
-                if (point.pressure > maxP) {
-                    maxP = point.pressure
-                }
-            }
-        });
-        console.log(minW, maxW, minP, maxP);
-        window.addEventListener('resize', () => {
-            clearTimeout(doit);
-            doit = setTimeout(this.updateDimensions, 100);
-        });
+        window.addEventListener('resize', this.handleResize);
         this.updateDimensions();
         this.onChange({target: {name: PLOT_TYPES.STORM}})
     }
 
     componentWillUnmount() {
-        window.removeEventListener('resize', this.updateDimensions);
+        clearTimeout(this.resizeTimer);
+        window.removeEventListener('resize', this.handleResize);
     }
 
     getToolTip = (object) => {
@@ -565,7 +544,7 @@ class Hurricane extends Component {
                 >
                     <Map
                         reuseMaps
-                        mapboxAccessToken={CREDENTIALS["MAP_TOKEN"]}
+                        mapboxAccessToken={import.meta.env.VITE_MAPBOX_TOKEN}
                         mapStyle="mapbox://styles/mapbox/dark-v9"
                     />
 
