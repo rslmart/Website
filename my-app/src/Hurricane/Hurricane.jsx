@@ -8,6 +8,9 @@ import FilterPanel from "./filter-panel";
 import SettingsPanel from "./settings-panel";
 import StormInfo from "./storm-info";
 import SourcesPanel from "./sources-panel";
+import HelpPanel from "./help-panel";
+
+const HELP_SEEN_KEY = "hurricaneHelpSeen";
 
 /*
 /Settings
@@ -364,7 +367,23 @@ class Hurricane extends Component {
         filterPanelOpen: true,
         settingsOpen: false,
         sourcesOpen: false,
+        helpOpen: (() => {
+            try {
+                return !window.localStorage.getItem(HELP_SEEN_KEY);
+            } catch (e) {
+                return true;
+            }
+        })(),
         layers: []
+    };
+
+    closeHelp = () => {
+        try {
+            window.localStorage.setItem(HELP_SEEN_KEY, "1");
+        } catch (e) {
+            // ignore storage failures (private mode, etc.)
+        }
+        this.setState({ helpOpen: false });
     };
 
     onChange = async (evt) => {
@@ -692,6 +711,11 @@ class Hurricane extends Component {
                 <SourcesPanel
                     open={this.state.sourcesOpen}
                     toggle={() => this.setState(prevState => ({ sourcesOpen: !prevState.sourcesOpen }))}
+                />
+                <HelpPanel
+                    open={this.state.helpOpen}
+                    onOpen={() => this.setState({ helpOpen: true })}
+                    onClose={this.closeHelp}
                 />
             </div>
         );

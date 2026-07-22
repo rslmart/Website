@@ -32,6 +32,7 @@ Usage:
 import argparse
 import os
 
+import BuildHouses
 import CleanRoyalTreeData
 import GatherAncestors
 import GetData
@@ -49,14 +50,20 @@ def run(monarchies, skip_lists=False, with_ancestors=True):
         GetListOfMonarchs.get_monarch_lists(monarchies)
     GetData.get_monarch_data(set(monarchies))
     # Gather ancestor closures before labelling so the extra people get labelled
-    # in the same pass. No-op for non-European monarchies.
+    # in the same pass. gather_ancestors is European-only (shallow shared-ancestor
+    # bridging); gather_deep_ancestors reconnects the Mongol houses to Genghis via
+    # one deep lineage. Both no-op for monarchies outside their target sets.
     if with_ancestors:
         GatherAncestors.gather_ancestors(monarchies)
+        GatherAncestors.gather_deep_ancestors(monarchies)
     GetData.label_people(monarchies)
     CleanRoyalTreeData.clean_and_combine(set(monarchies))
     if with_ancestors:
         GatherAncestors.combine_ancestors(monarchies)
+    # Houses derive from the combined pool, so build them after it's assembled.
+    BuildHouses.build_houses()
     SplitDataForFrontend.split()
+    SplitDataForFrontend.split_houses()
 
 
 def run_ancestors_only(monarchies):
@@ -64,7 +71,31 @@ def run_ancestors_only(monarchies):
     GatherAncestors.gather_ancestors(monarchies)
     GetData.label_people(monarchies)
     GatherAncestors.combine_ancestors(monarchies)
+    BuildHouses.build_houses()
     SplitDataForFrontend.split()
+    SplitDataForFrontend.split_houses()
+
+
+def run_houses_only():
+    """Rebuild only the house groupings and their frontend payloads."""
+    BuildHouses.build_houses()
+    SplitDataForFrontend.split_houses()
+
+
+def run_deep_ancestors(monarchies):
+    """Fetch the deep Mongol-house lineages, fold them in, and rebuild houses.
+
+    Layers onto an already-built dataset (no succession rebuild): gathers the
+    intermediate paternal ancestors that connect the khanates to Genghis Khan,
+    labels and folds them into monarchy_data.json, then rebuilds the house
+    payloads so e.g. Borjigin collapses from disconnected sub-trees into one tree.
+    """
+    GatherAncestors.gather_deep_ancestors(monarchies)
+    GetData.label_people(monarchies)
+    GatherAncestors.combine_ancestors(monarchies)
+    BuildHouses.build_houses()
+    SplitDataForFrontend.split()
+    SplitDataForFrontend.split_houses()
 
 
 def main():
@@ -80,10 +111,25 @@ def main():
                              "(no succession rebuild).")
     parser.add_argument("--split-only", action="store_true",
                         help="Only regenerate public/royalty/ from the existing combined files.")
+    parser.add_argument("--houses-only", action="store_true",
+                        help="Only rebuild the house groupings and their frontend payloads.")
+    parser.add_argument("--deep-ancestors", action="store_true",
+                        help="Fetch the deep Mongol-house lineages (khanates -> Genghis Khan), "
+                             "fold them into the combined data, and rebuild houses.")
     args = parser.parse_args()
+
+    if args.houses_only:
+        run_houses_only()
+        return
+
+    if args.deep_ancestors:
+        deep = args.monarchies or sorted(GatherAncestors.DEEP_ANCESTOR_MONARCHIES)
+        run_deep_ancestors(deep)
+        return
 
     if args.split_only:
         SplitDataForFrontend.split()
+        SplitDataForFrontend.split_houses()
         return
 
     monarchies = ALL_MONARCHIES if args.all else args.monarchies

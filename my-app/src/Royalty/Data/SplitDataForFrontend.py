@@ -9,10 +9,14 @@ gzipped JSON file under ``public/royalty/`` which the app fetches on demand.
 This mirrors the Hurricane component, which serves its large dataset gzipped
 from ``public/`` and gunzips it at runtime.
 
-Inputs  (data/):   monarchy_data.json, monarchy_family_trees.json, monarch_list.json
+Inputs  (data/):   monarchy_data.json, monarchy_family_trees.json, monarch_list.json,
+                   houses.json (optional)
 Outputs (public/royalty/):
     index.json                -> sorted list of available monarchy names
     <Monarchy>.json.gz        -> { successionList, monarchList, nodes }
+    houses.json               -> [{ id, name }] of available houses (optional)
+    <House>.json.gz           -> { type:"house", monarchList, successionList:[],
+                                   members, nodes } (optional)
 
 Run from the Data/ directory (or via pipeline.py). Pure local transform; no
 network access required.
@@ -97,5 +101,46 @@ def split():
     print(f"Wrote index with {len(monarchies)} monarchies to {PUBLIC_DIR}")
 
 
+def split_houses():
+    """Emit per-house gzipped payloads and a houses.json index (if built).
+
+    House payloads mirror the monarchy shape so they flow through the same
+    frontend loader/merge path, tagged with type:"house" and carrying a
+    `members` map (qid -> rankTier) plus a `monarchs` list. `nodes` holds the
+    members and their ancestor pool so the frontend can connect a rank-filtered
+    subset into a compact subtree.
+    """
+    houses_path = os.path.join(DATA_DIR, "houses.json")
+    if not os.path.exists(houses_path):
+        print("No houses.json; skipping house split.")
+        return
+
+    with open(houses_path) as f:
+        houses = json.load(f)
+
+    os.makedirs(PUBLIC_DIR, exist_ok=True)
+    index = []
+    for slug, house in houses.items():
+        payload = {
+            "type": "house",
+            "monarchList": house.get("monarchs", []),
+            "successionList": [],
+            "members": house.get("members", {}),
+            "nodes": house.get("nodes", {}),
+        }
+        raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        with gzip.open(os.path.join(PUBLIC_DIR, slug + ".json.gz"), "wb") as out:
+            out.write(raw)
+        index.append({"id": slug, "name": house.get("name", slug)})
+        print(f"{slug}: {len(payload['members'])} members, "
+              f"{len(payload['nodes'])} nodes ({len(raw)} B raw)")
+
+    index.sort(key=lambda h: h["name"])
+    with open(os.path.join(PUBLIC_DIR, "houses.json"), "w") as f:
+        json.dump(index, f)
+    print(f"Wrote houses index with {len(index)} houses to {PUBLIC_DIR}")
+
+
 if __name__ == "__main__":
     split()
+    split_houses()

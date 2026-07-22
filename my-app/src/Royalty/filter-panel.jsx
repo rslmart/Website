@@ -1,6 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import { monarchyColors, SUCCESSION_EDGE_COLOR } from './RoyalTreeUtils';
+import { monarchyColors, SUCCESSION_EDGE_COLOR, RANK_TIERS } from './RoyalTreeUtils';
 import './RoyalTreeStyle.css'
 
 // Constants
@@ -27,7 +27,7 @@ const PANEL_STYLES = {
     },
     checkboxList: {
         marginTop: 8,
-        maxHeight: 320,
+        maxHeight: 160,
         overflowY: "auto",
         border: "1px solid #ddd",
         borderRadius: 4,
@@ -82,6 +82,17 @@ const PANEL_STYLES = {
         paddingTop: 8,
         borderTop: "1px solid #eee",
     },
+    groupBlock: {
+        marginTop: 10,
+        paddingTop: 8,
+        borderTop: "1px solid #eee",
+    },
+    groupTitle: {
+        fontSize: 12,
+        fontWeight: 600,
+        color: "#2c3e50",
+        marginBottom: 6,
+    },
     connectionsTitle: {
         fontSize: 12,
         fontWeight: 600,
@@ -117,16 +128,22 @@ function FilterPanel(props) {
     const {
         selectedMonarchs,
         monarchyOptions,
+        houseOptions,
         memberCounts,
         sharedCount,
         bridgeOptions,
         onBridgeChange,
+        rankOptions,
+        onRankChange,
         showSuccession,
         onToggleSuccession,
         onChange,
     } = props;
 
     const selectedSet = new Set(selectedMonarchs);
+    const houseIdSet = new Set(houseOptions.map(h => h.id));
+    const anyHouseSelected = selectedMonarchs.some(m => houseIdSet.has(m));
+    const visibleRanks = new Set(rankOptions.visibleRanks);
 
     const toggle = (option) => {
         const next = selectedSet.has(option)
@@ -139,8 +156,15 @@ function FilterPanel(props) {
         onBridgeChange({ ...bridgeOptions, ...patch });
     };
 
+    const toggleRank = (tier) => {
+        const next = visibleRanks.has(tier)
+            ? rankOptions.visibleRanks.filter(t => t !== tier)
+            : [...rankOptions.visibleRanks, tier];
+        onRankChange({ ...rankOptions, visibleRanks: next });
+    };
+
     return (
-        <div className="control-panel">
+        <div className="control-panel" style={{ width: 200 }}>
             <div style={PANEL_STYLES.header}>
                 <h3 style={PANEL_STYLES.panelTitle}>Monarchies</h3>
             </div>
@@ -161,6 +185,44 @@ function FilterPanel(props) {
                         </label>
                     ))}
                 </div>
+
+                {houseOptions.length > 0 && (
+                    <div style={PANEL_STYLES.groupBlock}>
+                        <div style={PANEL_STYLES.groupTitle}>Houses</div>
+                        <div style={PANEL_STYLES.checkboxList}>
+                            {houseOptions.map(house => (
+                                <label key={house.id} style={PANEL_STYLES.checkboxRow}>
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedSet.has(house.id)}
+                                        onChange={() => toggle(house.id)}
+                                    />
+                                    {house.name}
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {anyHouseSelected && (
+                    <div style={PANEL_STYLES.connections}>
+                        <div style={PANEL_STYLES.connectionsTitle}>Ranks to show</div>
+                        {RANK_TIERS.filter(r => r.tier > 0).map(({ tier, name }) => (
+                            <label key={tier} style={PANEL_STYLES.connectionsRow}>
+                                <input
+                                    type="checkbox"
+                                    checked={visibleRanks.has(tier)}
+                                    onChange={() => toggleRank(tier)}
+                                />
+                                <span>{name}</span>
+                            </label>
+                        ))}
+                        <div style={PANEL_STYLES.connectionsHint}>
+                            Monarchs are always shown. Ancestors are added to connect them.
+                        </div>
+                    </div>
+                )}
+
                 {selectedMonarchs.length > 0 && (
                     <div style={PANEL_STYLES.legend}>
                         {selectedMonarchs.map((option, idx) => {
@@ -244,6 +306,10 @@ function FilterPanel(props) {
 FilterPanel.propTypes = {
     selectedMonarchs: PropTypes.arrayOf(PropTypes.string).isRequired,
     monarchyOptions: PropTypes.arrayOf(PropTypes.string).isRequired,
+    houseOptions: PropTypes.arrayOf(PropTypes.shape({
+        id: PropTypes.string.isRequired,
+        name: PropTypes.string.isRequired,
+    })),
     memberCounts: PropTypes.arrayOf(PropTypes.number),
     sharedCount: PropTypes.number,
     bridgeOptions: PropTypes.shape({
@@ -251,16 +317,23 @@ FilterPanel.propTypes = {
         maxDepth: PropTypes.number,
     }),
     onBridgeChange: PropTypes.func,
+    rankOptions: PropTypes.shape({
+        visibleRanks: PropTypes.arrayOf(PropTypes.number),
+    }),
+    onRankChange: PropTypes.func,
     showSuccession: PropTypes.bool,
     onToggleSuccession: PropTypes.func,
     onChange: PropTypes.func.isRequired,
 };
 
 FilterPanel.defaultProps = {
+    houseOptions: [],
     memberCounts: [],
     sharedCount: 0,
     bridgeOptions: { includeSiblings: false, maxDepth: 2 },
     onBridgeChange: () => {},
+    rankOptions: { visibleRanks: [6, 5, 4, 3] },
+    onRankChange: () => {},
     showSuccession: true,
     onToggleSuccession: () => {},
 };

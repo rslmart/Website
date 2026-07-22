@@ -4,7 +4,8 @@ import dagre from 'cytoscape-dagre';
 import FilterPanel from "./filter-panel";
 import SearchPanel from "./SearchPanel";
 import NodeToolTip from "./NodeToolTip";
-import { convertToChart, mergeMonarchies, DEFAULT_BRIDGE_OPTIONS } from './RoyalTreeUtils';
+import HelpPanel from "./help-panel";
+import { convertToChart, mergeMonarchies, DEFAULT_BRIDGE_OPTIONS, DEFAULT_VISIBLE_RANKS } from './RoyalTreeUtils';
 import './RoyalTreeStyle.css';
 
 cytoscape.use(dagre);
@@ -12,6 +13,7 @@ cytoscape.use(dagre);
 // Constants
 const EMPTY_NODE = { id: '' };
 const DEFAULT_MONARCHY = "England";
+const HELP_SEEN_KEY = "royaltyHelpSeen";
 
 // Per-monarchy data is baked into gzipped JSON under public/royalty/ by
 // src/Royalty/Data/SplitDataForFrontend.py and fetched on demand, so the
@@ -53,11 +55,14 @@ class RoyalTree extends Component {
     this.state = {
       selectedMonarchs: [DEFAULT_MONARCHY],
       monarchyOptions: [],
+      houseOptions: [],
       bridgeOptions: DEFAULT_BRIDGE_OPTIONS,
+      rankOptions: { visibleRanks: DEFAULT_VISIBLE_RANKS },
       showSuccession: true,
       data: {},
       highlightedNodes: [],
       sharedNodes: new Set(),
+      memberFlag: new Set(),
       memberCounts: [],
       sharedCount: 0,
       peopleList: [],
@@ -69,6 +74,13 @@ class RoyalTree extends Component {
       rootId: '',
       selectedNode: EMPTY_NODE,
       showNodeToolTip: false,
+      helpOpen: (() => {
+        try {
+          return !window.localStorage.getItem(HELP_SEEN_KEY);
+        } catch (e) {
+          return true;
+        }
+      })(),
       loading: true,
       error: null,
     };
@@ -294,7 +306,7 @@ class RoyalTree extends Component {
       const convertedData = this.convertToCytoscapeFormat(
           convertToChart(
               data, highlightedNodes, sharedNodes, nodeMonarchyIndex,
-              successionEdges, this.state.showSuccession,
+              successionEdges, this.state.showSuccession, this.state.memberFlag,
           )
       );
 
@@ -430,10 +442,18 @@ class RoyalTree extends Component {
     window.addEventListener('resize', this.handleResize);
     try {
       const monarchyOptions = await loadGzipJson(royaltyUrl('index.json'));
+      // Houses are optional (only present once BuildHouses has run).
+      let houseOptions = [];
+      try {
+        const response = await fetch(royaltyUrl('houses.json'));
+        if (response.ok) houseOptions = await response.json();
+      } catch (e) {
+        houseOptions = [];
+      }
       const initial = monarchyOptions.includes(DEFAULT_MONARCHY)
           ? DEFAULT_MONARCHY
           : monarchyOptions[0];
-      this.setState({ monarchyOptions });
+      this.setState({ monarchyOptions, houseOptions });
       await this.loadMonarchies([initial]);
     } catch (error) {
       console.error('Failed to load monarchy index:', error);
@@ -470,6 +490,7 @@ class RoyalTree extends Component {
             data: {},
             highlightedNodes: [],
             sharedNodes: new Set(),
+            memberFlag: new Set(),
             nodeMonarchyIndex: {},
             memberCounts: [],
             sharedCount: 0,
@@ -497,10 +518,10 @@ class RoyalTree extends Component {
       // A newer selection superseded this request while it was in flight.
       if (token !== this.loadToken) return;
 
-      // Cache so the bridging knobs can re-merge without re-fetching.
+      // Cache so the bridging/rank knobs can re-merge without re-fetching.
       this.loadedPayloads = payloads;
       this.loadedSelected = selected;
-      this.renderMerged(payloads, selected, this.state.bridgeOptions);
+      this.renderMerged(payloads, selected, this.state.bridgeOptions, this.state.rankOptions);
     } catch (error) {
       if (token !== this.loadToken) return;
       console.error(`Failed to load monarchies "${selected.join(', ')}":`, error);
@@ -512,7 +533,7 @@ class RoyalTree extends Component {
   // keyed by Wikidata ID, so shared royals collapse to one node; multi-monarchy
   // views also splice in the chains connecting dynasties up to their most-recent
   // common ancestors (see mergeMonarchies).
-  renderMerged = (payloads, selected, bridgeOptions) => {
+  renderMerged = (payloads, selected, bridgeOptions, rankOptions) => {
     const {
       data,
       highlightedNodes,
@@ -523,9 +544,10 @@ class RoyalTree extends Component {
       monarchOrder,
       successionEdges,
       membership,
+      memberFlag,
       peopleList,
       sharedList,
-    } = mergeMonarchies(payloads, selected, bridgeOptions);
+    } = mergeMonarchies(payloads, selected, bridgeOptions, rankOptions);
 
     this.setState(
         {
@@ -538,6 +560,7 @@ class RoyalTree extends Component {
           monarchOrder,
           successionEdges,
           membership,
+          memberFlag,
           sharedInfo: null,
           peopleList,
           sharedList,
@@ -553,7 +576,16 @@ class RoyalTree extends Component {
   handleBridgeChange = (bridgeOptions) => {
     this.setState({ bridgeOptions });
     if (this.loadedSelected.length > 1) {
-      this.renderMerged(this.loadedPayloads, this.loadedSelected, bridgeOptions);
+      this.renderMerged(this.loadedPayloads, this.loadedSelected, bridgeOptions, this.state.rankOptions);
+    }
+  };
+
+  // Re-run the merge with a new rank filter against the already-fetched payloads
+  // (no network). Only affects houses, so no-op when none are loaded.
+  handleRankChange = (rankOptions) => {
+    this.setState({ rankOptions });
+    if (this.loadedPayloads.some(p => p.type === 'house')) {
+      this.renderMerged(this.loadedPayloads, this.loadedSelected, this.state.bridgeOptions, rankOptions);
     }
   };
 
@@ -572,6 +604,15 @@ class RoyalTree extends Component {
     if (name === "selectedMonarchs") {
       this.loadMonarchies(value);
     }
+  };
+
+  closeHelp = () => {
+    try {
+      window.localStorage.setItem(HELP_SEEN_KEY, "1");
+    } catch (e) {
+      // ignore storage failures (private mode, etc.)
+    }
+    this.setState({ helpOpen: false });
   };
 
   render() {
@@ -629,15 +670,24 @@ class RoyalTree extends Component {
             <FilterPanel
                 selectedMonarchs={this.state.selectedMonarchs}
                 monarchyOptions={this.state.monarchyOptions}
+                houseOptions={this.state.houseOptions}
                 memberCounts={this.state.memberCounts}
                 sharedCount={this.state.sharedCount}
                 bridgeOptions={this.state.bridgeOptions}
                 onBridgeChange={this.handleBridgeChange}
+                rankOptions={this.state.rankOptions}
+                onRankChange={this.handleRankChange}
                 showSuccession={this.state.showSuccession}
                 onToggleSuccession={this.handleToggleSuccession}
                 onChange={(name, value) => this.handleFilterChange(name, value)}
             />
           </div>
+
+          <HelpPanel
+              open={this.state.helpOpen}
+              onOpen={() => this.setState({ helpOpen: true })}
+              onClose={this.closeHelp}
+          />
 
           <div className="royal-tree-attribution">
             Data from{' '}

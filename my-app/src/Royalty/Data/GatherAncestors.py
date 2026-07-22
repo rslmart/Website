@@ -45,6 +45,19 @@ EUROPEAN_MONARCHIES = {
     "Norway", "Poland", "Portugal", "Russia", "Scotland", "Spain", "Sweden",
 }
 
+# Non-European houses whose members are only linked to their common progenitor by
+# a long paternal chain that the succession BFS never climbs. Unlike the European
+# case (shallow, shared-ancestor bridging), here we walk one lineage deep to
+# reconnect a house to its founder - e.g. the Golden Horde / Chagatai / Ilkhanate
+# khans up to Jochi -> Genghis Khan (~10 generations). Siblings are left off to
+# avoid pulling in the khanates' huge lateral families.
+DEEP_ANCESTOR_MONARCHIES = {
+    "Mongol_Empire", "Golden_Horde", "Ilkhanate", "Chagatai_Khanate", "Chinggisids",
+}
+
+# Deep enough to reach Genghis Khan from the latest Golden Horde khans.
+DEEP_ANCESTOR_DEPTH = 12
+
 DATA_DIR = "./data"
 
 
@@ -52,12 +65,16 @@ def _european(monarchies):
     return [m for m in monarchies if m in EUROPEAN_MONARCHIES]
 
 
-def _gather_one(monarchy, depth):
-    """Level-synchronous upward BFS over father/mother, plus one sibling level.
+def _deep(monarchies):
+    return [m for m in monarchies if m in DEEP_ANCESTOR_MONARCHIES]
+
+
+def _gather_one(monarchy, depth, include_siblings=True):
+    """Level-synchronous upward BFS over father/mother, optionally plus siblings.
 
     Batch-fetches each generation (mirrors GetData.bfs) to stay friendly to
-    Wikidata's rate limits, then fetches the siblings of every gathered ancestor.
-    Reuses data/<M>.json so only missing people are fetched.
+    Wikidata's rate limits, then (when requested) fetches the siblings of every
+    gathered ancestor. Reuses data/<M>.json so only missing people are fetched.
     """
     retriever = DataRetriever(local_file=os.path.join(DATA_DIR, monarchy + ".json"))
     with open(os.path.join(DATA_DIR, "monarch_list.json")) as f:
@@ -86,16 +103,17 @@ def _gather_one(monarchy, depth):
 
     # One lateral level: the siblings of every gathered ancestor (and monarch).
     siblings = set()
-    to_fetch = []
-    for node_id in ancestors:
-        person = retriever.get_person_from_item_id(node_id)
-        if not person:
-            continue
-        for sibling_id in person.get("sibling", []):
-            if sibling_id not in ancestors and sibling_id not in siblings:
-                siblings.add(sibling_id)
-                to_fetch.append(sibling_id)
-    retriever.get_people_from_item_ids(to_fetch)
+    if include_siblings:
+        to_fetch = []
+        for node_id in ancestors:
+            person = retriever.get_person_from_item_id(node_id)
+            if not person:
+                continue
+            for sibling_id in person.get("sibling", []):
+                if sibling_id not in ancestors and sibling_id not in siblings:
+                    siblings.add(sibling_id)
+                    to_fetch.append(sibling_id)
+        retriever.get_people_from_item_ids(to_fetch)
 
     extended = ancestors | siblings
     with open(os.path.join(DATA_DIR, monarchy + "_ancestors.json"), "w") as f:
@@ -111,13 +129,26 @@ def gather_ancestors(monarchies, depth=MAX_ANCESTOR_DEPTH):
         print(f"  {monarchy}: {len(ancestors)} ancestors + {len(siblings)} siblings")
 
 
+def gather_deep_ancestors(monarchies, depth=DEEP_ANCESTOR_DEPTH):
+    """Walk one deep paternal/maternal lineage for the Mongol houses (no siblings).
+
+    Reconnects khanate members to their shared progenitor (Jochi -> Genghis Khan)
+    by fetching the intermediate ancestors the succession BFS skipped.
+    """
+    targets = _deep(monarchies)
+    for monarchy in targets:
+        print(f"Gathering deep ancestors (depth {depth}, no siblings): {monarchy}")
+        ancestors, _ = _gather_one(monarchy, depth, include_siblings=False)
+        print(f"  {monarchy}: {len(ancestors)} ancestors")
+
+
 def combine_ancestors(monarchies):
     """Fold ancestor records into the combined pool and record the per-monarchy sets.
 
     Must run after clean_and_combine (which (re)creates monarchy_data.json) and
     after label_people (which produces <M>_labelled.json including the ancestors).
     """
-    targets = _european(monarchies)
+    targets = list(dict.fromkeys(_european(monarchies) + _deep(monarchies)))
 
     with open(os.path.join(DATA_DIR, "monarchy_data.json")) as f:
         data = json.load(f)
@@ -159,4 +190,5 @@ if __name__ == "__main__":
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     args = sys.argv[1:] or sorted(EUROPEAN_MONARCHIES)
     gather_ancestors(args)
+    gather_deep_ancestors(args)
     combine_ancestors(args)

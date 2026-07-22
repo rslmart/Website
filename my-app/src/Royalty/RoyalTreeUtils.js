@@ -73,6 +73,7 @@ export function convertToChart(
     nodeMonarchyIndex = {},
     successionEdges = [],
     showSuccession = false,
+    memberFlag = null,
 ) {
   const highlightedNodeSet = new Set(highlightedNodes);
   const nodeSet = new Set();
@@ -84,6 +85,10 @@ export function convertToChart(
     // connection points stand out; then succession members, then everyone else.
     const isShared = sharedNodes.has(person.id);
     const isHighlighted = highlightedNodeSet.has(person.id);
+    // A bridge/connector node exists only to link members; de-emphasize it so
+    // the actual members read as the subject. (memberFlag null => treat all as
+    // members, e.g. the single-monarchy view.)
+    const isBridge = memberFlag ? !memberFlag.has(person.id) : false;
     const sex = person["sex or gender"];
     const palette = monarchyColors(nodeMonarchyIndex[person.id] || 0);
     // Create person node
@@ -91,12 +96,14 @@ export function convertToChart(
       ...person,
       type: 'circle',
       size: 80,
+      isBridge,
       label: createLabel(person),
       labelCfg: { position: "bottom" },
       style: {
         fill: sex ? palette[sex] : undefined,
-        stroke: isShared ? SHARED_NODE_COLOR : (isHighlighted ? '#e7e312' : 'black'),
-        opacity: (isShared || isHighlighted) ? 1 : 0.9,
+        stroke: isShared ? SHARED_NODE_COLOR
+            : (isHighlighted ? '#e7e312' : (isBridge ? '#999' : 'black')),
+        opacity: (isShared || isHighlighted) ? 1 : (isBridge ? 0.55 : 0.9),
         lineWidth: 5
       }
     };
@@ -382,52 +389,137 @@ function personListFrom(entries) {
       .sort((a, b) => a.label.localeCompare(b.label));
 }
 
+// Rank tiers, mirroring Ranks.py. Used by the house view to prune members to the
+// important ones. Higher tier = higher rank.
+export const RANK_TIERS = [
+  { tier: 6, name: 'Emperor' },
+  { tier: 5, name: 'King / Monarch' },
+  { tier: 4, name: 'Grand Duke / Archduke / Khan' },
+  { tier: 3, name: 'Duke' },
+  { tier: 2, name: 'Prince / Margrave' },
+  { tier: 1, name: 'Count / Baron' },
+  { tier: 0, name: 'Other' },
+];
+
+// Default house rank filter: Duke and above (plus monarchs, always shown).
+export const DEFAULT_VISIBLE_RANKS = [6, 5, 4, 3];
+
+// Depth used to connect a house's shown members through their common ancestors.
+// Generous because it's bounded by the (already depth-capped) house node pool.
+const HOUSE_CONNECT_DEPTH = 8;
+
+// Given a house's shown members and its node pool, return the members plus the
+// ancestor nodes that connect them (most-recent common ancestors and the chains
+// up to them). Treats each member as its own group and reuses the same
+// closure/frontier/useful-chain machinery as the multi-monarchy bridge, so only
+// genuinely connective ancestors are kept and unrelated twigs are dropped.
+function intraConnect(startIds, pool) {
+  const result = new Set(startIds);
+  if (startIds.length < 2) return result;
+
+  const closures = startIds.map(id => relativeClosure([id], pool, false, HOUSE_CONNECT_DEPTH));
+  const count = {};
+  closures.forEach(set => set.forEach(qid => { count[qid] = (count[qid] || 0) + 1; }));
+  const common = new Set(Object.keys(count).filter(qid => count[qid] >= 2));
+  if (!common.size) return result;
+
+  const frontier = new Set();
+  startIds.forEach(id =>
+      frontierCommon([id], pool, false, HOUSE_CONNECT_DEPTH, common).forEach(qid => frontier.add(qid)));
+
+  closures.forEach(closure =>
+      usefulChainNodes(closure, pool, frontier, false).forEach(qid => result.add(qid)));
+  return result;
+}
+
+// A payload's start members and its lookup pool. Monarchies contribute their
+// baked compact node set; houses contribute the rank-filtered members (monarchs
+// always included) drawn from their member+ancestor pool.
+function payloadStart(payload, visibleRanks) {
+  const pool = { ...(payload.nodes || {}), ...(payload.extendedNodes || {}) };
+  if (payload.type === 'house') {
+    const members = payload.members || {};
+    const monarchSet = new Set(payload.monarchList || []);
+    const startIds = Object.keys(members).filter(qid =>
+        (qid in pool) && (monarchSet.has(qid) || visibleRanks.has(members[qid])));
+    return { isHouse: true, pool, startIds };
+  }
+  return { isHouse: false, pool, startIds: Object.keys(payload.nodes || {}) };
+}
+
 // Merge several monarchy payloads into a single displayable graph. Returns the
 // display `data`, highlight/shared sets, per-node monarchy index (for shading),
 // counts, and search lists. Single-monarchy input reduces to the original
 // compact behavior.
-export function mergeMonarchies(payloads, selected, bridgeOptions = DEFAULT_BRIDGE_OPTIONS) {
+export function mergeMonarchies(
+    payloads, selected, bridgeOptions = DEFAULT_BRIDGE_OPTIONS, rankOptions = {}) {
   const includeSiblings = bridgeOptions.includeSiblings ?? DEFAULT_BRIDGE_OPTIONS.includeSiblings;
   const maxDepth = bridgeOptions.maxDepth ?? DEFAULT_BRIDGE_OPTIONS.maxDepth;
+  const visibleRanks = new Set(rankOptions.visibleRanks ?? DEFAULT_VISIBLE_RANKS);
   const data = {};
   const membership = {};
   const nodeMonarchyIndex = {};
   const highlightedNodes = [];
   const highlightSet = new Set();
+  // People who are actual members (monarchy base nodes / house shown members)
+  // vs. ancestors pulled in only to connect them (bridge/connector nodes).
+  const memberFlag = new Set();
 
-  // 1) Base: each monarchy's compact node set (unchanged behavior).
+  const starts = payloads.map(p => payloadStart(p, visibleRanks));
+
+  // 1) Base: each entity's members. Houses also get their internal connecting
+  // ancestors spliced in so the pruned member set forms one tree.
   payloads.forEach((payload, idx) => {
     const monarchy = selected[idx];
-    Object.entries(payload.nodes || {}).forEach(([qid, person]) => {
+    const { isHouse, pool, startIds } = starts[idx];
+
+    startIds.forEach(qid => {
+      const person = pool[qid];
+      if (!person) return;
       data[qid] = person;
       (membership[qid] = membership[qid] || new Set()).add(monarchy);
       if (!(qid in nodeMonarchyIndex)) nodeMonarchyIndex[qid] = idx;
+      memberFlag.add(qid);
     });
+
     (payload.monarchList || []).forEach(qid => {
       if (!highlightSet.has(qid)) {
         highlightSet.add(qid);
         highlightedNodes.push(qid);
       }
     });
+
+    if (isHouse) {
+      intraConnect(startIds, pool).forEach(qid => {
+        if (qid in data) return;
+        const person = pool[qid];
+        if (!person) return;
+        data[qid] = person;
+        if (!(qid in nodeMonarchyIndex)) nodeMonarchyIndex[qid] = idx;
+      });
+    }
   });
 
-  const memberCounts = payloads.map(p => Object.keys(p.nodes || {}).length);
+  // Member counts: houses report their shown-member count (varies with the rank
+  // filter); monarchies report their compact node set as before.
+  const memberCounts = starts.map((s, idx) =>
+      s.isHouse ? s.startIds.length : Object.keys(payloads[idx].nodes || {}).length);
   const sharedNodes = new Set(
       Object.keys(membership).filter(qid => membership[qid].size > 1)
   );
 
-  // 2) Multi-monarchy: bridge the trees through their most-recent common
-  // ancestors only. We look up to `maxDepth` generations (optionally along
-  // siblings), find the shared ancestors, then keep just the chains connecting
-  // each monarchy's members up to the *first* shared ancestor reached - not the
-  // entire shared pedigree above it, which would swamp the view.
+  // 2) Multiple entities: bridge them through their most-recent common ancestors.
+  // We look up to `maxDepth` generations (optionally along siblings), find the
+  // shared ancestors, then keep just the chains connecting each entity's members
+  // up to the *first* shared ancestor reached - not the entire shared pedigree
+  // above it, which would swamp the view.
   if (selected.length > 1) {
-    const pools = payloads.map(p => ({ ...(p.nodes || {}), ...(p.extendedNodes || {}) }));
+    const pools = starts.map(s => s.pool);
     const allPool = {};
     pools.forEach(pool => Object.assign(allPool, pool));
 
-    const closures = payloads.map((p, idx) =>
-        relativeClosure(Object.keys(p.nodes || {}), pools[idx], includeSiblings, maxDepth));
+    const closures = starts.map(s =>
+        relativeClosure(s.startIds, s.pool, includeSiblings, maxDepth));
 
     const closureCount = {};
     closures.forEach(set => set.forEach(qid => {
@@ -439,8 +531,8 @@ export function mergeMonarchies(payloads, selected, bridgeOptions = DEFAULT_BRID
 
     if (commonNodes.size > 0) {
       const frontier = new Set();
-      payloads.forEach((p, idx) => {
-        frontierCommon(Object.keys(p.nodes || {}), pools[idx], includeSiblings, maxDepth, commonNodes)
+      starts.forEach(s => {
+        frontierCommon(s.startIds, s.pool, includeSiblings, maxDepth, commonNodes)
             .forEach(qid => frontier.add(qid));
       });
 
@@ -458,13 +550,15 @@ export function mergeMonarchies(payloads, selected, bridgeOptions = DEFAULT_BRID
     }
   }
 
-  // Succession: monarchList is already in succession order (built by walking
-  // Wikidata predecessor/successor chains). For each monarchy we keep the
-  // monarchs present in the display and emit an edge between each consecutive
-  // pair - the "crown passed from X to Y" transfer, independent of bloodline.
+  // Succession: monarchList is in succession order for real monarchies (built by
+  // walking Wikidata predecessor/successor chains). For each we keep the monarchs
+  // present in the display and emit an edge between each consecutive pair - the
+  // "crown passed from X to Y" transfer. Houses have no single succession, so
+  // they are skipped.
   const monarchOrder = [];
   const successionEdges = [];
   payloads.forEach((payload, idx) => {
+    if (starts[idx].isHouse) return;
     const ordered = (payload.monarchList || [])
         .filter(qid => qid in data)
         .map(qid => ({ id: qid, label: data[qid].label }));
@@ -496,6 +590,7 @@ export function mergeMonarchies(payloads, selected, bridgeOptions = DEFAULT_BRID
     monarchOrder,
     successionEdges,
     membership: membershipOut,
+    memberFlag,
     peopleList: personListFrom(Object.entries(data)),
     sharedList: personListFrom(Array.from(sharedNodes).map(qid => [qid, data[qid]])),
   };
