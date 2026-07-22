@@ -28,7 +28,7 @@
 
 .filter-panel-container {
     position: absolute;
-    top: 20px;
+    top: 72px;
     left: 20px;
     z-index: 1000;
     pointer-events: auto;
@@ -90,11 +90,13 @@
 }
 
 .control-panel {
-    background: white; /* Critical for visibility */
+    background: var(--color-surface); /* Critical for visibility */
     padding: 15px;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-panel);
     min-width: 190px;
+    max-height: calc(100vh - 92px);
+    overflow-y: auto;
     position: relative; /* Ensures child elements position correctly */
     z-index: 1001; /* Higher than the graphs z-index */
 }

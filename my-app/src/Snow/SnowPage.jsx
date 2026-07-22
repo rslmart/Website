@@ -5,6 +5,7 @@ import { ResponsiveContainer, LineChart, CartesianGrid, BarChart, Bar, XAxis, YA
 // https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt (the DJF value
 // labelled year Y covers the winter that starts in Y-1).
 import oni from './Data/oni.json';
+import HomeButton from '../components/HomeButton';
 
 /*
 TODO:
@@ -410,12 +411,14 @@ class Snow extends Component {
             top: 0,
             left: 0,
             right: 0,
-            backgroundColor: '#f0f0f0',
-            padding: '10px 20px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            zIndex: 1000,
+            backgroundColor: 'var(--color-surface)',
+            padding: '10px 20px 10px 72px',
+            boxShadow: 'var(--shadow-sm)',
             display: 'flex',
             justifyContent: 'space-between', // Changed to space-between
-            alignItems: 'center'
+            alignItems: 'center',
+            gap: '16px'
         };
 
         const titleStyle = {
@@ -473,6 +476,7 @@ class Snow extends Component {
 
         return (
             <div>
+                <HomeButton />
                 <div style={titleBarStyle}>
                     <div style={titleStyle}>
                         <span style={brandStyle}>WA Snowfall</span>

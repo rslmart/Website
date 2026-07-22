@@ -9,6 +9,7 @@ import SettingsPanel from "./settings-panel";
 import StormInfo from "./storm-info";
 import SourcesPanel from "./sources-panel";
 import HelpPanel from "./help-panel";
+import HomeButton from "../components/HomeButton";
 
 const HELP_SEEN_KEY = "hurricaneHelpSeen";
 
@@ -598,6 +599,7 @@ class Hurricane extends Component {
     render() {
         return (
             <div style={{width: "100vw", height: "100vh"}} ref={ (divElement) => { this.divElement = divElement } }>
+                <HomeButton />
                 <DeckGL
                     viewState={this.state.viewState}
                     controller={true}

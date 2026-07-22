@@ -5,6 +5,7 @@ import FilterPanel from "./filter-panel";
 import SearchPanel from "./SearchPanel";
 import NodeToolTip from "./NodeToolTip";
 import HelpPanel from "./help-panel";
+import HomeButton from "../components/HomeButton";
 import { convertToChart, mergeMonarchies, DEFAULT_BRIDGE_OPTIONS, DEFAULT_VISIBLE_RANKS } from './RoyalTreeUtils';
 import './RoyalTreeStyle.css';
 
@@ -192,7 +193,19 @@ class RoyalTree extends Component {
             'border-color': 'data(borderColor)',
             'border-width': 5,
             'background-image': 'data(image)',
-            'background-fit': 'cover',
+            // Draw the portrait smaller than the node and centered so the node's
+            // fill (gender/monarchy color) stays visible as a ring around it.
+            'background-fit': 'none',
+            'background-width': '85%',
+            'background-height': '85%',
+            'background-position-x': '50%',
+            'background-position-y': '50%',
+            // Portraits are served from makoa.link without CORS headers. Cytoscape
+            // draws node images to a canvas and, by default, requests them with
+            // crossorigin="anonymous", which makes non-CORS images fail to render.
+            // Loading without the crossorigin attribute lets them draw (the canvas
+            // is tainted, but we never read its pixels back).
+            'background-image-crossorigin': 'null',
             'opacity': 'data(opacity)',
             'padding': '10px'
           }
@@ -618,6 +631,7 @@ class RoyalTree extends Component {
   render() {
     return (
         <div className="royal-tree-container" style={{ position: 'relative' }}>
+          <HomeButton />
           <div
               ref={this.containerRef}
               className="cytoscape-container"

@@ -1,11 +1,13 @@
 import React from "react";
 import styles from './Bio.module.css';
 import { Link } from "react-router-dom";
+import HomeButton from "../components/HomeButton";
 
 function Bio() {
 
     return (
         <div className={styles.container}>
+            <HomeButton />
             <header className={styles.header}>
                 <h1 className={styles.title}>Russell Makoa Martin</h1>
                 <div className={styles.contactInfo}>

@@ -19,22 +19,31 @@ function FilterPanel(props) {
         top: 0,
         right: 0,
         maxWidth: '320px',
-        backgroundColor: '#fff',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
-        padding: '6px 12px',
+        maxHeight: 'calc(100vh - 40px)',
+        overflowY: 'auto',
+        backgroundColor: 'var(--color-surface)',
+        boxShadow: 'var(--shadow-panel)',
+        borderRadius: 'var(--radius)',
+        padding: '10px 14px',
         margin: '20px',
         fontSize: '13px',
         lineHeight: 2,
-        color: '#6b6b76',
+        color: 'var(--color-text-muted)',
         outline: 'none',
         zIndex: 9999,
     };
 
     return (filterPanelOpen ?
                 <div style={controlPanelStyles}>
-                    <div style={{height: "25px", marginBottom: 0, paddingBottom: 0}}>
-                        <h3 style={{float: "left", marginTop: 0, marginBottom: 0}}>Hurdat Hurricane Data</h3>
-                        <button onClick={evt => toggleFilterPanel(evt)} style={{float: "right", }}>-</button>
+                    <div style={{display: "flex", justifyContent: "space-between", alignItems: "center"}}>
+                        <h3 style={{margin: 0, fontSize: 16, color: "var(--color-text)"}}>Hurricane Data</h3>
+                        <button
+                            onClick={evt => toggleFilterPanel(evt)}
+                            aria-label="Collapse panel"
+                            style={{border: "none", background: "none", fontSize: 20, lineHeight: 1, cursor: "pointer", color: "var(--color-text-muted)"}}
+                        >
+                            −
+                        </button>
                     </div>
                     <div>
                         <div key={'plotType'} className="select" style={{marginTop: 10}}>
@@ -231,7 +240,26 @@ function FilterPanel(props) {
                         }
                     </div>
                 </div> :
-                <button onClick={evt => toggleFilterPanel(evt)} style={{position: "absolute", top: 20, right: 20}}>+</button>
+                <button
+                    onClick={evt => toggleFilterPanel(evt)}
+                    style={{
+                        position: "absolute",
+                        top: 20,
+                        right: 20,
+                        border: "none",
+                        backgroundColor: "var(--color-surface)",
+                        boxShadow: "var(--shadow-panel)",
+                        borderRadius: "var(--radius-sm)",
+                        padding: "8px 12px",
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        color: "var(--color-text)",
+                        cursor: "pointer",
+                        zIndex: 9999,
+                    }}
+                >
+                    Filters +
+                </button>
     );
 }
 

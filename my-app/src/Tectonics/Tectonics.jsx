@@ -4,6 +4,7 @@ import {GeoJsonLayer, LineLayer} from '@deck.gl/layers';
 import {Map} from 'react-map-gl';
 import LegendPanel from './LegendPanel';
 import InfoPanel from './InfoPanel';
+import HomeButton from '../components/HomeButton';
 import {
     CATEGORIES,
     STEP_CLASS_LABEL,
@@ -235,6 +236,7 @@ function Tectonics() {
 
     return (
         <div style={{width: '100vw', height: '100vh'}}>
+            <HomeButton />
             <DeckGL
                 viewState={viewState}
                 controller={true}

@@ -5,13 +5,16 @@ const panelStyles = {
     top: 0,
     left: 0,
     maxWidth: '280px',
-    backgroundColor: '#fff',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
-    padding: '6px 12px',
-    margin: '20px',
+    maxHeight: 'calc(100vh - 92px)',
+    overflowY: 'auto',
+    backgroundColor: 'var(--color-surface)',
+    boxShadow: 'var(--shadow-panel)',
+    borderRadius: 'var(--radius)',
+    padding: '10px 14px',
+    margin: '72px 20px 20px',
     fontSize: '13px',
     lineHeight: 1.8,
-    color: '#4a4a55',
+    color: 'var(--color-text-muted)',
     outline: 'none',
     zIndex: 9999,
 };
@@ -59,7 +62,24 @@ function LegendPanel(props) {
 
     if (!open) {
         return (
-            <button onClick={togglePanel} style={{position: 'absolute', top: 20, left: 20, zIndex: 9999}}>
+            <button
+                onClick={togglePanel}
+                style={{
+                    position: 'absolute',
+                    top: 72,
+                    left: 20,
+                    zIndex: 9999,
+                    border: 'none',
+                    backgroundColor: 'var(--color-surface)',
+                    boxShadow: 'var(--shadow-panel)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '8px 12px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    color: 'var(--color-text)',
+                    cursor: 'pointer',
+                }}
+            >
                 Legend +
             </button>
         );
@@ -67,9 +87,15 @@ function LegendPanel(props) {
 
     return (
         <div style={panelStyles}>
-            <div style={{height: '25px'}}>
-                <h3 style={{float: 'left', marginTop: 0, marginBottom: 0}}>Tectonic Plates</h3>
-                <button onClick={togglePanel} style={{float: 'right'}}>-</button>
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                <h3 style={{margin: 0, fontSize: 16, color: 'var(--color-text)'}}>Tectonic Plates</h3>
+                <button
+                    onClick={togglePanel}
+                    aria-label="Collapse panel"
+                    style={{border: 'none', background: 'none', fontSize: 20, lineHeight: 1, cursor: 'pointer', color: 'var(--color-text-muted)'}}
+                >
+                    −
+                </button>
             </div>
 
             <div style={{marginTop: 6}}>
@@ -96,7 +122,7 @@ function LegendPanel(props) {
                 </Checkbox>
             </div>
 
-            <div style={{marginTop: 8, fontSize: '11px', color: '#9a9aa5'}}>
+            <div style={{marginTop: 8, fontSize: '11px', color: 'var(--color-text-faint)'}}>
                 Data: Bird (2002) PB2002 model
             </div>
         </div>
