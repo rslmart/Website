@@ -1,18 +1,73 @@
 import React, { Component } from 'react';
-import snowFallData from './Data/pass_snowfall_data.json';
 import { ResponsiveContainer, LineChart, CartesianGrid, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, Line } from 'recharts';
+// NOAA Oceanic Nino Index (ONI) DJF anomaly per season start-year. Small and
+// only changes once a year, so it is imported at build time. Source:
+// https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt (the DJF value
+// labelled year Y covers the winter that starts in Y-1).
+import oni from './Data/oni.json';
 
 /*
 TODO:
-Add "average" season
 Add links
     Ski resort
-    WS_DOT webcams
-Create lambda that updates data daily (in season)
-    Runs python script that makes request, then uploads to S3
+    WSDOT webcams
 Add forecast?
+
+Done:
+- Average season line (per-calendar-day mean across all seasons)
+- La Nina / El Nino average lines (ONI-classified, per-calendar-day mean)
+- Daily in-season update: see src/Snow/lambda (Lambda + EventBridge -> S3 +
+  CloudFront invalidation). The page fetches its data at runtime from
+  public/snow/pass_snowfall_data.json.
  */
 
+// Runtime data location (deployed under public/, overwritten daily by the
+// Lambda in src/Snow/lambda). Mirrors the Royalty page's fetch pattern.
+const SNOW_DATA_URL = process.env.PUBLIC_URL + '/snow/pass_snowfall_data.json';
+
+// Pseudo-season keys for the computed baselines.
+const AVERAGE_SEASON = 'Average';
+const LA_NINA_AVG = 'La Nina avg';
+const EL_NINO_AVG = 'El Nino avg';
+
+// ENSO classification from an ONI DJF anomaly (standard +/-0.5 thresholds).
+const ensoPhase = (anom) => {
+    if (anom === undefined || anom === null) return null;
+    if (anom >= 0.5) return 'El Nino';
+    if (anom <= -0.5) return 'La Nina';
+    return 'Neutral';
+}
+
+const ensoStrength = (anom) => {
+    const a = Math.abs(anom);
+    if (a < 0.5) return '';
+    if (a < 1.0) return 'weak';
+    if (a < 1.5) return 'moderate';
+    if (a < 2.0) return 'strong';
+    return 'very strong';
+}
+
+// Signed ONI anomaly value, e.g. "+1.50" or "-0.37".
+const formatOni = (anom) => (anom === undefined || anom === null)
+    ? '?'
+    : `${anom > 0 ? '+' : ''}${anom.toFixed(2)}`;
+
+// Human-readable label for a season including the ONI number, e.g.
+// "La Nina, moderate (ONI -1.31)" or "Neutral (ONI -0.37)".
+const describeEnso = (season) => {
+    const anom = oni[season];
+    const phase = ensoPhase(anom);
+    if (!phase) return 'Unknown';
+    if (phase === 'Neutral') return `Neutral (ONI ${formatOni(anom)})`;
+    return `${phase}, ${ensoStrength(anom)} (ONI ${formatOni(anom)})`;
+}
+
+const ensoColors = {
+    'La Nina': { bg: '#e3f0fb', fg: '#1f6fb2' },
+    'El Nino': { bg: '#fbe6e6', fg: '#b5322e' },
+    'Neutral': { bg: '#ececec', fg: '#555555' },
+    'Unknown': { bg: '#ececec', fg: '#555555' },
+}
 
 const passNames = {
     'Blewett_Pass_US-97': 'Blewett Pass US-97',
@@ -50,32 +105,35 @@ function customDateSort(a, b) {
     return aDayNum - bDayNum;
 }
 
-const getDateArray = () => {
-    return [
-        Array.apply(null, Array(31)).map(Number.prototype.valueOf,0),
-        Array.apply(null, Array(30)).map(Number.prototype.valueOf,0),
-        Array.apply(null, Array(31)).map(Number.prototype.valueOf,0),
-        Array.apply(null, Array(31)).map(Number.prototype.valueOf,0),
-        Array.apply(null, Array(28)).map(Number.prototype.valueOf,0),
-        Array.apply(null, Array(31)).map(Number.prototype.valueOf,0),
-        Array.apply(null, Array(30)).map(Number.prototype.valueOf,0),
-        Array.apply(null, Array(31)).map(Number.prototype.valueOf,0)
-    ];
-}
-
 const convertData = (passName, data) => {
     const chartData = {}
-    const averageData = {}
     let passData = data[passName];
     const highestPerYear_accumulatedSnowFall = {}
     const highestPerYear_totalSnowFall = {}
+
+    // Per-calendar-day (`${day}-${month}`) accumulators for the baseline
+    // averages: one bucket across every season, plus ONI-classified La Nina
+    // and El Nino buckets. Each is summed here and divided into a mean below.
+    const buckets = {
+        [AVERAGE_SEASON]: { sum: {}, count: {} },
+        [LA_NINA_AVG]: { sum: {}, count: {} },
+        [EL_NINO_AVG]: { sum: {}, count: {} },
+    }
+    const addToBucket = (key, name, daily) => {
+        const b = buckets[key]
+        if (!b.sum[name]) {
+            b.sum[name] = { newDailySnowFall: 0, totalSnowFall: 0, accumulatedSnowFall: 0 }
+            b.count[name] = 0
+        }
+        b.sum[name].newDailySnowFall += daily['newDailySnowFall']
+        b.sum[name].totalSnowFall += daily['totalSnowFall']
+        b.sum[name].accumulatedSnowFall += daily['accumulatedSnowFall']
+        b.count[name] += 1
+    }
+
     Object.entries(passData).forEach(([season, seasonData]) => {
         chartData[season] = []
-        averageData[season] = {
-            "newDailySnowFall": getDateArray(),
-            "totalSnowFall": getDateArray(),
-            "accumulatedSnowFall": getDateArray()
-        }
+        const phase = ensoPhase(oni[season])
         const highest_accumulatedSnowFall = {
             "season": '',
             "month": '',
@@ -92,8 +150,9 @@ const convertData = (passName, data) => {
             const monthData = seasonData.find(obj => obj.month === month)
             if (monthData && "dailySnowFall" in monthData) {
                 monthData.dailySnowFall.forEach(dailySnow => {
+                    const name = `${dailySnow['day']}-${month}`
                     chartData[season].push({
-                        'name': `${dailySnow['day']}-${month}`,
+                        'name': name,
                         'newDailySnowFall': dailySnow['newDailySnowFall'],
                         'totalSnowFall': dailySnow['totalSnowFall'],
                         'accumulatedSnowFall': dailySnow['accumulatedSnowFall'],
@@ -103,32 +162,35 @@ const convertData = (passName, data) => {
                         highest_accumulatedSnowFall["day"] = dailySnow["day"]
                         highest_accumulatedSnowFall["month"] = month
                         highest_accumulatedSnowFall["season"] = season
-
                     }
                     if (dailySnow["totalSnowFall"] > highest_totalSnowFall["amount"]) {
                         highest_totalSnowFall["amount"] = dailySnow["totalSnowFall"]
                         highest_totalSnowFall["day"] = dailySnow["day"]
                         highest_totalSnowFall["month"] = month
                         highest_totalSnowFall["season"] = season
-
                     }
-                    const index = dailySnow["day"] - 1;
-                    if (month === 'Feb' && index === 28) {
-                        averageData[season]["newDailySnowFall"][27] = averageData[season]["newDailySnowFall"][27] + dailySnow["newDailySnowFall"];
-                        averageData[season]["totalSnowFall"][27] = averageData[season]["newDailySnowFall"][27] + dailySnow["totalSnowFall"];
-                        averageData[season]["accumulatedSnowFall"][27] = averageData[season]["newDailySnowFall"][27] + dailySnow["accumulatedSnowFall"];
-                    } else {
-                        averageData[season]["newDailySnowFall"][index] = averageData["newDailySnowFall"];
-                        averageData[season]["totalSnowFall"][index] = averageData["totalSnowFall"];
-                        averageData[season]["accumulatedSnowFall"][index] = averageData["accumulatedSnowFall"];
-                    }
+                    addToBucket(AVERAGE_SEASON, name, dailySnow)
+                    if (phase === 'La Nina') addToBucket(LA_NINA_AVG, name, dailySnow)
+                    if (phase === 'El Nino') addToBucket(EL_NINO_AVG, name, dailySnow)
                 })
             }
         })
         highestPerYear_accumulatedSnowFall[season] = highest_accumulatedSnowFall
         highestPerYear_totalSnowFall[season] = highest_totalSnowFall
     })
-    return [chartData, averageData, highestPerYear_accumulatedSnowFall, highestPerYear_totalSnowFall]
+
+    // Build each baseline pseudo-season from its per-day accumulators.
+    const bucketToSeries = (bucket) => Object.keys(bucket.sum).map(name => ({
+        name,
+        newDailySnowFall: bucket.sum[name].newDailySnowFall / bucket.count[name],
+        totalSnowFall: bucket.sum[name].totalSnowFall / bucket.count[name],
+        accumulatedSnowFall: bucket.sum[name].accumulatedSnowFall / bucket.count[name],
+    }))
+    chartData[AVERAGE_SEASON] = bucketToSeries(buckets[AVERAGE_SEASON])
+    chartData[LA_NINA_AVG] = bucketToSeries(buckets[LA_NINA_AVG])
+    chartData[EL_NINO_AVG] = bucketToSeries(buckets[EL_NINO_AVG])
+
+    return [chartData, highestPerYear_accumulatedSnowFall, highestPerYear_totalSnowFall]
 }
 
 class Snow extends Component {
@@ -136,13 +198,45 @@ class Snow extends Component {
         super(props);
 
         this.state = {
+            snowFallData: null,
             passName: "Stevens_Pass_US-2",
-            currentSeason: "2024",
+            currentSeason: "",
             highestSeason: "",
             lowestSeason: "",
             data: [],
+            hiddenSeries: {},
         };
     }
+
+    // Toggle a series (by its legend name) on/off across all charts.
+    toggleSeries = (name) => {
+        if (name === undefined || name === null) return;
+        this.setState(prev => {
+            const next = { ...prev.hiddenSeries };
+            if (next[name]) {
+                delete next[name];
+            } else {
+                next[name] = true;
+            }
+            return { hiddenSeries: next };
+        });
+    }
+
+    handleLegendClick = (entry) => {
+        this.toggleSeries(entry && (entry.value ?? entry.dataKey));
+    }
+
+    legendFormatter = (value) => (
+        <span style={{
+            color: this.state.hiddenSeries[value] ? '#bbb' : '#333',
+            textDecoration: this.state.hiddenSeries[value] ? 'line-through' : 'none',
+            cursor: 'pointer'
+        }}>
+            {value}
+        </span>
+    )
+
+    tooltipFormatter = (value) => (typeof value === 'number' ? value.toFixed(1) : value)
 
     onChange = async (evt) => {
         if (evt.target.name === "passNameSelect") {
@@ -154,18 +248,28 @@ class Snow extends Component {
     }
 
     componentDidMount() {
-        this.changePass(this.state.passName, this.state.currentSeason);
+        fetch(SNOW_DATA_URL)
+            .then(res => res.json())
+            .then(snowFallData => {
+                const passName = this.state.passName;
+                const latestSeason = Object.keys(snowFallData[passName]).sort().pop();
+                this.setState({ snowFallData }, () => {
+                    this.changePass(passName, latestSeason);
+                });
+            })
+            .catch(err => console.error('Failed to load snowfall data', err));
     }
 
     changePass(passName, currentSeason) {
-        const [chartData, averageData, highestPerYear_accumulatedSnowFall, highestPerYear_totalSnowFall]
+        const { snowFallData } = this.state;
+        const [chartData, highestPerYear_accumulatedSnowFall]
             = convertData(passName, snowFallData)
 
-        // Find highest season
-        // Find lowest season
-        let highest_accumulatedSnowFall = highestPerYear_accumulatedSnowFall["2024"]
-        let lowest_accumulatedSnowFall = highestPerYear_accumulatedSnowFall["2024"]
-        Object.entries(highestPerYear_accumulatedSnowFall).forEach(([season, seasonData]) => {
+        // Seed highest/lowest from whatever seasons exist (no hardcoded year).
+        const realSeasons = Object.keys(highestPerYear_accumulatedSnowFall);
+        let highest_accumulatedSnowFall = highestPerYear_accumulatedSnowFall[realSeasons[0]]
+        let lowest_accumulatedSnowFall = highestPerYear_accumulatedSnowFall[realSeasons[0]]
+        Object.values(highestPerYear_accumulatedSnowFall).forEach((seasonData) => {
             if (seasonData["amount"] > highest_accumulatedSnowFall["amount"]) {
                 highest_accumulatedSnowFall = seasonData;
             }
@@ -173,17 +277,24 @@ class Snow extends Component {
                 lowest_accumulatedSnowFall = seasonData;
             }
         })
-        // Find latest season
-        // Merge chartData for all 3 together
+
+        // Seed one row per real calendar day (day 1..N), then merge each series.
         const finalData = [];
         months.forEach((month, month_number) => {
-            for (let i = 0; i <= days_in_a_month[month_number]; i++) {
+            for (let i = 1; i <= days_in_a_month[month_number]; i++) {
                 finalData.push({
                     'name': `${i}-${month}`,
                 })
             }
         })
-        const seasons = [currentSeason, highest_accumulatedSnowFall["season"], lowest_accumulatedSnowFall["season"]]
+        const seasons = [
+            currentSeason,
+            highest_accumulatedSnowFall["season"],
+            lowest_accumulatedSnowFall["season"],
+            AVERAGE_SEASON,
+            LA_NINA_AVG,
+            EL_NINO_AVG,
+        ]
         seasons.forEach(season => {
             chartData[season].forEach((dailySnow) => {
                 const matching = finalData.find(obj => obj.name === dailySnow.name);
@@ -234,14 +345,15 @@ class Snow extends Component {
                             }}
                         />
                         <YAxis label={{ value: 'Inches', angle: -90, dx: -15}} />
-                        <Tooltip />
-                        <Legend />
+                        <Tooltip formatter={this.tooltipFormatter} />
+                        <Legend onClick={this.handleLegendClick} formatter={this.legendFormatter} />
                         <Line
                             dot={false}
                             connectNulls={true}
                             dataKey={`${this.state.currentSeason}${dataKey}`}
                             name={this.state.currentSeason}
                             stroke={"#8884d8"}
+                            hide={!!this.state.hiddenSeries[this.state.currentSeason]}
                         />
                         <Line
                             dot={false}
@@ -249,6 +361,7 @@ class Snow extends Component {
                             dataKey={`${this.state.highestSeason}${dataKey}`}
                             name={this.state.highestSeason}
                             stroke={"#82ca9d"}
+                            hide={!!this.state.hiddenSeries[this.state.highestSeason]}
                         />
                         <Line
                             dot={false}
@@ -256,6 +369,34 @@ class Snow extends Component {
                             dataKey={`${this.state.lowestSeason}${dataKey}`}
                             name={this.state.lowestSeason}
                             stroke={"#ff8042"}
+                            hide={!!this.state.hiddenSeries[this.state.lowestSeason]}
+                        />
+                        <Line
+                            dot={false}
+                            connectNulls={true}
+                            dataKey={`${AVERAGE_SEASON}${dataKey}`}
+                            name={AVERAGE_SEASON}
+                            stroke={"#555555"}
+                            strokeDasharray="5 5"
+                            hide={!!this.state.hiddenSeries[AVERAGE_SEASON]}
+                        />
+                        <Line
+                            dot={false}
+                            connectNulls={true}
+                            dataKey={`${LA_NINA_AVG}${dataKey}`}
+                            name={LA_NINA_AVG}
+                            stroke={"#1f6fb2"}
+                            strokeDasharray="6 3"
+                            hide={!!this.state.hiddenSeries[LA_NINA_AVG]}
+                        />
+                        <Line
+                            dot={false}
+                            connectNulls={true}
+                            dataKey={`${EL_NINO_AVG}${dataKey}`}
+                            name={EL_NINO_AVG}
+                            stroke={"#b5322e"}
+                            strokeDasharray="6 3"
+                            hide={!!this.state.hiddenSeries[EL_NINO_AVG]}
                         />
                     </LineChart>
                 </ResponsiveContainer>
@@ -283,6 +424,20 @@ class Snow extends Component {
             color: '#333'
         };
 
+        const brandStyle = {
+            display: 'block',
+            fontSize: '0.9rem',
+            fontWeight: 'normal',
+            color: '#666'
+        };
+
+        const ensoBadgeContainerStyle = {
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '2px'
+        };
+
         const selectContainerStyle = {
             display: 'flex',
             flexDirection: 'column',
@@ -297,18 +452,60 @@ class Snow extends Component {
             backgroundColor: 'white'
         };
 
+        if (!this.state.snowFallData) {
+            return (
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    height: '100vh',
+                    color: '#666'
+                }}>
+                    Loading WA Snowfall data...
+                </div>
+            );
+        }
+
+        // Current ENSO status = the most recent season's ONI classification.
+        const latestSeason = Object.keys(this.state.snowFallData[this.state.passName]).sort().pop();
+        const currentEnsoPhase = ensoPhase(oni[latestSeason]) || 'Unknown';
+        const currentEnsoColor = ensoColors[currentEnsoPhase] || ensoColors['Unknown'];
+
         return (
             <div>
                 <div style={titleBarStyle}>
-                    <div style={titleStyle}>{passNames[this.state.passName]}</div>
+                    <div style={titleStyle}>
+                        <span style={brandStyle}>WA Snowfall</span>
+                        {passNames[this.state.passName]}
+                        <span style={brandStyle}>
+                            {this.state.currentSeason} season: {describeEnso(this.state.currentSeason)}
+                        </span>
+                    </div>
+                    <div style={ensoBadgeContainerStyle}>
+                        <span style={{ fontSize: '0.75rem', color: '#666' }}>Current ENSO status</span>
+                        <span style={{
+                            padding: '4px 12px',
+                            borderRadius: '12px',
+                            fontWeight: 'bold',
+                            backgroundColor: currentEnsoColor.bg,
+                            color: currentEnsoColor.fg
+                        }}>
+                            {describeEnso(latestSeason)}
+                        </span>
+                        <span style={{ fontSize: '0.7rem', color: '#999' }}>
+                            {latestSeason}-{Number(latestSeason) + 1} winter
+                        </span>
+                    </div>
                     <div style={selectContainerStyle}>
                         <select style={selectStyle} name="passNameSelect" value={this.state.passName} onChange={evt => this.onChange(evt)}>
                             {Object.keys(passNames).map(name =>
                                 <option key={name} value={name}>{passNames[name]}</option>)}
                         </select>
                         <select style={selectStyle} name="seasonSelect" value={this.state.currentSeason} onChange={evt => this.onChange(evt)}>
-                            {Object.keys(snowFallData[this.state.passName]).map(season =>
-                                <option key={season} value={season}>{season}</option>)}
+                            {Object.keys(this.state.snowFallData[this.state.passName]).map(season =>
+                                <option key={season} value={season}>
+                                    {season} - {ensoPhase(oni[season]) || '?'} ({formatOni(oni[season])})
+                                </option>)}
                         </select>
                     </div>
                 </div>
@@ -349,25 +546,35 @@ class Snow extends Component {
                                         }}
                                     />
                                     <YAxis label={{ value: 'Inches', angle: -90, dx: -15}} />
-                                    <Tooltip />
-                                    <Legend />
+                                    <Tooltip formatter={this.tooltipFormatter} />
+                                    <Legend onClick={this.handleLegendClick} formatter={this.legendFormatter} />
                                     <Bar
                                         dataKey={`${this.state.currentSeason}newDailySnowFall`}
                                         name={this.state.currentSeason}
                                         fill="#8884d8"
                                         stroke="#8884d8"
+                                        hide={!!this.state.hiddenSeries[this.state.currentSeason]}
                                     />
                                     <Bar
                                         dataKey={`${this.state.highestSeason}newDailySnowFall`}
                                         name={this.state.highestSeason}
                                         fill="#82ca9d"
                                         stroke="#82ca9d"
+                                        hide={!!this.state.hiddenSeries[this.state.highestSeason]}
                                     />
                                     <Bar
                                         dataKey={`${this.state.lowestSeason}newDailySnowFall`}
                                         name={this.state.lowestSeason}
                                         fill="#ff8042"
                                         stroke="#ff8042"
+                                        hide={!!this.state.hiddenSeries[this.state.lowestSeason]}
+                                    />
+                                    <Bar
+                                        dataKey={`${AVERAGE_SEASON}newDailySnowFall`}
+                                        name={AVERAGE_SEASON}
+                                        fill="#555555"
+                                        stroke="#555555"
+                                        hide={!!this.state.hiddenSeries[AVERAGE_SEASON]}
                                     />
                                 </BarChart>
                             </ResponsiveContainer>

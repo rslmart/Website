@@ -36,8 +36,9 @@ class DataRetriever:
         to_retrieve.append(item_id)
     retrieved_item_data = utils.get_wikidata_data_for_list(to_retrieve)
     for item_id in to_retrieve:
-
-      item_data = retrieved_item_data[item_id]
+      # An item can be missing if the API dropped/rate-limited it; degrade to an
+      # empty record rather than crashing the whole pipeline.
+      item_data = retrieved_item_data.get(item_id)
       person = {}
       if item_data:
         person["id"] = item_data["id"]
@@ -50,10 +51,17 @@ class DataRetriever:
             try:
               p = PROPERTIES[property_id]
               match property_id:
-                case "P69" | "P106" | "P27" | "P40" | "P26" | "P451" | "P1412" | "P3373" | "P140" | "P23478":  # time period, noble title, religion, sibling, "languages spoken, written or signed", child, spouse, unmarried partner, educated at, occupation, country of citizenship, position held
+                # List-valued ID claims: educated at (P69), occupation (P106),
+                # country of citizenship (P27), child (P40), spouse (P26),
+                # unmarried partner (P451), languages (P1412), sibling (P3373),
+                # religion or worldview (P140).
+                case "P69" | "P106" | "P27" | "P40" | "P26" | "P451" | "P1412" | "P3373" | "P140":
                   person[p] = [claim["mainsnak"]["datavalue"]["value"]["id"] for claim in
                                claim_list]
-                case "P22" | "P25" | "P19" | "P20" | "P119" | "P53" | "P509" | "P21":  # sex or gender, cause of death, family, father, mother, place of birth, place of death, place of burial
+                # Single-valued ID claims: father (P22), mother (P25),
+                # place of birth (P19), place of death (P20), place of burial (P119),
+                # family (P53), cause of death (P509), sex or gender (P21).
+                case "P22" | "P25" | "P19" | "P20" | "P119" | "P53" | "P509" | "P21":
                   person[p] = claim_list[0]["mainsnak"]["datavalue"]["value"]["id"]
                 case "P18" | "P109" | "P1442":  # image, signature, image of grave
                   person[p] = [claim["mainsnak"]["datavalue"]["value"] for claim in claim_list]
@@ -219,6 +227,12 @@ PROPERTIES = {
   "P2348": "time period",
   "P580": "start time",
   "P582": "end time",
+  # "from"/"to" intentionally unify two different Wikidata predecessor/successor
+  # relations so the succession walk in get_monarch_list() can follow a chain
+  # regardless of which one a given entity uses:
+  #   from <- replaces (P1365) and follows (P155)
+  #   to   <- replaced by (P1366) and followed by (P156)
+  # Do not split these apart without updating get_monarch_list().
   "P1365": "from",
   "P1366": "to",
   "P1534": "end cause",
@@ -276,49 +290,69 @@ def get_dict_of_properties():
   utils.saveData(properties, "properties")
 
 
-def bfs(start_id, target_id, data_retriever, max_depth):
-  visited = set()
-  queue = deque()
-  queue.append((start_id, [start_id], 0))
-  visited.add(start_id)
+# BFS tuning. A generous depth lets sparse ancient genealogies (e.g. Egyptian
+# dynasties) connect distant relatives. The danger is densely interconnected
+# dynasties (e.g. European royalty): for an unrelated pair the search would
+# otherwise explore the entire relatives web and never terminate in practice.
+# MAX_BFS_NODES is a hard safety cap on that explosion. Because BFS explores
+# shortest paths first, any genuine short connection is found long before the
+# cap is hit; the cap only bounds hopeless searches. In sparse graphs the depth
+# limit binds first, in dense graphs the node cap binds first.
+MAX_BFS_DEPTH = 8
+MAX_BFS_NODES = 4000
 
-  while queue:
-    current_id, path, depth = queue.popleft()
 
-    if current_id == target_id:
-      return path
+def _neighbors_of(person):
+  neighbors = []
+  father_id = person.get('father')
+  if father_id:
+    neighbors.append(father_id)
+  mother_id = person.get('mother')
+  if mother_id:
+    neighbors.append(mother_id)
+  neighbors.extend(person.get('child', []))
+  return neighbors
 
-    if depth >= max_depth:
-      print("Reached maximum search depth")
-      continue
 
-    current_person = data_retriever.get_person_from_item_id(current_id)
-    if not current_person:
-      continue
+def bfs(start_id, target_id, data_retriever, max_depth=MAX_BFS_DEPTH, max_nodes=MAX_BFS_NODES):
+  """Level-synchronised BFS over father/mother/child edges.
 
-    # Collect valid neighbors (father, mother, children)
-    neighbors = []
-    # Father
-    father_id = current_person.get('father')
-    if father_id:
-      neighbors.append(father_id)
-    # Mother
-    mother_id = current_person.get('mother')
-    if mother_id:
-      neighbors.append(mother_id)
-    # Children
-    children_ids = current_person.get('child', [])
-    for child_id in children_ids:
-      neighbors.append(child_id)
+  Processes one depth level at a time and batch-fetches the entire next level's
+  people in a single call, instead of one tiny request per node. Wikidata's API
+  intermittently stalls (~tens of seconds) under throttling, so collapsing
+  thousands of small requests into a handful of large ones is what makes the
+  build tractable. This still returns a shortest path (BFS explores by depth)."""
+  if start_id == target_id:
+    return [start_id]
 
-    # Retrieve neighbors so we have the data
-    data_retriever.get_people_from_item_ids(neighbors)
+  visited = {start_id}
+  data_retriever.get_people_from_item_ids([start_id])
+  frontier = [(start_id, [start_id])]  # (node_id, path) at the current depth
+  depth = 0
 
-    for neighbor_id in neighbors:
-      if neighbor_id not in visited:
-        visited.add(neighbor_id)
-        new_path = path + [neighbor_id]
-        queue.append((neighbor_id, new_path, depth + 1))
+  while frontier and depth < max_depth:
+    if len(visited) > max_nodes:
+      print(f"Reached node cap ({max_nodes}); giving up on this pair")
+      return None
+
+    next_frontier = []
+    to_fetch = []
+    for node_id, path in frontier:
+      person = data_retriever.get_person_from_item_id(node_id)
+      if not person:
+        continue
+      for neighbor_id in _neighbors_of(person):
+        if neighbor_id == target_id:
+          return path + [neighbor_id]
+        if neighbor_id not in visited:
+          visited.add(neighbor_id)
+          next_frontier.append((neighbor_id, path + [neighbor_id]))
+          to_fetch.append(neighbor_id)
+
+    # One batched retrieval for the whole next level (chunked into 50s inside).
+    data_retriever.get_people_from_item_ids(to_fetch)
+    frontier = next_frontier
+    depth += 1
 
   return None
 
@@ -357,14 +391,14 @@ def construct_family_tree_from_monarch_list(monarchy, save_file_path):
   for i in range(len(list_of_monarch_ids)):
     current_id = list_of_monarch_ids[i]
     path_found = None
-    print("Finding path from: ", retriever.get_person_from_item_id(current_id)['label'], 'https://www.wikidata.org/wiki/' + current_id)
+    print("Finding path from: ", retriever.get_person_from_item_id(current_id).get('label'), 'https://www.wikidata.org/wiki/' + current_id)
     # Check subsequent people starting from i+1
     end = i + 6
     if len(list_of_monarch_ids) < end:
       end = len(list_of_monarch_ids)
     for j in range(i + 1, end):
       target_id = list_of_monarch_ids[j]
-      print("Finding path to: ", retriever.get_person_from_item_id(target_id)['label'], 'https://www.wikidata.org/wiki/' + target_id)
+      print("Finding path to: ", retriever.get_person_from_item_id(target_id).get('label'), 'https://www.wikidata.org/wiki/' + target_id)
       path = bfs(current_id, target_id, retriever, max_depth=8)
       if path:
         path_found = path

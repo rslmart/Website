@@ -22,3 +22,28 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# large source data (23MB); regenerate public/hurricane/storms.json with
+# src/Hurricane/data/convertIbtracsToJson.py. Download from:
+# https://www.ncei.noaa.gov/data/international-best-track-archive-for-climate-stewardship-ibtracs/v04r01/access/netcdf/
+src/Hurricane/IBTrACS.ALL.v04r01.nc
+
+# Royalty pipeline: Python env + caches
+src/Royalty/Data/.venv/
+**/__pycache__/
+
+# Royalty per-monarchy intermediate data (~200MB, regenerable via
+# src/Royalty/Data/pipeline.py). Keep only the combined files the app/pipeline
+# need; ignore the raw Wikidata caches, per-country family trees, and labelled
+# files.
+src/Royalty/Data/data/*.json
+!src/Royalty/Data/data/monarch_list.json
+!src/Royalty/Data/data/monarchy_data.json
+!src/Royalty/Data/data/monarchy_family_trees.json
+!src/Royalty/Data/data/monarchy_ancestors.json
+!src/Royalty/Data/data/properties.json
+
+# Royalty pipeline run logs and local debug scratch scripts
+src/Royalty/Data/*.log
+src/Royalty/Data/_gaps.py
+src/Royalty/Data/debug_*.py

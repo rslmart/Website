@@ -6,6 +6,7 @@ import Bio from "./Bio/Bio";
 import Hurricane from "./Hurricane/Hurricane";
 import RoyalTree from "./Royalty/RoyalTreePage";
 import SnowPage from "./Snow/SnowPage";
+import Tectonics from "./Tectonics/Tectonics";
 
 const rootElement = document.getElementById("root");
 const root = createRoot(rootElement);
@@ -17,6 +18,7 @@ root.render(
             <Route path="/Hurricane" element={<Hurricane/>} />
             <Route path="/RoyalTree" element={<RoyalTree/>} />
             <Route path="/Snow" element={<SnowPage/>} />
+            <Route path="/Tectonics" element={<Tectonics/>} />
         </Routes>
     </BrowserRouter>
 );

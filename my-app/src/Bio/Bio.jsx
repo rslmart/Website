@@ -9,12 +9,6 @@ function Bio() {
             <header className={styles.header}>
                 <h1 className={styles.title}>Russell Makoa Martin</h1>
                 <div className={styles.contactInfo}>
-                    makoa1693@gmail.com | 757-323-5802 |
-                    <a href="https://makoa.link"
-                       target="_blank"
-                       rel="noopener noreferrer"
-                       className={styles.link}>www.makoa.link</a>
-                    <br />
                     <a href="https://github.com/rslmart"
                        target="_blank"
                        rel="noopener noreferrer"
@@ -33,9 +27,21 @@ function Bio() {
                 <div className={styles.jobItem}>
                     <div className={styles.jobHeader}>
                         <h3>Software Engineer</h3>
+                        <div className={styles.company}>LiveKit</div>
+                        <div className={styles.location}>Remote</div>
+                        <div className={styles.date}>Oct 2025 - Present</div>
+                    </div>
+                    <ul>
+                        <li>Build new features and add support for various STT, TTS, and LLM models to the Inference Gateway (<a href="https://lnkd.in/gXW-K4d8" target="_blank" rel="noopener noreferrer" className={styles.link}>read about it here</a>)</li>
+                    </ul>
+                </div>
+
+                <div className={styles.jobItem}>
+                    <div className={styles.jobHeader}>
+                        <h3>Software Engineer</h3>
                         <div className={styles.company}>AI Stealth Startup</div>
                         <div className={styles.location}>Seattle, WA</div>
-                        <div className={styles.date}>Nov 2023 - Current</div>
+                        <div className={styles.date}>Nov 2023 - Oct 2025</div>
                     </div>
                     <ul>
                     <li>Develop critical network infrastructure (Go, Prometheus) for AI/ML workloads</li>

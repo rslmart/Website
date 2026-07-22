@@ -101,7 +101,7 @@ const formatValue = (key, value) => {
     return value || 'N/A';
 };
 
-const NodeToolTip = ({ x, y, data }) => {
+const NodeToolTip = ({ data }) => {
     if (!data) return null;
 
     return (

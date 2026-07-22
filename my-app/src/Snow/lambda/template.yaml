@@ -1,0 +1,60 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Daily in-season updater for the WA Snowfall page. Fetches the current WSDOT
+  season for each pass, merges it into the JSON the site serves from S3, and
+  invalidates the CloudFront path.
+
+Parameters:
+  BucketName:
+    Type: String
+    Description: S3 bucket the site is served from.
+  ObjectKey:
+    Type: String
+    Default: snow/pass_snowfall_data.json
+    Description: Key of the snowfall JSON object.
+  DistributionId:
+    Type: String
+    Description: CloudFront distribution id to invalidate after each update.
+
+Resources:
+  SnowUpdaterFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: wa-snowfall-daily-updater
+      Handler: handler.handler
+      Runtime: python3.12
+      CodeUri: .
+      Timeout: 120
+      MemorySize: 256
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref BucketName
+          OBJECT_KEY: !Ref ObjectKey
+          DISTRIBUTION_ID: !Ref DistributionId
+      Policies:
+        - Statement:
+            - Sid: SnowfallObjectReadWrite
+              Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:PutObject
+              Resource: !Sub arn:aws:s3:::${BucketName}/${ObjectKey}
+            - Sid: InvalidateCloudFront
+              Effect: Allow
+              Action:
+                - cloudfront:CreateInvalidation
+              Resource: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${DistributionId}
+      Events:
+        DailySchedule:
+          Type: Schedule
+          Properties:
+            # 15:00 UTC daily (~7-8am Pacific). Adjust as desired.
+            Schedule: cron(0 15 * * ? *)
+            Description: Daily WA snowfall refresh
+            Enabled: true
+
+Outputs:
+  FunctionName:
+    Description: Lambda function name
+    Value: !Ref SnowUpdaterFunction

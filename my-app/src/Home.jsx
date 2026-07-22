@@ -32,7 +32,12 @@ function Home() {
             </Link>
             <Link to="/Snow" style={{ width: "80%", margin: "10px" }}>
                 <button className="menu-button">
-                    Snow
+                    WA Snowfall
+                </button>
+            </Link>
+            <Link to="/Tectonics" style={{ width: "80%", margin: "10px" }}>
+                <button className="menu-button">
+                    Tectonic Plates
                 </button>
             </Link>
         </div>

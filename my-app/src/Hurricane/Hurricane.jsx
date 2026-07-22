@@ -4,10 +4,10 @@ import {GridLayer, HeatmapLayer} from '@deck.gl/aggregation-layers';
 import {LineLayer, PolygonLayer, ScatterplotLayer} from '@deck.gl/layers';
 import {WebMercatorViewport} from '@deck.gl/core';
 import {Map} from 'react-map-gl';
-import STORMS from './data/storms_with_ir.json';
 import FilterPanel from "./filter-panel";
 import SettingsPanel from "./settings-panel";
 import StormInfo from "./storm-info";
+import SourcesPanel from "./sources-panel";
 
 /*
 /Settings
@@ -55,11 +55,41 @@ export const PLOT_TYPES = {
     MAX_WIND_GRID: "Max Wind Grid"
 };
 
+// IBTrACS basin codes (global). storm.basin is set to the storm's first basin.
 export const BASINS = {
     ALL: "All",
-    AL: "North Atlantic",
+    NA: "North Atlantic",
     EP: "East Pacific",
-    CP: "Central Pacific"
+    WP: "West Pacific",
+    NI: "North Indian",
+    SI: "South Indian",
+    SP: "South Pacific",
+    SA: "South Atlantic"
+};
+
+// The storm dataset is IBTrACS, converted to JSON by
+// src/Hurricane/data/convertIbtracsToJson.py and served gzipped from public/.
+// Fetched and gunzipped at runtime so the ~185MB dataset never enters the JS bundle.
+const STORMS_URL = process.env.PUBLIC_URL + "/hurricane/storms.json.gz";
+
+const loadStorms = async () => {
+    const response = await fetch(STORMS_URL);
+    if (!response.ok) {
+        throw new Error(`Failed to load storm data (${response.status})`);
+    }
+    const buffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    // Decompress ourselves unless the server already did (Content-Encoding).
+    // Gzip magic bytes are 0x1f 0x8b.
+    const isGzip = bytes.length > 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
+    let text;
+    if (isGzip && typeof DecompressionStream !== "undefined") {
+        const stream = new Response(buffer).body.pipeThrough(new DecompressionStream("gzip"));
+        text = await new Response(stream).text();
+    } else {
+        text = new TextDecoder().decode(bytes);
+    }
+    return JSON.parse(text);
 };
 
 const SYSTEM_STATUSES = {
@@ -120,7 +150,7 @@ const getStormLineLayer = (storms, settings) => new LineLayer({
     getSourcePosition: d => d.from,
     getTargetPosition: d => d.to,
     getColor: d => d.color,
-    // wrapLongitude: true,
+    wrapLongitude: true,
     ...settings
 });
 
@@ -308,11 +338,14 @@ class Hurricane extends Component {
         },
         plotType: PLOT_TYPES.STORM,
         basin: "ALL",
-        dataSource: STORMS,
-        data: STORMS,
+        storms: {},
+        dataSource: {},
+        data: {},
+        loading: true,
+        loadError: null,
         name: "",
-        minYear: 1851,
-        maxYear: 2021,
+        minYear: 1842,
+        maxYear: 2026,
         minMonth: 1,
         maxMonth: 12,
         minWind: 0,
@@ -330,6 +363,7 @@ class Hurricane extends Component {
         selectedPoint: 0,
         filterPanelOpen: true,
         settingsOpen: false,
+        sourcesOpen: false,
         layers: []
     };
 
@@ -386,7 +420,7 @@ class Hurricane extends Component {
             await this.setState({ basin: evt.target.value });
         }
         else if (evt.target.name === "selectStorm") {
-            const selectedStorm = STORMS[evt.target.value.id];
+            const selectedStorm = this.state.storms[evt.target.value.id];
             const { minLat, maxLat, minLon, maxLon } = getNewViewPort(selectedStorm.track_points);
             const viewport = new WebMercatorViewport(this.state.viewState);
             const newViewport = viewport.fitBounds([[minLon, minLat], [maxLon, maxLat]], {padding: 80});
@@ -412,9 +446,9 @@ class Hurricane extends Component {
         }
         let dataSource;
         if (this.state.plotType === PLOT_TYPES.STORM) {
-            dataSource = STORMS;
+            dataSource = this.state.storms;
         } else {
-            dataSource = Object.values(STORMS).flatMap(storm => storm["track_points"]);
+            dataSource = Object.values(this.state.storms).flatMap(storm => storm["track_points"]);
             // For aggregation layers we need to remove none 6 hours points so its unbiased
             if (this.state.plotType === PLOT_TYPES.HEATMAP || this.state.plotType === PLOT_TYPES.GRID) {
                 await this.setState({ only6Hour: true });
@@ -427,7 +461,7 @@ class Hurricane extends Component {
         if (Array.isArray(dataSource)) { // Track points
             data = dataSource
                 .filter(point =>
-                    (this.state.basin === "ALL" ? true : STORMS[point.id].basin === this.state.basin)
+                    (this.state.basin === "ALL" ? true : this.state.storms[point.id].basin === this.state.basin)
                     && point.year >= this.state.minYear
                     && point.year <= this.state.maxYear
                     && point.month >= this.state.minMonth
@@ -511,10 +545,20 @@ class Hurricane extends Component {
         this.resizeTimer = setTimeout(this.updateDimensions, 100);
     };
 
-    componentDidMount() {
+    async componentDidMount() {
         window.addEventListener('resize', this.handleResize);
         this.updateDimensions();
-        this.onChange({target: {name: PLOT_TYPES.STORM}})
+        try {
+            const storms = await loadStorms();
+            // Run the initial filter/layer build only after `storms` is committed;
+            // setState is not actually awaitable, so use its callback.
+            this.setState({ storms, dataSource: storms, data: storms, loading: false }, () => {
+                this.onChange({target: {name: PLOT_TYPES.STORM}});
+            });
+        } catch (error) {
+            console.error(error);
+            this.setState({ loading: false, loadError: error.message });
+        }
     }
 
     componentWillUnmount() {
@@ -565,14 +609,14 @@ class Hurricane extends Component {
                                 pointerEvents: 'none',}}
                         >
                             <div className="column">
-                                <p>Name: {STORMS[this.state.hoverInfo.object["id"]]["name"]}</p>
+                                <p>Name: {this.state.storms[this.state.hoverInfo.object["id"]]["name"]}</p>
                                 <p>Date: {this.state.hoverInfo.object["date_time"].split(" ")[0]}</p>
                                 <p>Longitude: {this.state.hoverInfo.object["longitude"]}</p>
                                 <p>Wind: {this.state.hoverInfo.object["wind"]}</p>
                                 {this.state.hoverInfo.object["max_wind_radius"] && <p>Max Wind Radius: {this.state.hoverInfo.object["max_wind_radius"]}</p>}
                             </div>
                             <div className="column" style={{paddingLeft: 10}}>
-                                <p>Season: {STORMS[this.state.hoverInfo.object["id"]]["season"]}</p>
+                                <p>Season: {this.state.storms[this.state.hoverInfo.object["id"]]["season"]}</p>
                                 <p>Time: {this.state.hoverInfo.object["date_time"].split(" ")[1]}</p>
                                 <p>Latitude: {this.state.hoverInfo.object["latitude"]}</p>
                                 <p>Status: {this.state.hoverInfo.object["status"]}</p>
@@ -581,6 +625,24 @@ class Hurricane extends Component {
                         </div>
                     )}
                 </DeckGL>
+                {(this.state.loading || this.state.loadError) && (
+                    <div style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        backgroundColor: '#fff',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                        padding: '12px 20px',
+                        fontSize: '14px',
+                        color: this.state.loadError ? '#b00020' : '#6b6b76',
+                        zIndex: 9999,
+                    }}>
+                        {this.state.loadError
+                            ? `Could not load storm data: ${this.state.loadError}`
+                            : 'Loading global storm data…'}
+                    </div>
+                )}
                 {this.state.stormInfo && (
                     <StormInfo
                         stormInfo={this.state.stormInfo}
@@ -626,6 +688,10 @@ class Hurricane extends Component {
                     gridSettings={this.state.gridSettings}
                     heatmapSettings={this.state.heatmapSettings}
                     plotType={this.state.plotType}
+                />
+                <SourcesPanel
+                    open={this.state.sourcesOpen}
+                    toggle={() => this.setState(prevState => ({ sourcesOpen: !prevState.sourcesOpen }))}
                 />
             </div>
         );
