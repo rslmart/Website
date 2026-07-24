@@ -5,6 +5,9 @@ import {Map} from 'react-map-gl';
 import LegendPanel from './LegendPanel';
 import InfoPanel from './InfoPanel';
 import HomeButton from '../components/HomeButton';
+import ControlsFab from '../components/ControlsFab';
+import MobileDrawer from '../components/MobileDrawer';
+import useViewport from '../hooks/useViewport';
 import {
     CATEGORIES,
     STEP_CLASS_LABEL,
@@ -88,6 +91,8 @@ function Tectonics() {
     const [visibility, setVisibility] = useState(DEFAULT_VISIBILITY);
     const [selectedPlate, setSelectedPlate] = useState(null);
     const [legendOpen, setLegendOpen] = useState(true);
+    const [controlsDrawerOpen, setControlsDrawerOpen] = useState(false);
+    const { isMobile } = useViewport();
 
     useEffect(() => {
         let cancelled = false;
@@ -235,7 +240,7 @@ function Tectonics() {
     };
 
     return (
-        <div style={{width: '100vw', height: '100vh'}}>
+        <div className="mobile-dvh" style={{width: '100vw', height: '100vh'}}>
             <HomeButton />
             <DeckGL
                 viewState={viewState}
@@ -273,16 +278,52 @@ function Tectonics() {
             )}
 
             {selectedPlate && (
-                <InfoPanel plate={selectedPlate} onClose={() => setSelectedPlate(null)} />
+                isMobile ? (
+                    <div className="mobile-sheet">
+                        <div className="mobile-sheet-header">
+                            <button
+                                type="button"
+                                className="mobile-sheet-close"
+                                onClick={() => setSelectedPlate(null)}
+                                aria-label="Close"
+                            >
+                                &times;
+                            </button>
+                        </div>
+                        <InfoPanel embedded plate={selectedPlate} onClose={() => setSelectedPlate(null)} />
+                    </div>
+                ) : (
+                    <InfoPanel plate={selectedPlate} onClose={() => setSelectedPlate(null)} />
+                )
             )}
 
-            <LegendPanel
-                open={legendOpen}
-                categories={CATEGORIES}
-                visibility={visibility}
-                onToggle={toggle}
-                togglePanel={() => setLegendOpen((prev) => !prev)}
-            />
+            {!isMobile && (
+                <LegendPanel
+                    open={legendOpen}
+                    categories={CATEGORIES}
+                    visibility={visibility}
+                    onToggle={toggle}
+                    togglePanel={() => setLegendOpen((prev) => !prev)}
+                />
+            )}
+
+            {isMobile && (
+                <ControlsFab onClick={() => setControlsDrawerOpen(true)} />
+            )}
+            {isMobile && (
+                <MobileDrawer
+                    open={controlsDrawerOpen}
+                    onClose={() => setControlsDrawerOpen(false)}
+                    title="Layers & legend"
+                >
+                    <LegendPanel
+                        embedded
+                        categories={CATEGORIES}
+                        visibility={visibility}
+                        onToggle={toggle}
+                    />
+                </MobileDrawer>
+            )}
         </div>
     );
 }

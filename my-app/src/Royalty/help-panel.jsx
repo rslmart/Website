@@ -1,14 +1,14 @@
 import * as React from 'react';
 import HelpModal, { helpSectionTitle as sectionTitle, helpList as list, helpListItem as li } from '../components/HelpModal';
 
-function HelpPanel({ open, onOpen, onClose }) {
+function HelpPanel({ open, onOpen, onClose, fabPosition = { bottom: 20, left: 20 } }) {
     return (
         <HelpModal
             open={open}
             onOpen={onOpen}
             onClose={onClose}
             title="Royal Family Trees — Guide"
-            fabPosition={{ bottom: 20, left: 20 }}
+            fabPosition={fabPosition}
             fabTitle="How to use this chart"
         >
             <p style={{ marginTop: 8, color: "var(--color-text-muted)" }}>

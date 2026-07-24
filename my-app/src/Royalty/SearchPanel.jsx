@@ -137,7 +137,7 @@ MonarchStepper.propTypes = {
     onZoomTo: PropTypes.func.isRequired,
 };
 
-function SearchPanel({ people, sharedPeople, monarchOrder, onZoomTo }) {
+function SearchPanel({ people, sharedPeople, monarchOrder, onZoomTo, embedded }) {
     const [query, setQuery] = useState('');
     const [open, setOpen] = useState(false);
     const [activeIndex, setActiveIndex] = useState(0);
@@ -204,7 +204,10 @@ function SearchPanel({ people, sharedPeople, monarchOrder, onZoomTo }) {
     const multiMonarchy = monarchOrder.length > 1;
 
     return (
-        <div className="control-panel" style={{ marginBottom: 10, zIndex: 1003 }}>
+        <div
+            className={embedded ? undefined : "control-panel"}
+            style={embedded ? undefined : { marginBottom: 10, zIndex: 1003 }}
+        >
             <div style={STYLES.searchWrap} ref={wrapRef}>
                 <input
                     type="text"
@@ -304,10 +307,12 @@ SearchPanel.propTypes = {
         })).isRequired,
     })),
     onZoomTo: PropTypes.func.isRequired,
+    embedded: PropTypes.bool,
 };
 
 SearchPanel.defaultProps = {
     monarchOrder: [],
+    embedded: false,
 };
 
 export default React.memo(SearchPanel);

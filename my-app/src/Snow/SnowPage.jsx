@@ -6,6 +6,8 @@ import { ResponsiveContainer, LineChart, CartesianGrid, BarChart, Bar, XAxis, YA
 // labelled year Y covers the winter that starts in Y-1).
 import oni from './Data/oni.json';
 import HomeButton from '../components/HomeButton';
+import MobileDrawer from '../components/MobileDrawer';
+import { withViewport } from '../hooks/useViewport';
 
 /*
 TODO:
@@ -206,6 +208,7 @@ class Snow extends Component {
             lowestSeason: "",
             data: [],
             hiddenSeries: {},
+            controlsDrawerOpen: false,
         };
     }
 
@@ -327,8 +330,9 @@ class Snow extends Component {
     }
 
     renderLineChart(title, dataKey) {
+        const isMobile = this.props.viewport && this.props.viewport.isMobile;
         return (
-            <div style={{ height: '33vh'}}>
+            <div style={isMobile ? { height: 300, minHeight: 260 } : { height: '33vh' }}>
                 <h4 style={{ textAlign: 'center', margin: '10px 0' }}>{title}</h4>
                 <ResponsiveContainer width="100%" height="80%">
                     <LineChart
@@ -455,6 +459,27 @@ class Snow extends Component {
             backgroundColor: 'white'
         };
 
+        const isMobile = this.props.viewport && this.props.viewport.isMobile;
+
+        // Static (non-fixed) compact header on mobile so the page scrolls
+        // naturally; leaves room on the left for the fixed Home button.
+        const mobileHeaderStyle = {
+            backgroundColor: 'var(--color-surface)',
+            boxShadow: 'var(--shadow-sm)',
+            padding: '10px 12px 10px 64px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '12px',
+        };
+
+        const mobileTitleStyle = {
+            fontSize: '1.05rem',
+            fontWeight: 'bold',
+            color: '#333',
+            lineHeight: 1.25,
+        };
+
         if (!this.state.snowFallData) {
             return (
                 <div style={{
@@ -474,9 +499,36 @@ class Snow extends Component {
         const currentEnsoPhase = ensoPhase(oni[latestSeason]) || 'Unknown';
         const currentEnsoColor = ensoColors[currentEnsoPhase] || ensoColors['Unknown'];
 
+        const passSelect = (
+            <select style={{ ...selectStyle, width: '100%' }} name="passNameSelect" value={this.state.passName} onChange={evt => this.onChange(evt)}>
+                {Object.keys(passNames).map(name =>
+                    <option key={name} value={name}>{passNames[name]}</option>)}
+            </select>
+        );
+        const seasonSelect = (
+            <select style={{ ...selectStyle, width: '100%' }} name="seasonSelect" value={this.state.currentSeason} onChange={evt => this.onChange(evt)}>
+                {Object.keys(this.state.snowFallData[this.state.passName]).map(season =>
+                    <option key={season} value={season}>
+                        {season} - {ensoPhase(oni[season]) || '?'} ({formatOni(oni[season])})
+                    </option>)}
+            </select>
+        );
+        const ensoBadge = (
+            <span style={{
+                padding: '4px 12px',
+                borderRadius: '12px',
+                fontWeight: 'bold',
+                backgroundColor: currentEnsoColor.bg,
+                color: currentEnsoColor.fg
+            }}>
+                {describeEnso(latestSeason)}
+            </span>
+        );
+
         return (
             <div>
                 <HomeButton />
+                {!isMobile && (
                 <div style={titleBarStyle}>
                     <div style={titleStyle}>
                         <span style={brandStyle}>WA Snowfall</span>
@@ -487,15 +539,7 @@ class Snow extends Component {
                     </div>
                     <div style={ensoBadgeContainerStyle}>
                         <span style={{ fontSize: '0.75rem', color: '#666' }}>Current ENSO status</span>
-                        <span style={{
-                            padding: '4px 12px',
-                            borderRadius: '12px',
-                            fontWeight: 'bold',
-                            backgroundColor: currentEnsoColor.bg,
-                            color: currentEnsoColor.fg
-                        }}>
-                            {describeEnso(latestSeason)}
-                        </span>
+                        {ensoBadge}
                         <span style={{ fontSize: '0.7rem', color: '#999' }}>
                             {latestSeason}-{Number(latestSeason) + 1} winter
                         </span>
@@ -513,13 +557,29 @@ class Snow extends Component {
                         </select>
                     </div>
                 </div>
-                <div style={{
-                    width: '100%',
-                    height: '100vh',
-                    padding: '20px',
-                    paddingTop: '80px',
-                    boxSizing: 'border-box'
-                }}>
+                )}
+                {isMobile && (
+                <div style={mobileHeaderStyle}>
+                    <div style={mobileTitleStyle}>
+                        <span style={brandStyle}>WA Snowfall</span>
+                        {passNames[this.state.passName]}
+                        <span style={brandStyle}>
+                            {this.state.currentSeason}: {describeEnso(this.state.currentSeason)}
+                        </span>
+                    </div>
+                    <button
+                        type="button"
+                        className="btn-primary"
+                        onClick={() => this.setState({ controlsDrawerOpen: true })}
+                    >
+                        Controls
+                    </button>
+                </div>
+                )}
+                <div style={isMobile
+                    ? { width: '100%', padding: '12px 10px 32px', boxSizing: 'border-box' }
+                    : { width: '100%', height: '100vh', padding: '20px', paddingTop: '80px', boxSizing: 'border-box' }
+                }>
                     {this.renderLineChart(
                         `Snow Depth`,
                         `totalSnowFall`
@@ -530,7 +590,7 @@ class Snow extends Component {
                         `accumulatedSnowFall`
                     )}
 
-                        <div style={{ height: '33vh'}}>
+                        <div style={isMobile ? { height: 300, minHeight: 260 } : { height: '33vh' }}>
                             <h4 style={{ textAlign: 'center', margin: '10px 0' }}>New Daily Snowfall</h4>
                             <ResponsiveContainer width="100%" height="80%">
                                 <BarChart
@@ -599,9 +659,28 @@ class Snow extends Component {
                             </a>
                         </div>
                     </div>
+                {isMobile && (
+                    <MobileDrawer
+                        open={this.state.controlsDrawerOpen}
+                        onClose={() => this.setState({ controlsDrawerOpen: false })}
+                        title="Snowfall controls"
+                    >
+                        <div className="mobile-drawer-section">Current ENSO status</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 6 }}>
+                            {ensoBadge}
+                            <span style={{ fontSize: '0.75rem', color: '#999' }}>
+                                {latestSeason}-{Number(latestSeason) + 1} winter
+                            </span>
+                        </div>
+                        <div className="mobile-drawer-section">Mountain pass</div>
+                        {passSelect}
+                        <div className="mobile-drawer-section">Season</div>
+                        {seasonSelect}
+                    </MobileDrawer>
+                )}
             </div>
         );
     }
 }
 
-export default Snow;
+export default withViewport(Snow);

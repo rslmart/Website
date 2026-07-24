@@ -11,14 +11,14 @@ const WIND_LEGEND = [
     { color: "rgb(196,100,217)", label: "≥ 137 kt (Cat 5)" },
 ];
 
-function HelpPanel({ open, onOpen, onClose }) {
+function HelpPanel({ open, onOpen, onClose, fabPosition = { top: 20, left: 70 } }) {
     return (
         <HelpModal
             open={open}
             onOpen={onOpen}
             onClose={onClose}
             title="Hurricane Explorer — Guide"
-            fabPosition={{ top: 20, left: 70 }}
+            fabPosition={fabPosition}
             fabTitle="How to use this map"
         >
             <p style={{ marginTop: 8, color: "var(--color-text-muted)" }}>

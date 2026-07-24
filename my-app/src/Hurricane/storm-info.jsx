@@ -89,7 +89,7 @@ const stormInfoStyles = {
 };
 
 function StormInfo(props) {
-    const { stormInfo, selectedPoint, onChange, exitStormInfo } = props;
+    const { stormInfo, selectedPoint, onChange, exitStormInfo, embedded } = props;
 
     function getColorToHex(windSpeed) {
         const color = getColorFromWindSpeed(windSpeed);
@@ -120,7 +120,7 @@ function StormInfo(props) {
     const hasPressureData = pressureValues.length > 0;
 
     return (
-        <div style={stormInfoStyles}>
+        <div style={embedded ? { color: '#6b6b76' } : stormInfoStyles}>
             {/* Header and close button remains the same */}
             <div style={{ marginBottom: "20px" }}>
                 <h3 style={{ float: "left", marginTop: 0, marginBottom: 0 }}>{stormInfo["name"]} {stormInfo["season"]}</h3>

@@ -15,7 +15,16 @@ const panelStyles = {
     zIndex: 9999,
 };
 
-function InfoPanel({plate, onClose}) {
+function InfoPanel({plate, onClose, embedded}) {
+    if (embedded) {
+        return (
+            <div style={{color: '#4a4a55', fontSize: '13px', lineHeight: 1.7}}>
+                <h3 style={{marginTop: 0, marginBottom: 8}}>{plate.PlateName}</h3>
+                <div>Plate code: <b>{plate.Code}</b></div>
+            </div>
+        );
+    }
+
     return (
         <div style={panelStyles}>
             <div style={{height: '22px'}}>

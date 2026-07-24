@@ -200,3 +200,193 @@ input[type="radio"] {
 .modal-close:hover {
     color: var(--color-text);
 }
+
+/* ============================================================
+   Mobile-only experience for the data-viz pages.
+   Everything below is gated behind viewport width/height media
+   queries, so the desktop layout (>=769px) is never affected.
+   ============================================================ */
+
+@media (max-width: 768px), (max-width: 900px) and (max-height: 480px) {
+    /* Full-height viz containers: prefer dvh so mobile browser chrome doesn't
+       clip bottom FABs/attribution. Applied on top of an inline 100vh fallback
+       (and .royal-tree-container's own height), hence !important. */
+    .mobile-dvh {
+        height: 100dvh !important;
+    }
+
+    /* --- Controls FAB (opens the drawer) --- */
+    .controls-fab {
+        position: fixed;
+        right: calc(16px + env(safe-area-inset-right, 0px));
+        bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+        z-index: 10001;
+        width: 48px;
+        height: 48px;
+    }
+
+    /* Bump the shared FABs to comfortable tap targets and respect safe areas. */
+    .home-fab {
+        top: calc(12px + env(safe-area-inset-top, 0px));
+        left: calc(12px + env(safe-area-inset-left, 0px));
+        width: 44px;
+        height: 44px;
+    }
+
+    .help-fab {
+        width: 44px;
+        height: 44px;
+    }
+
+    /* --- Bottom-sheet drawer (Controls) --- */
+    .mobile-drawer-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.45);
+        z-index: 10050;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+    }
+
+    .mobile-drawer {
+        background: var(--color-surface);
+        color: var(--color-text-muted);
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        box-shadow: var(--shadow-modal);
+        max-height: 92dvh;
+        display: flex;
+        flex-direction: column;
+        animation: mobile-sheet-up 0.18s ease-out;
+    }
+
+    .mobile-drawer-header {
+        flex: 0 0 auto;
+        padding: 8px 16px 6px;
+        border-bottom: 1px solid var(--color-border);
+    }
+
+    .mobile-drawer-handle {
+        display: block;
+        width: 40px;
+        height: 4px;
+        border-radius: 2px;
+        background: var(--color-border-strong);
+        margin: 2px auto 8px;
+    }
+
+    .mobile-drawer-titlebar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .mobile-drawer-title {
+        margin: 0;
+        font-size: 16px;
+        color: var(--color-text);
+    }
+
+    .mobile-drawer-close,
+    .mobile-sheet-close {
+        border: none;
+        background: none;
+        font-size: 26px;
+        line-height: 1;
+        cursor: pointer;
+        color: var(--color-text-muted);
+        padding: 2px 8px;
+    }
+
+    .mobile-drawer-body {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+        font-size: 13px;
+        line-height: 2;
+    }
+
+    /* Section headings when several panels are stacked in one drawer. */
+    .mobile-drawer-section {
+        margin: 4px 0 6px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--color-text);
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+
+    .mobile-drawer-section:not(:first-child) {
+        margin-top: 18px;
+        padding-top: 14px;
+        border-top: 1px solid var(--color-border);
+    }
+
+    /* --- Generic detail bottom sheet (storm info, plate info, tooltip) --- */
+    .mobile-sheet {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 10000;
+        background: var(--color-surface);
+        color: var(--color-text-muted);
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        box-shadow: var(--shadow-modal);
+        max-height: 72dvh;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 6px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+        animation: mobile-sheet-up 0.18s ease-out;
+    }
+
+    .mobile-sheet-header {
+        display: flex;
+        justify-content: flex-end;
+        position: sticky;
+        top: 0;
+    }
+
+    @keyframes mobile-sheet-up {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
+    }
+
+    /* Comfortable tap targets + no iOS zoom-on-focus for controls in sheets. */
+    .mobile-drawer-body select,
+    .mobile-drawer-body input[type="text"],
+    .mobile-drawer-body input[type="number"],
+    .mobile-drawer-body input[type="search"],
+    .mobile-sheet select,
+    .mobile-sheet input[type="text"],
+    .mobile-sheet input[type="number"],
+    .mobile-sheet input[type="search"] {
+        font-size: 16px;
+        padding: 8px 10px;
+    }
+
+    .mobile-drawer-body input[type="checkbox"],
+    .mobile-drawer-body input[type="radio"],
+    .mobile-sheet input[type="checkbox"],
+    .mobile-sheet input[type="radio"] {
+        width: 20px;
+        height: 20px;
+    }
+
+    /* Range sliders are easier to grab full-width. */
+    .mobile-drawer-body input[type="range"] {
+        width: 100%;
+    }
+}
+
+/* Landscape phones: keep sheets shallow so charts/map stay visible. */
+@media (max-width: 900px) and (max-height: 480px) {
+    .mobile-drawer {
+        max-height: 96dvh;
+    }
+
+    .mobile-sheet {
+        max-height: 88dvh;
+    }
+}

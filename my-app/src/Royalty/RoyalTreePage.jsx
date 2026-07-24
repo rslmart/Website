@@ -6,6 +6,9 @@ import SearchPanel from "./SearchPanel";
 import NodeToolTip from "./NodeToolTip";
 import HelpPanel from "./help-panel";
 import HomeButton from "../components/HomeButton";
+import ControlsFab from "../components/ControlsFab";
+import MobileDrawer from "../components/MobileDrawer";
+import { withViewport } from "../hooks/useViewport";
 import { convertToChart, mergeMonarchies, DEFAULT_BRIDGE_OPTIONS, DEFAULT_VISIBLE_RANKS } from './RoyalTreeUtils';
 import './RoyalTreeStyle.css';
 
@@ -75,6 +78,7 @@ class RoyalTree extends Component {
       rootId: '',
       selectedNode: EMPTY_NODE,
       showNodeToolTip: false,
+      controlsDrawerOpen: false,
       helpOpen: (() => {
         try {
           return !window.localStorage.getItem(HELP_SEEN_KEY);
@@ -629,6 +633,7 @@ class RoyalTree extends Component {
   };
 
   render() {
+    const isMobile = this.props.viewport && this.props.viewport.isMobile;
     return (
         <div className="royal-tree-container" style={{ position: 'relative' }}>
           <HomeButton />
@@ -648,11 +653,27 @@ class RoyalTree extends Component {
           )}
 
           {this.state.showNodeToolTip && (
-              <div className="node-tooltips">
-                <NodeToolTip
-                  data={this.state.tooltipData}
-                />
-              </div>
+              isMobile ? (
+                  <div className="mobile-sheet">
+                    <div className="mobile-sheet-header">
+                      <button
+                          type="button"
+                          className="mobile-sheet-close"
+                          onClick={() => this.setState({ showNodeToolTip: false })}
+                          aria-label="Close"
+                      >
+                        &times;
+                      </button>
+                    </div>
+                    <NodeToolTip data={this.state.tooltipData} />
+                  </div>
+              ) : (
+                  <div className="node-tooltips">
+                    <NodeToolTip
+                      data={this.state.tooltipData}
+                    />
+                  </div>
+              )
           )}
 
           {this.state.sharedInfo && (
@@ -671,36 +692,77 @@ class RoyalTree extends Component {
               </div>
           )}
 
-          <div className="search-panel-container">
-            <SearchPanel
-                people={this.state.peopleList}
-                sharedPeople={this.state.sharedList}
-                monarchOrder={this.state.monarchOrder}
-                onZoomTo={this.zoomToNode}
-            />
-          </div>
+          {!isMobile && (
+              <div className="search-panel-container">
+                <SearchPanel
+                    people={this.state.peopleList}
+                    sharedPeople={this.state.sharedList}
+                    monarchOrder={this.state.monarchOrder}
+                    onZoomTo={this.zoomToNode}
+                />
+              </div>
+          )}
 
-          <div className="filter-panel-container">
-            <FilterPanel
-                selectedMonarchs={this.state.selectedMonarchs}
-                monarchyOptions={this.state.monarchyOptions}
-                houseOptions={this.state.houseOptions}
-                memberCounts={this.state.memberCounts}
-                sharedCount={this.state.sharedCount}
-                bridgeOptions={this.state.bridgeOptions}
-                onBridgeChange={this.handleBridgeChange}
-                rankOptions={this.state.rankOptions}
-                onRankChange={this.handleRankChange}
-                showSuccession={this.state.showSuccession}
-                onToggleSuccession={this.handleToggleSuccession}
-                onChange={(name, value) => this.handleFilterChange(name, value)}
-            />
-          </div>
+          {!isMobile && (
+              <div className="filter-panel-container">
+                <FilterPanel
+                    selectedMonarchs={this.state.selectedMonarchs}
+                    monarchyOptions={this.state.monarchyOptions}
+                    houseOptions={this.state.houseOptions}
+                    memberCounts={this.state.memberCounts}
+                    sharedCount={this.state.sharedCount}
+                    bridgeOptions={this.state.bridgeOptions}
+                    onBridgeChange={this.handleBridgeChange}
+                    rankOptions={this.state.rankOptions}
+                    onRankChange={this.handleRankChange}
+                    showSuccession={this.state.showSuccession}
+                    onToggleSuccession={this.handleToggleSuccession}
+                    onChange={(name, value) => this.handleFilterChange(name, value)}
+                />
+              </div>
+          )}
+
+          {isMobile && (
+              <ControlsFab onClick={() => this.setState({ controlsDrawerOpen: true })} />
+          )}
+          {isMobile && (
+              <MobileDrawer
+                  open={this.state.controlsDrawerOpen}
+                  onClose={() => this.setState({ controlsDrawerOpen: false })}
+                  title="Controls"
+              >
+                <div className="mobile-drawer-section">Find a person</div>
+                <SearchPanel
+                    embedded
+                    people={this.state.peopleList}
+                    sharedPeople={this.state.sharedList}
+                    monarchOrder={this.state.monarchOrder}
+                    onZoomTo={(id) => { this.setState({ controlsDrawerOpen: false }); this.zoomToNode(id); }}
+                />
+                <div className="mobile-drawer-section">Monarchies</div>
+                <FilterPanel
+                    embedded
+                    selectedMonarchs={this.state.selectedMonarchs}
+                    monarchyOptions={this.state.monarchyOptions}
+                    houseOptions={this.state.houseOptions}
+                    memberCounts={this.state.memberCounts}
+                    sharedCount={this.state.sharedCount}
+                    bridgeOptions={this.state.bridgeOptions}
+                    onBridgeChange={this.handleBridgeChange}
+                    rankOptions={this.state.rankOptions}
+                    onRankChange={this.handleRankChange}
+                    showSuccession={this.state.showSuccession}
+                    onToggleSuccession={this.handleToggleSuccession}
+                    onChange={(name, value) => this.handleFilterChange(name, value)}
+                />
+              </MobileDrawer>
+          )}
 
           <HelpPanel
               open={this.state.helpOpen}
               onOpen={() => this.setState({ helpOpen: true })}
               onClose={this.closeHelp}
+              fabPosition={isMobile ? { top: 12, right: 12 } : { bottom: 20, left: 20 }}
           />
 
           <div className="royal-tree-attribution">
@@ -716,4 +778,4 @@ class RoyalTree extends Component {
   }
 }
 
-export default RoyalTree;
+export default withViewport(RoyalTree);

@@ -138,6 +138,7 @@ function FilterPanel(props) {
         showSuccession,
         onToggleSuccession,
         onChange,
+        embedded,
     } = props;
 
     const selectedSet = new Set(selectedMonarchs);
@@ -164,7 +165,7 @@ function FilterPanel(props) {
     };
 
     return (
-        <div className="control-panel" style={{ width: 230 }}>
+        <div className={embedded ? undefined : "control-panel"} style={embedded ? undefined : { width: 230 }}>
             <div style={PANEL_STYLES.header}>
                 <h3 style={PANEL_STYLES.panelTitle}>Monarchies</h3>
             </div>
@@ -324,6 +325,7 @@ FilterPanel.propTypes = {
     showSuccession: PropTypes.bool,
     onToggleSuccession: PropTypes.func,
     onChange: PropTypes.func.isRequired,
+    embedded: PropTypes.bool,
 };
 
 FilterPanel.defaultProps = {
@@ -336,6 +338,7 @@ FilterPanel.defaultProps = {
     onRankChange: () => {},
     showSuccession: true,
     onToggleSuccession: () => {},
+    embedded: false,
 };
 
 export default React.memo(FilterPanel);

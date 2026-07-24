@@ -58,7 +58,43 @@ function Checkbox({name, checked, onToggle, children}) {
 }
 
 function LegendPanel(props) {
-    const {open, categories, visibility, onToggle, togglePanel} = props;
+    const {open, categories, visibility, onToggle, togglePanel, embedded} = props;
+
+    const body = (
+        <React.Fragment>
+            <div style={{marginTop: 6}}>
+                <div style={{fontWeight: 600, marginTop: 6}}>Boundaries</div>
+                {Object.entries(categories).map(([key, {label, color}]) => (
+                    <Checkbox key={key} name={key} checked={visibility[key]} onToggle={onToggle}>
+                        <span style={swatch(color)} />
+                        {label}
+                    </Checkbox>
+                ))}
+
+                <div style={{fontWeight: 600, marginTop: 8}}>Overlays</div>
+                <Checkbox name="orogens" checked={visibility.orogens} onToggle={onToggle}>
+                    <span style={areaSwatch('rgba(150,140,120,0.5)')} />
+                    Orogeny
+                </Checkbox>
+                <Checkbox name="plates" checked={visibility.plates} onToggle={onToggle}>
+                    <span style={areaSwatch('rgba(120,120,140,0.35)')} />
+                    Plates (click to identify)
+                </Checkbox>
+                <Checkbox name="velocity" checked={visibility.velocity} onToggle={onToggle}>
+                    <span style={{...swatch([40, 40, 40]), height: '2px'}} />
+                    Velocity vectors
+                </Checkbox>
+            </div>
+
+            <div style={{marginTop: 8, fontSize: '11px', color: 'var(--color-text-faint)'}}>
+                Data: Bird (2002) PB2002 model
+            </div>
+        </React.Fragment>
+    );
+
+    if (embedded) {
+        return body;
+    }
 
     if (!open) {
         return (
@@ -97,34 +133,7 @@ function LegendPanel(props) {
                     −
                 </button>
             </div>
-
-            <div style={{marginTop: 6}}>
-                <div style={{fontWeight: 600, marginTop: 6}}>Boundaries</div>
-                {Object.entries(categories).map(([key, {label, color}]) => (
-                    <Checkbox key={key} name={key} checked={visibility[key]} onToggle={onToggle}>
-                        <span style={swatch(color)} />
-                        {label}
-                    </Checkbox>
-                ))}
-
-                <div style={{fontWeight: 600, marginTop: 8}}>Overlays</div>
-                <Checkbox name="orogens" checked={visibility.orogens} onToggle={onToggle}>
-                    <span style={areaSwatch('rgba(150,140,120,0.5)')} />
-                    Orogeny
-                </Checkbox>
-                <Checkbox name="plates" checked={visibility.plates} onToggle={onToggle}>
-                    <span style={areaSwatch('rgba(120,120,140,0.35)')} />
-                    Plates (click to identify)
-                </Checkbox>
-                <Checkbox name="velocity" checked={visibility.velocity} onToggle={onToggle}>
-                    <span style={{...swatch([40, 40, 40]), height: '2px'}} />
-                    Velocity vectors
-                </Checkbox>
-            </div>
-
-            <div style={{marginTop: 8, fontSize: '11px', color: 'var(--color-text-faint)'}}>
-                Data: Bird (2002) PB2002 model
-            </div>
+            {body}
         </div>
     );
 }

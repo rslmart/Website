@@ -19,7 +19,7 @@ const settingsPanelStyles = {
 
 function SettingsPanel(props) {
     const {settingsOpen, onSettingsChange, toggleSettingsPanel, scatterplotSettings, lineSettings, gridSettings,
-        heatmapSettings, plotType
+        heatmapSettings, plotType, embedded
     } = props;
     const {radiusScale, radiusMinPixels, radiusMaxPixels, lineWidthScale, lineWidthMinPixels, lineWidthMaxPixels}
         = scatterplotSettings;
@@ -224,6 +224,10 @@ function SettingsPanel(props) {
             return gridDiv
         }
         return <div/>;
+    }
+
+    if (embedded) {
+        return getSettingsDiv(plotType);
     }
 
     return (settingsOpen ?

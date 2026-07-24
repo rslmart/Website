@@ -10,6 +10,9 @@ import StormInfo from "./storm-info";
 import SourcesPanel from "./sources-panel";
 import HelpPanel from "./help-panel";
 import HomeButton from "../components/HomeButton";
+import ControlsFab from "../components/ControlsFab";
+import MobileDrawer from "../components/MobileDrawer";
+import { withViewport } from "../hooks/useViewport";
 
 const HELP_SEEN_KEY = "hurricaneHelpSeen";
 
@@ -368,6 +371,7 @@ class Hurricane extends Component {
         filterPanelOpen: true,
         settingsOpen: false,
         sourcesOpen: false,
+        controlsDrawerOpen: false,
         helpOpen: (() => {
             try {
                 return !window.localStorage.getItem(HELP_SEEN_KEY);
@@ -385,6 +389,11 @@ class Hurricane extends Component {
             // ignore storage failures (private mode, etc.)
         }
         this.setState({ helpOpen: false });
+    };
+
+    exitStormInfo = async (evt) => {
+        await this.setState({ stormInfo: null, selectedPoint: 0 });
+        this.onChange(evt);
     };
 
     onChange = async (evt) => {
@@ -545,17 +554,19 @@ class Hurricane extends Component {
         if (this.divElement) {
             const height = this.divElement.clientHeight;
             const width = this.divElement.clientWidth;
+            // Keep viewState a plain object. Storing a WebMercatorViewport
+            // instance here makes deck.gl throw on the resize re-render
+            // ("Cannot assign to read only property 'padding'"); DeckGL sizes
+            // itself from its container, so width/height aren't needed here.
             this.setState({
                 height, width,
-                viewState: new WebMercatorViewport({
-                    height,
-                    width,
+                viewState: {
                     longitude: -64,
                     latitude: 26,
                     zoom: 3,
                     pitch: 0,
                     bearing: 0
-                }),
+                },
             });
         }
     };
@@ -615,8 +626,9 @@ class Hurricane extends Component {
     }
 
     render() {
+        const isMobile = this.props.viewport && this.props.viewport.isMobile;
         return (
-            <div style={{width: "100vw", height: "100vh"}} ref={ (divElement) => { this.divElement = divElement } }>
+            <div className="mobile-dvh" style={{width: "100vw", height: "100vh"}} ref={ (divElement) => { this.divElement = divElement } }>
                 <HomeButton />
                 <DeckGL
                     viewState={this.state.viewState}
@@ -683,63 +695,128 @@ class Hurricane extends Component {
                     </div>
                 )}
                 {this.state.stormInfo && (
-                    <StormInfo
-                        stormInfo={this.state.stormInfo}
-                        selectedPoint={this.state.selectedPoint}
-                        onChange={this.onChange}
-                        exitStormInfo={async (evt) => {
-                            await this.setState({stormInfo: null, selectedPoint: 0});
-                            this.onChange(evt)
-                        }}
-                    />)
-                }
-                <FilterPanel
-                    filterPanelOpen={this.state.filterPanelOpen}
-                    plotType={this.state.plotType}
-                    plotTypeOptions={PLOT_TYPES}
-                    basin={this.state.basin}
-                    basinOptions={BASINS}
-                    name={this.state.name}
-                    systemStatus={this.state.systemStatus}
-                    systemStatusOptions={SYSTEM_STATUSES}
-                    minYear={this.state.minYear}
-                    maxYear={this.state.maxYear}
-                    minMonth={this.state.minMonth}
-                    maxMonth={this.state.maxMonth}
-                    minWind={this.state.minWind}
-                    maxWind={this.state.maxWind}
-                    filterByPressure={this.state.filterByPressure}
-                    minPressure={this.state.minPressure}
-                    maxPressure={this.state.maxPressure}
-                    landfall={this.state.landfall}
-                    showMaxWindPoly={this.state.showMaxWindPoly}
-                    showWindPoly={this.state.showWindPoly}
-                    only6Hour={this.state.only6Hour}
-                    onChange={evt => this.onChange(evt)}
-                    toggleFilterPanel={evt => {this.setState(prevState => ({ filterPanelOpen: !prevState.filterPanelOpen}))}}
-                />
-                <SettingsPanel
-                    settingsOpen={this.state.settingsOpen}
-                    onSettingsChange={this.onSettingsChange}
-                    toggleSettingsPanel={evt => {this.setState(prevState => ({ settingsOpen: !prevState.settingsOpen}))}}
-                    scatterplotSettings={this.state.scatterplotSettings}
-                    lineSettings={this.state.lineSettings}
-                    gridSettings={this.state.gridSettings}
-                    heatmapSettings={this.state.heatmapSettings}
-                    plotType={this.state.plotType}
-                />
-                <SourcesPanel
-                    open={this.state.sourcesOpen}
-                    toggle={() => this.setState(prevState => ({ sourcesOpen: !prevState.sourcesOpen }))}
-                />
+                    isMobile ? (
+                        <div className="mobile-sheet">
+                            <StormInfo
+                                embedded
+                                stormInfo={this.state.stormInfo}
+                                selectedPoint={this.state.selectedPoint}
+                                onChange={this.onChange}
+                                exitStormInfo={this.exitStormInfo}
+                            />
+                        </div>
+                    ) : (
+                        <StormInfo
+                            stormInfo={this.state.stormInfo}
+                            selectedPoint={this.state.selectedPoint}
+                            onChange={this.onChange}
+                            exitStormInfo={this.exitStormInfo}
+                        />
+                    )
+                )}
+                {!isMobile && (
+                    <FilterPanel
+                        filterPanelOpen={this.state.filterPanelOpen}
+                        plotType={this.state.plotType}
+                        plotTypeOptions={PLOT_TYPES}
+                        basin={this.state.basin}
+                        basinOptions={BASINS}
+                        name={this.state.name}
+                        systemStatus={this.state.systemStatus}
+                        systemStatusOptions={SYSTEM_STATUSES}
+                        minYear={this.state.minYear}
+                        maxYear={this.state.maxYear}
+                        minMonth={this.state.minMonth}
+                        maxMonth={this.state.maxMonth}
+                        minWind={this.state.minWind}
+                        maxWind={this.state.maxWind}
+                        filterByPressure={this.state.filterByPressure}
+                        minPressure={this.state.minPressure}
+                        maxPressure={this.state.maxPressure}
+                        landfall={this.state.landfall}
+                        showMaxWindPoly={this.state.showMaxWindPoly}
+                        showWindPoly={this.state.showWindPoly}
+                        only6Hour={this.state.only6Hour}
+                        onChange={evt => this.onChange(evt)}
+                        toggleFilterPanel={evt => {this.setState(prevState => ({ filterPanelOpen: !prevState.filterPanelOpen}))}}
+                    />
+                )}
+                {!isMobile && (
+                    <SettingsPanel
+                        settingsOpen={this.state.settingsOpen}
+                        onSettingsChange={this.onSettingsChange}
+                        toggleSettingsPanel={evt => {this.setState(prevState => ({ settingsOpen: !prevState.settingsOpen}))}}
+                        scatterplotSettings={this.state.scatterplotSettings}
+                        lineSettings={this.state.lineSettings}
+                        gridSettings={this.state.gridSettings}
+                        heatmapSettings={this.state.heatmapSettings}
+                        plotType={this.state.plotType}
+                    />
+                )}
+                {!isMobile && (
+                    <SourcesPanel
+                        open={this.state.sourcesOpen}
+                        toggle={() => this.setState(prevState => ({ sourcesOpen: !prevState.sourcesOpen }))}
+                    />
+                )}
+                {isMobile && (
+                    <ControlsFab onClick={() => this.setState({ controlsDrawerOpen: true })} />
+                )}
+                {isMobile && (
+                    <MobileDrawer
+                        open={this.state.controlsDrawerOpen}
+                        onClose={() => this.setState({ controlsDrawerOpen: false })}
+                        title="Controls"
+                    >
+                        <div className="mobile-drawer-section">Filters</div>
+                        <FilterPanel
+                            embedded
+                            filterPanelOpen
+                            plotType={this.state.plotType}
+                            plotTypeOptions={PLOT_TYPES}
+                            basin={this.state.basin}
+                            basinOptions={BASINS}
+                            name={this.state.name}
+                            systemStatus={this.state.systemStatus}
+                            systemStatusOptions={SYSTEM_STATUSES}
+                            minYear={this.state.minYear}
+                            maxYear={this.state.maxYear}
+                            minMonth={this.state.minMonth}
+                            maxMonth={this.state.maxMonth}
+                            minWind={this.state.minWind}
+                            maxWind={this.state.maxWind}
+                            filterByPressure={this.state.filterByPressure}
+                            minPressure={this.state.minPressure}
+                            maxPressure={this.state.maxPressure}
+                            landfall={this.state.landfall}
+                            showMaxWindPoly={this.state.showMaxWindPoly}
+                            showWindPoly={this.state.showWindPoly}
+                            only6Hour={this.state.only6Hour}
+                            onChange={evt => this.onChange(evt)}
+                        />
+                        <div className="mobile-drawer-section">Rendering</div>
+                        <SettingsPanel
+                            embedded
+                            onSettingsChange={this.onSettingsChange}
+                            scatterplotSettings={this.state.scatterplotSettings}
+                            lineSettings={this.state.lineSettings}
+                            gridSettings={this.state.gridSettings}
+                            heatmapSettings={this.state.heatmapSettings}
+                            plotType={this.state.plotType}
+                        />
+                        <div className="mobile-drawer-section">Data &amp; imagery sources</div>
+                        <SourcesPanel embedded />
+                    </MobileDrawer>
+                )}
                 <HelpPanel
                     open={this.state.helpOpen}
                     onOpen={() => this.setState({ helpOpen: true })}
                     onClose={this.closeHelp}
+                    fabPosition={isMobile ? { top: 12, right: 12 } : { top: 20, left: 70 }}
                 />
             </div>
         );
     }
 }
 
-export default Hurricane;
+export default withViewport(Hurricane);

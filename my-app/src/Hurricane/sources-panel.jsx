@@ -28,7 +28,22 @@ const linkStyle = {
     textDecoration: "none",
 };
 
-function SourcesPanel({ open, toggle }) {
+function SourcesPanel({ open, toggle, embedded }) {
+    if (embedded) {
+        return (
+            <div style={{ fontSize: 12, lineHeight: 1.5, color: "var(--color-text-muted)" }}>
+                {SOURCES.map((source) => (
+                    <div key={source.name} style={{ marginBottom: 6 }}>
+                        <div style={{ color: "#9b9ba6" }}>{source.label}</div>
+                        <a href={source.href} target="_blank" rel="noopener noreferrer" style={linkStyle}>
+                            {source.name}
+                        </a>
+                    </div>
+                ))}
+            </div>
+        );
+    }
+
     if (!open) {
         return (
             <button

@@ -120,6 +120,11 @@
 }
 
 @media (max-width: 768px) {
+    /* Clear the fixed Home button (top-left) so it never covers the header. */
+    .container {
+        padding-top: 64px;
+    }
+
     .jobHeader {
         flex-direction: column;
         gap: 5px;
@@ -141,7 +146,7 @@
 
 @media (max-width: 480px) {
     .container {
-        padding: 10px;
+        padding: 64px 10px 10px;
     }
 
     .header {

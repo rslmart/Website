@@ -4,7 +4,7 @@ function FilterPanel(props) {
     const {filterPanelOpen, plotType, plotTypeOptions, basin, basinOptions, name, systemStatus, systemStatusOptions,
         minYear, maxYear, minMonth, maxMonth, minWind, maxWind,
         filterByPressure, minPressure, maxPressure, landfall, showMaxWindPoly, showWindPoly,
-        only6Hour, onChange, toggleFilterPanel} = props;
+        only6Hour, onChange, toggleFilterPanel, embedded} = props;
 
     const PLOT_TYPE_DESCRIPTIONS = {
         STORM: "Showing the entire tracks of storm systems.",
@@ -33,18 +33,7 @@ function FilterPanel(props) {
         zIndex: 9999,
     };
 
-    return (filterPanelOpen ?
-                <div style={controlPanelStyles}>
-                    <div style={{display: "flex", justifyContent: "space-between", alignItems: "center"}}>
-                        <h3 style={{margin: 0, fontSize: 16, color: "var(--color-text)"}}>Hurricane Data</h3>
-                        <button
-                            onClick={evt => toggleFilterPanel(evt)}
-                            aria-label="Collapse panel"
-                            style={{border: "none", background: "none", fontSize: 20, lineHeight: 1, cursor: "pointer", color: "var(--color-text-muted)"}}
-                        >
-                            −
-                        </button>
-                    </div>
+    const fields = (
                     <div>
                         <div key={'plotType'} className="select" style={{marginTop: 10}}>
                             <label>Mode: </label>
@@ -239,6 +228,25 @@ function FilterPanel(props) {
                         </div>
                         }
                     </div>
+    );
+
+    if (embedded) {
+        return fields;
+    }
+
+    return (filterPanelOpen ?
+                <div style={controlPanelStyles}>
+                    <div style={{display: "flex", justifyContent: "space-between", alignItems: "center"}}>
+                        <h3 style={{margin: 0, fontSize: 16, color: "var(--color-text)"}}>Hurricane Data</h3>
+                        <button
+                            onClick={evt => toggleFilterPanel(evt)}
+                            aria-label="Collapse panel"
+                            style={{border: "none", background: "none", fontSize: 20, lineHeight: 1, cursor: "pointer", color: "var(--color-text-muted)"}}
+                        >
+                            −
+                        </button>
+                    </div>
+                    {fields}
                 </div> :
                 <button
                     onClick={evt => toggleFilterPanel(evt)}
