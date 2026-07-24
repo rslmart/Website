@@ -565,8 +565,25 @@ class Hurricane extends Component {
         this.resizeTimer = setTimeout(this.updateDimensions, 100);
     };
 
+    // Step through the selected storm's track points with the arrow keys while the
+    // detail panel is open. Skip when a form control is focused so its own arrow-key
+    // behavior (sliders, number inputs) still works.
+    handleKeyDown = (evt) => {
+        if (!this.state.stormInfo) return;
+        const tag = evt.target && evt.target.tagName;
+        if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+        if (evt.key === 'ArrowRight' || evt.key === 'ArrowUp') {
+            evt.preventDefault();
+            this.onChange({ target: { name: 'forwardSelectedPoint' } });
+        } else if (evt.key === 'ArrowLeft' || evt.key === 'ArrowDown') {
+            evt.preventDefault();
+            this.onChange({ target: { name: 'backwardSelectedPoint' } });
+        }
+    };
+
     async componentDidMount() {
         window.addEventListener('resize', this.handleResize);
+        window.addEventListener('keydown', this.handleKeyDown);
         this.updateDimensions();
         try {
             const storms = await loadStorms();
@@ -584,6 +601,7 @@ class Hurricane extends Component {
     componentWillUnmount() {
         clearTimeout(this.resizeTimer);
         window.removeEventListener('resize', this.handleResize);
+        window.removeEventListener('keydown', this.handleKeyDown);
     }
 
     getToolTip = (object) => {

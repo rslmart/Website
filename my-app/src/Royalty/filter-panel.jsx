@@ -164,7 +164,7 @@ function FilterPanel(props) {
     };
 
     return (
-        <div className="control-panel" style={{ width: 200 }}>
+        <div className="control-panel" style={{ width: 230 }}>
             <div style={PANEL_STYLES.header}>
                 <h3 style={PANEL_STYLES.panelTitle}>Monarchies</h3>
             </div>

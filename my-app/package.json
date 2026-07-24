@@ -29,7 +29,8 @@
     "start": "vite",
     "build": "vite build",
     "dev": "vite",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "bash deploy.sh"
   },
   "browserslist": {
     "production": [
