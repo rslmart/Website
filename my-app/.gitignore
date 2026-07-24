@@ -48,3 +48,7 @@ src/Royalty/Data/data/*.json
 src/Royalty/Data/*.log
 src/Royalty/Data/_gaps.py
 src/Royalty/Data/debug_*.py
+
+# Photos: local data-processing scratch (~5GB of HEIC source images, Python
+# venv, and generated output). Not part of the site build.
+src/Photos/
