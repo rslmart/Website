@@ -5,6 +5,7 @@ import "./global.css";
 import Home from "./Home";
 import Bio from "./Bio/Bio";
 import Hurricane from "./Hurricane/Hurricane";
+import PhotosPage from "./Photos/PhotosPage";
 import RoyalTree from "./Royalty/RoyalTreePage";
 import SnowPage from "./Snow/SnowPage";
 import Tectonics from "./Tectonics/Tectonics";
@@ -17,6 +18,7 @@ root.render(
             <Route exact path="/" element={<Home/>} />
             <Route path="/Bio" element={<Bio/>} />
             <Route path="/Hurricane" element={<Hurricane/>} />
+            <Route path="/Photos" element={<PhotosPage/>} />
             <Route path="/RoyalTree" element={<RoyalTree/>} />
             <Route path="/Snow" element={<SnowPage/>} />
             <Route path="/Tectonics" element={<Tectonics/>} />

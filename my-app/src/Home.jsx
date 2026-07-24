@@ -16,6 +16,12 @@ const PROJECTS = [
         accent: "#e0533d",
     },
     {
+        to: "/Photos",
+        title: "Photo Map",
+        desc: "My favorite photos on a world map that clusters by region and splits as you zoom — plus a gallery and a scrubable timeline.",
+        accent: "#f59e0b",
+    },
+    {
         to: "/RoyalTree",
         title: "RoyalTree",
         desc: "Interactive royal genealogies reconstructed from Wikidata — see how dynasties connect.",

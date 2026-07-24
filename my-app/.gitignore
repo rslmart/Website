@@ -47,3 +47,11 @@ src/Royalty/Data/data/*.json
 src/Royalty/Data/*.log
 src/Royalty/Data/_gaps.py
 src/Royalty/Data/debug_*.py
+
+# Photos pipeline: original photos and generated sizes/manifest are large and
+# externally managed (uploaded to s3://<bucket>/photos, served at makoa.link/photos).
+# Regenerate with src/Photos/build_photos.py. The overrides.json is kept (hand-edited).
+src/Photos/Data/
+src/Photos/output/
+src/Photos/.venv/
+src/Photos/airports.dat
