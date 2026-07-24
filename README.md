@@ -11,7 +11,7 @@ Live at [makoa.link](https://makoa.link).
 
 - **React 18** + **react-router-dom 6** (client-side routing, one route per page)
 - **Vite 6** for dev/build (via a Create-React-App compatibility shim in
-  [`vite.config.js`](vite.config.js) — output goes to `build/`, not `dist/`)
+  [`vite.config.js`](my-app/vite.config.js) — output goes to `build/`, not `dist/`)
 - **deck.gl** + **react-map-gl / Mapbox GL** for the map pages (Hurricane, Tectonics)
 - **Cytoscape.js** (+ dagre) for the RoyalTree genealogy graph
 - **Recharts** for the Snow dashboard
@@ -49,20 +49,22 @@ my-app/
 | Route | Page | Data source | Details |
 |-------|------|-------------|---------|
 | `/` | Home | none (static landing) | this file |
-| `/Bio` | Resume / CV | none (static content) | [`src/Bio/README.md`](src/Bio/README.md) |
-| `/Hurricane` | Cyclone tracks + satellite IR | NOAA IBTrACS, HURSAT-B1, RAMMB/CIRA | [`src/Hurricane/README.md`](src/Hurricane/README.md) |
-| `/RoyalTree` | Royal family trees | Wikidata + Wikipedia + Wikimedia Commons | [`src/Royalty/README.md`](src/Royalty/README.md) |
-| `/Snow` | WA mountain-pass snowfall | WSDOT + NOAA CPC ONI | [`src/Snow/README.md`](src/Snow/README.md) |
-| `/Tectonics` | Plate boundaries | Bird (2002) PB2002 model | [`src/Tectonics/README.md`](src/Tectonics/README.md) |
+| `/Bio` | Resume / CV | none (static content) | [`my-app/src/Bio/README.md`](my-app/src/Bio/README.md) |
+| `/Hurricane` | Cyclone tracks + satellite IR | NOAA IBTrACS, HURSAT-B1, RAMMB/CIRA | [`my-app/src/Hurricane/README.md`](my-app/src/Hurricane/README.md) |
+| `/RoyalTree` | Royal family trees | Wikidata + Wikipedia + Wikimedia Commons | [`my-app/src/Royalty/README.md`](my-app/src/Royalty/README.md) |
+| `/Snow` | WA mountain-pass snowfall | WSDOT + NOAA CPC ONI | [`my-app/src/Snow/README.md`](my-app/src/Snow/README.md) |
+| `/Tectonics` | Plate boundaries | Bird (2002) PB2002 model | [`my-app/src/Tectonics/README.md`](my-app/src/Tectonics/README.md) |
 
 Each per-page README explains **how and where that page's data was gathered and
 processed**, the output schema, and how the frontend consumes it.
 
 ## Local development
 
-Prerequisites: Node.js 18+ and npm.
+Prerequisites: Node.js 18+ and npm. The app lives in the [`my-app/`](my-app)
+subdirectory — run all commands from there:
 
 ```bash
+cd my-app
 npm install
 
 # The map pages need a Mapbox token:
@@ -85,7 +87,7 @@ npm run deploy       # build + deploy to S3/CloudFront (see below)
 The site is a static bundle plus a set of pre-processed data files. There are two
 classes of data, both served from the same `makoa.link` bucket via CloudFront:
 
-1. **In-repo, build-shipped data** — files under [`public/`](public) (the storm
+1. **In-repo, build-shipped data** — files under [`public/`](my-app/public) (the storm
    dataset, royalty trees, snowfall JSON, tectonic layers). These are committed to
    the repo and uploaded by `deploy.sh` as part of the normal build.
 2. **Externally-managed data uploaded out-of-band** — large asset trees the build
@@ -104,7 +106,8 @@ server already decompressed the response.
 
 ## Deployment
 
-Deploys are handled by [`deploy.sh`](deploy.sh). Configure it once:
+Deploys are handled by [`deploy.sh`](my-app/deploy.sh) (run from `my-app/`).
+Configure it once:
 
 ```bash
 cp .env.deploy.example .env.deploy

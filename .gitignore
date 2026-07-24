@@ -1,0 +1,5 @@
+# JetBrains IDE config (per-developer)
+.idea/
+
+# macOS
+.DS_Store
