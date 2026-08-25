@@ -245,9 +245,9 @@ function Bio() {
                     to create a tool to visualize these large, complicated families. As part of this I used python
                     to scrape and organize data from wikidata. I then used react and javascript to turn this data
                     into clean, easy to follow family trees on my website.{" "}
-                    <a href="http://makoa.link/RoyalTree" target="_blank" rel="noopener noreferrer">
+                    <Link to="/RoyalTree">
                         View Project
-                    </a>
+                    </Link>
                 </p>
                 <p className={styles.cvParagraph}>
                     <strong>Hurricane Tracks:</strong> As an avid surfer and east coaster, I have a keen interest in
@@ -255,9 +255,9 @@ function Bio() {
                     format, and organize a large amount of data (over 300,000 data points) on historical hurricane
                     and typhoon tracks for my personal website at www.makoa.link. Using React and Deck.gl, I created
                     interactive visualizations that made it easy to view and filter this information.{" "}
-                    <a href="http://makoa.link/Hurricane" target="_blank" rel="noopener noreferrer">
+                    <Link to="/Hurricane">
                         View Project
-                    </a>
+                    </Link>
                 </p>
             </div>
             <div className={styles.cvSubSection}>
