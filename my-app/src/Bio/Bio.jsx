@@ -34,7 +34,11 @@ function Bio() {
                         <div className={styles.date}>Oct 2025 - Present</div>
                     </div>
                     <ul>
-                        <li>Build new features and add support for various STT, TTS, and LLM models to the Inference Gateway (<a href="https://lnkd.in/gXW-K4d8" target="_blank" rel="noopener noreferrer" className={styles.link}>read about it here</a>)</li>
+                        <li>Build new features and add support for 10+ STT, TTS, LLM, and realtime providers to the Inference Gateway (Go, WebSockets) (<a href="https://lnkd.in/gXW-K4d8" target="_blank" rel="noopener noreferrer" className={styles.link}>read about it here</a>)</li>
+                        <li>Created and own the voice cloning service (Go, CockroachDB, S3, NATS), from first commit to multi-region production</li>
+                        <li>Designed and launched realtime speech-to-speech support end to end, from gateway failover to usage-based billing and quota enforcement (gRPC/protobuf)</li>
+                        <li>Created a continuous LLM latency benchmarking system (Go, ClickHouse) comparing LiveKit Inference against direct provider APIs</li>
+                        <li>Improved reliability with TTS failover, fallback tiers, and cross-region routing; own dashboards, alerting, and incident response for my services</li>
                     </ul>
                 </div>
 
@@ -117,11 +121,11 @@ function Bio() {
                 <div className={styles.skillsContainer}>
                     <div className={styles.skillCategory}>
                     <h3>Proficient</h3>
-                    <p>Go, Python, Java, JavaScript, React, C++, Linux, Git</p>
+                    <p>Go, Python, Java, JavaScript, React, C++, gRPC, Linux, Git</p>
                 </div>
                     <div className={styles.skillCategory}>
                     <h3>Familiar</h3>
-                    <p>Keras, Prometheus, C, CUDA, SQL, Matlab, AWS Lambda, API Gateway, DynamoDB, S3, Athena, Glue, Quicksight, Route 53, Cloudwatch, X-Ray</p>
+                    <p>TypeScript, Kubernetes, CockroachDB, ClickHouse, Grafana, Keras, Prometheus, C, CUDA, SQL, Matlab, AWS Lambda, API Gateway, DynamoDB, S3, Athena, Glue, Quicksight, Route 53, Cloudwatch, X-Ray</p>
                 </div>
             </div>
         </section>
@@ -171,13 +175,34 @@ function Bio() {
         <div className={styles.cvSection}>
             <h2 className={styles.sectionTitle}>Cover Letter</h2>
             <div className={styles.cvSubSection}>
+                <h3 className={styles.sectionTitle}>LiveKit</h3>
+                <p className={styles.cvParagraph}>
+                    Since October 2025, I have worked on LiveKit Inference, a hosted gateway that gives voice AI
+                    agents a single API for speech-to-text, text-to-speech, LLM, and realtime speech-to-speech
+                    models from more than ten providers. Most of my work is in Go, spanning the gateway itself,
+                    the gRPC contracts between services, and the Kubernetes configuration that deploys them across
+                    a multi-region fleet.
+                </p>
+                <p className={styles.cvParagraph}>
+                    I created and own the voice cloning service, which lets customers clone a voice across several
+                    TTS providers and use it in their agents. I took it from the first commit to a multi-region
+                    production deployment, including plan-based quotas and a consent audit trail. I also designed
+                    and launched realtime speech-to-speech support in the gateway, built the usage metering and
+                    quota enforcement behind it, and created a benchmarking system that continuously measures LLM
+                    latency through LiveKit against calling providers directly. Alongside new features, I work on
+                    reliability: provider failover, cross-region routing, and the dashboards and alerts for the
+                    services I own.
+                </p>
+            </div>
+
+            <div className={styles.cvSubSection}>
                 <h3 className={styles.sectionTitle}>Stealth Startup</h3>
                 <p className={styles.cvParagraph}>
-                    Starting December 2023, I have been part of the networking team at an AI Datacenter startup,
+                    From December 2023 to October 2025, I was part of the networking team at an AI Datacenter startup,
                     supporting a critical server component that serves as a foundational platform for internal teams.
-                    My responsibilities include monitoring, updating, and securing network devices, as well as
+                    My responsibilities included monitoring, updating, and securing network devices, as well as
                     designing secure APIs and environments to facilitate device interaction. A core focus of my
-                    role has been driving automation and testing efforts, such as developing gRPC APIs for device
+                    role was driving automation and testing efforts, such as developing gRPC APIs for device
                     communication and building robust GitLab CI/CD pipelines to automate builds, deployments,
                     and testing workflows.
                 </p>
