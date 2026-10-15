@@ -35,9 +35,9 @@ function Bio() {
                     </div>
                     <ul>
                         <li>Build new features and add support for 10+ STT, TTS, LLM, and realtime providers to the Inference Gateway (Go, WebSockets) (<a href="https://lnkd.in/gXW-K4d8" target="_blank" rel="noopener noreferrer" className={styles.link}>read about it here</a>)</li>
-                        <li>Created and own the voice cloning service (Go, CockroachDB, S3, NATS), from first commit to multi-region production</li>
-                        <li>Designed and launched realtime speech-to-speech support end to end, from gateway failover to usage-based billing and quota enforcement (gRPC/protobuf)</li>
-                        <li>Created a continuous LLM latency benchmarking system (Go, ClickHouse) comparing LiveKit Inference against direct provider APIs</li>
+                        <li>Created and own the voice cloning service (Go, CockroachDB, S3, NATS), from first commit to multi-region production (<a href="https://www.linkedin.com/posts/voice-agents-are-everywhere-now-taking-reservations-ugcPost-7458183168945463296-fNon/" target="_blank" rel="noopener noreferrer" className={styles.link}>read about it here</a>)</li>
+                        <li>Designed and launched realtime speech-to-speech support end to end, from gateway failover to usage-based billing and quota enforcement (gRPC/protobuf) (<a href="https://www.linkedin.com/posts/voice-agents-get-built-in-three-different-ugcPost-7516561022988468224-4sWy/" target="_blank" rel="noopener noreferrer" className={styles.link}>read about it here</a>)</li>
+                        <li>Created a continuous LLM latency benchmarking system (Go, ClickHouse) that powers LiveKit's public latency benchmarks (<a href="https://livekit.com/benchmarks/latency" target="_blank" rel="noopener noreferrer" className={styles.link}>view benchmarks</a>)</li>
                         <li>Improved reliability with TTS failover, fallback tiers, and cross-region routing; own dashboards, alerting, and incident response for my services</li>
                     </ul>
                 </div>
