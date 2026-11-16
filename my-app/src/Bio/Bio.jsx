@@ -61,7 +61,7 @@ function Bio() {
                     <h3>Software Engineer II</h3>
                     <div className={styles.company}>AWS AI/ML</div>
                     <div className={styles.location}>London, UK</div>
-                    <div className={styles.date}>Jan 2022 - Oct 2023</div>
+                    <div className={styles.date}>Dec 2022 - Oct 2023</div>
                 </div>
                 <ul>
                     <li>Enhanced ML-driven anomaly detection (Java/Kotlin) for AWS services across 16 regions</li>
@@ -195,7 +195,7 @@ function Bio() {
             <div className={styles.cvSubSection}>
                 <h3 className={styles.sectionTitle}>Stealth Startup</h3>
                 <p className={styles.cvParagraph}>
-                    From December 2023 to October 2025, I was part of the networking team at an AI Datacenter startup,
+                    From November 2023 to October 2025, I was part of the networking team at an AI Datacenter startup,
                     supporting a critical server component that serves as a foundational platform for internal teams.
                     My responsibilities included monitoring, updating, and securing network devices, as well as
                     designing secure APIs and environments to facilitate device interaction. A core focus of my
@@ -227,7 +227,7 @@ function Bio() {
             <div className={styles.cvSubSection}>
                 <h3 className={styles.sectionTitle}>AWS Networking</h3>
                 <p className={styles.cvParagraph}>
-                    Upon completing my undergraduate degree in May 2019, I joined AWS as a member of a newly
+                    Upon completing my Master's degree in May 2019, I joined AWS as a member of a newly
                     established AWS Networking team in July 2019. AWS Networking is responsible for building
                     the physical and logical infrastructure that underpins all AWS services. As the second
                     developer hired onto the team, following the Senior SDE, I created and deployed the project's
