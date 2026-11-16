@@ -95,7 +95,16 @@ very strong) by magnitude at 0.5 / 1.0 / 1.5 / 2.0.
   **New Daily Snowfall** (`newDailySnowFall`).
 - For each pass it computes client-side baselines across seasons — an all-season
   Average plus separate La Niña and El Niño averages — and auto-selects the
-  highest- and lowest-snowfall seasons for comparison lines.
+  highest- and lowest-snowfall seasons for comparison lines. The data logic
+  lives in `snowStats.js`:
+  - Baseline days backed by fewer than 3 seasons are omitted, and Feb 29 is
+    left out of the baselines (it only exists in leap winters).
+  - "Lowest season" only considers seasons that are over and have data in
+    each of Dec–Mar, so empty (`[]`), gappy or in-progress seasons can't win.
+  - Switching to a pass that lacks the chosen season falls back to that
+    pass's newest season with data.
+  - Tests: `node --test src/Snow/snowStats.test.mjs` (from `my-app/`).
+- If the data fetch fails, the page shows the error with a Retry button.
 - A badge shows the current winter's ENSO status, colored by phase.
 
 ## Adding a new season
