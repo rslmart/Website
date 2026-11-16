@@ -4,7 +4,7 @@ import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ThemeToggle from "../components/ThemeToggle";
-import useTheme, { LIGHT_ONLY_PATHS, THEME_STORAGE_KEY, isLightOnlyPath } from "./useTheme";
+import useTheme, { LIGHT_ONLY_PATHS, THEME_STORAGE_KEY, isLightOnlyPath, resetThemeMemoryForTests } from "./useTheme";
 
 /* A matchMedia stand-in whose prefers-color-scheme answer tests can flip. */
 function mockSystemTheme(initial) {
@@ -25,11 +25,17 @@ function mockSystemTheme(initial) {
 }
 
 function Shell({ pathname = "/" }) {
-    const { theme, lightOnly, toggle } = useTheme(pathname);
-    return lightOnly ? <p>light only</p> : <ThemeToggle theme={theme} onToggle={toggle} />;
+    const { theme, lightOnly } = useTheme(pathname);
+    return lightOnly ? <p>light only</p> : <ThemeToggle theme={theme} />;
 }
 
 const htmlTheme = () => document.documentElement.dataset.theme;
+
+/* Open the theme menu and pick an option. */
+async function choose(option) {
+    await userEvent.click(screen.getByRole("button", { name: /^Theme:/ }));
+    await userEvent.click(screen.getByRole("radio", { name: option }));
+}
 
 beforeEach(() => {
     window.localStorage.clear();
@@ -37,6 +43,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+    resetThemeMemoryForTests();
     vi.restoreAllMocks();
 });
 
@@ -56,7 +63,8 @@ describe("useTheme", () => {
         const { unmount } = render(<Shell />);
         expect(htmlTheme()).toBe("light");
 
-        await userEvent.click(screen.getByRole("button", { name: "Switch to dark theme" }));
+        expect(screen.getByRole("button", { name: "Theme: System (light)" })).toBeInTheDocument();
+        await choose("Dark");
         expect(htmlTheme()).toBe("dark");
         expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe("dark");
 
@@ -68,7 +76,39 @@ describe("useTheme", () => {
         delete document.documentElement.dataset.theme;
         render(<Shell />);
         expect(htmlTheme()).toBe("dark");
-        expect(screen.getByRole("button", { name: "Switch to light theme" })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Theme: Dark" })).toBeInTheDocument();
+    });
+
+    it("returns to following the system and forgets the saved choice", async () => {
+        const setSystem = mockSystemTheme("light");
+        window.localStorage.setItem(THEME_STORAGE_KEY, "dark");
+        render(<Shell />);
+        expect(htmlTheme()).toBe("dark");
+
+        await choose("System");
+        expect(htmlTheme()).toBe("light");
+        expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBeNull();
+        expect(screen.getByRole("radio", { name: "System" })).toBeChecked();
+
+        act(() => setSystem("dark"));
+        expect(htmlTheme()).toBe("dark");
+        expect(screen.getByRole("button", { name: "Theme: System (dark)" })).toBeInTheDocument();
+    });
+
+    it("opens on the current choice, and Escape closes it and returns focus", async () => {
+        mockSystemTheme("light");
+        render(<Shell />);
+        const button = screen.getByRole("button", { name: /^Theme:/ });
+        expect(button).toHaveAttribute("aria-expanded", "false");
+
+        await userEvent.click(button);
+        expect(button).toHaveAttribute("aria-expanded", "true");
+        expect(screen.getByRole("radio", { name: "System" })).toHaveFocus();
+
+        await userEvent.keyboard("{Escape}");
+        expect(button).toHaveAttribute("aria-expanded", "false");
+        expect(button).toHaveFocus();
+        expect(screen.queryByRole("radio")).toBeNull();
     });
 
     it("falls back to the system theme and still toggles when storage throws", async () => {
@@ -83,7 +123,20 @@ describe("useTheme", () => {
         render(<Shell />);
         expect(htmlTheme()).toBe("dark");
 
-        await userEvent.click(screen.getByRole("button", { name: "Switch to light theme" }));
+        await choose("Light");
+        expect(htmlTheme()).toBe("light");
+    });
+
+    it("applies a choice when storage reads but cannot write", async () => {
+        mockSystemTheme("dark");
+        vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+            throw new Error("QuotaExceededError");
+        });
+
+        render(<Shell />);
+        expect(htmlTheme()).toBe("dark");
+
+        await choose("Light");
         expect(htmlTheme()).toBe("light");
     });
 
@@ -107,7 +160,8 @@ describe("useTheme", () => {
 
     it("matches light-only paths case-insensitively, with or without a trailing slash", () => {
         expect(isLightOnlyPath("/Bio")).toBe(true);
-        expect(isLightOnlyPath("/snow/")).toBe(true);
+        expect(isLightOnlyPath("/bio/")).toBe(true);
+        expect(isLightOnlyPath("/Snow")).toBe(false);
         expect(isLightOnlyPath("/")).toBe(false);
         expect(isLightOnlyPath("/Biology")).toBe(false);
     });

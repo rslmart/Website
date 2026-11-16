@@ -35,7 +35,7 @@ const areaSwatch = (rgba) => ({
     marginRight: '8px',
     verticalAlign: 'middle',
     backgroundColor: rgba,
-    border: '1px solid #b9b0a2',
+    border: '1px solid var(--color-border-strong)',
 });
 
 const row = {display: 'flex', alignItems: 'center', margin: '2px 0'};

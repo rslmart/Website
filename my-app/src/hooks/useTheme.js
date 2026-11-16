@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from "react";
 
 /* Site theme: "light" or "dark", applied as <html data-theme="...">, which
    switches the colour tokens in global.css.
@@ -8,16 +8,16 @@ import { useCallback, useEffect, useLayoutEffect, useState } from "react";
    mounts. Keep the two in sync (src/hooks/useTheme.test.jsx checks the
    storage key and the light-only list against index.html).
 
-   - An explicit choice from the toggle is saved in localStorage. Storage can
-     throw (private mode, blocked site data), so reads and writes fall back
-     to following the system setting without saving.
-   - With no saved choice the theme follows prefers-color-scheme, live.
+   - The visitor's choice is "light", "dark" or "system" (follow
+     prefers-color-scheme, live). An explicit light or dark is saved in
+     localStorage; "system" removes the saved value.
+   - Storage can throw (private mode, blocked site data). Then the choice is
+     kept in memory for this page load only and nothing is saved.
    - LIGHT_ONLY_PATHS stay light whatever the choice, until their own
-     styles move onto the tokens: Bio until website-prop-bio-readability-a11y,
-     the four data pages until website-site-theme-page-chrome. */
+     styles move onto the tokens: Bio until website-prop-bio-readability-a11y. */
 
 export const THEME_STORAGE_KEY = "theme";
-export const LIGHT_ONLY_PATHS = ["/bio", "/hurricane", "/royaltree", "/snow", "/tectonics"];
+export const LIGHT_ONLY_PATHS = ["/bio"];
 
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 
@@ -25,7 +25,14 @@ export function isLightOnlyPath(pathname) {
     return LIGHT_ONLY_PATHS.includes(pathname.toLowerCase().replace(/\/+$/, ""));
 }
 
+// In-memory choice, used once storage has failed to read or write
+// (undefined = storage is working).
+let memoryChoice;
+const listeners = new Set();
+
+/* The saved explicit choice, "light" | "dark", or null for "follow system". */
 export function readStoredTheme() {
+    if (memoryChoice !== undefined) return memoryChoice;
     try {
         const value = window.localStorage.getItem(THEME_STORAGE_KEY);
         return value === "light" || value === "dark" ? value : null;
@@ -34,20 +41,47 @@ export function readStoredTheme() {
     }
 }
 
-function writeStoredTheme(value) {
+/* Tests only: forget an in-memory fallback choice. */
+export function resetThemeMemoryForTests() {
+    memoryChoice = undefined;
+}
+
+/* Save a choice: "light", "dark" or "system". */
+export function setThemeChoice(choice) {
+    const value = choice === "light" || choice === "dark" ? choice : null;
     try {
-        window.localStorage.setItem(THEME_STORAGE_KEY, value);
+        if (value) window.localStorage.setItem(THEME_STORAGE_KEY, value);
+        else window.localStorage.removeItem(THEME_STORAGE_KEY);
+        memoryChoice = undefined;
     } catch {
-        // Not persisted; the choice still applies until the page is reloaded.
+        memoryChoice = value;
     }
+    listeners.forEach((notify) => notify());
+}
+
+function subscribe(notify) {
+    listeners.add(notify);
+    // Another tab changed the choice.
+    window.addEventListener("storage", notify);
+    return () => {
+        listeners.delete(notify);
+        window.removeEventListener("storage", notify);
+    };
 }
 
 function systemTheme() {
     return window.matchMedia?.(DARK_QUERY).matches ? "dark" : "light";
 }
 
+/* The current choice ("light" | "dark" | "system") and a setter. Shared by
+   every caller, so the toggle and RootLayout stay in step. */
+export function useThemeChoice() {
+    const stored = useSyncExternalStore(subscribe, readStoredTheme, () => null);
+    return { choice: stored ?? "system", setChoice: setThemeChoice };
+}
+
 export default function useTheme(pathname) {
-    const [stored, setStored] = useState(readStoredTheme);
+    const { choice } = useThemeChoice();
     const [system, setSystem] = useState(systemTheme);
 
     useEffect(() => {
@@ -58,7 +92,7 @@ export default function useTheme(pathname) {
         return () => query.removeEventListener("change", onChange);
     }, []);
 
-    const preferred = stored ?? system;
+    const preferred = choice === "system" ? system : choice;
     const lightOnly = isLightOnlyPath(pathname);
     const theme = lightOnly ? "light" : preferred;
 
@@ -68,11 +102,5 @@ export default function useTheme(pathname) {
         document.documentElement.dataset.theme = theme;
     }, [theme]);
 
-    const toggle = useCallback(() => {
-        const next = preferred === "dark" ? "light" : "dark";
-        writeStoredTheme(next);
-        setStored(next);
-    }, [preferred]);
-
-    return { theme, lightOnly, toggle };
+    return { theme, lightOnly, choice, system };
 }

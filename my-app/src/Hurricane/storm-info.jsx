@@ -77,13 +77,14 @@ const stormInfoStyles = {
     bottom: 0,
     left: 0,
     maxWidth: '320px',
-    backgroundColor: '#fff',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+    backgroundColor: 'var(--color-surface)',
+    boxShadow: 'var(--shadow-panel)',
+    borderRadius: 'var(--radius)',
     padding: '6px 12px',
     margin: '20px',
     fontSize: '13px',
     lineHeight: 2,
-    color: '#6b6b76',
+    color: 'var(--color-text-muted)',
     outline: 'none',
     zIndex: 9999,
 };
@@ -120,10 +121,10 @@ function StormInfo(props) {
     const hasPressureData = pressureValues.length > 0;
 
     return (
-        <div style={embedded ? { color: '#6b6b76' } : stormInfoStyles}>
+        <div style={embedded ? { color: 'var(--color-text-muted)' } : stormInfoStyles}>
             {/* Header and close button remains the same */}
             <div style={{ marginBottom: "20px" }}>
-                <h3 style={{ float: "left", marginTop: 0, marginBottom: 0 }}>{stormInfo["name"]} {stormInfo["season"]}</h3>
+                <h3 style={{ float: "left", marginTop: 0, marginBottom: 0, color: "var(--color-text)" }}>{stormInfo["name"]} {stormInfo["season"]}</h3>
                 <button onClick={evt => exitStormInfo(evt)} style={{ float: "right" }} aria-label="Close storm details">&times;</button>
             </div>
 
@@ -137,7 +138,7 @@ function StormInfo(props) {
                         style={{ width: "300px", display: "block" }}
                         onError={() => setIrIndex((i) => i + 1)}
                     />
-                    <div style={{ fontSize: 11, color: "#9b9ba6" }}>{irSource}</div>
+                    <div style={{ fontSize: 11, color: "var(--color-text-faint)" }}>{irSource}</div>
                 </div>
             )}
 
@@ -210,7 +211,15 @@ function StormInfo(props) {
                         <Legend />
                         <Tooltip
                             content={({ payload }) => (
-                                <div className="custom-tooltip">
+                                <div
+                                    className="custom-tooltip"
+                                    style={{
+                                        backgroundColor: "var(--color-surface)",
+                                        border: "1px solid var(--color-border-strong)",
+                                        borderRadius: "var(--radius-sm)",
+                                        padding: "0 8px",
+                                    }}
+                                >
                                     {payload?.map((entry, index) => (
                                         <p key={index} style={{ color: entry.color }}>
                                             {entry.name}: {Math.round(entry.value)}{entry.name === 'Wind Speed' ? ' kts' : ' mb'}

@@ -2,11 +2,12 @@
     position: absolute;
     right: 20px;
     bottom: 20px;
-    background-color: white;
+    background-color: var(--color-surface);
+    color: var(--color-text);
     padding: 12px;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    box-shadow: 0 2px 15px rgba(0,0,0,0.2);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-panel);
     z-index: 9999;
     pointer-events: none;
     max-width: 300px;
@@ -20,6 +21,11 @@
     width: 100%;
     height: 100%;
     z-index: 0; /* Keep below filter panel */
+    /* The tree keeps a light canvas in both themes: its node, edge and label
+       colours carry meaning and are tuned for light (user ruling 2026-11-17,
+       DECISIONS "Palette approved"). website-site-theme-maps-charts owns any
+       dark canvas. This is the light --color-bg, fixed on purpose. */
+    background-color: #F4F5F2;
 }
 
 .cytoscape-container > canvas {
@@ -55,16 +61,16 @@
     left: 50%;
     transform: translate(-50%, -50%);
     z-index: 1002;
-    background: white;
+    background: var(--color-surface);
     padding: 10px 18px;
-    border-radius: 6px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-panel);
     font-size: 14px;
-    color: #2c3e50;
+    color: var(--color-text);
 }
 
 .royal-tree-error {
-    color: #c0392b;
+    color: var(--color-danger);
 }
 
 .royal-tree-attribution {
@@ -72,16 +78,16 @@
     right: 12px;
     bottom: 10px;
     z-index: 1000;
-    background: rgba(255, 255, 255, 0.85);
+    background: var(--color-surface-translucent);
     padding: 4px 10px;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     font-size: 11px;
-    color: #7f8c8d;
+    color: var(--color-text-muted);
     pointer-events: auto;
 }
 
 .royal-tree-attribution a {
-    color: #2c3e50;
+    color: var(--color-primary);
     text-decoration: none;
 }
 
@@ -108,13 +114,14 @@
     left: 50%;
     transform: translateX(-50%);
     z-index: 1002;
-    background: white;
+    background: var(--color-surface);
     padding: 8px 34px 8px 14px;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
+    /* Same green as the highlighted lineage in the tree (a data colour). */
     border-left: 4px solid #00b894;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+    box-shadow: var(--shadow-panel);
     font-size: 13px;
-    color: #2c3e50;
+    color: var(--color-text);
     max-width: 60%;
 }
 
@@ -127,7 +134,7 @@
     font-size: 18px;
     line-height: 1;
     cursor: pointer;
-    color: #7f8c8d;
+    color: var(--color-text-muted);
 }
 
 /* ---- Mobile ---- */

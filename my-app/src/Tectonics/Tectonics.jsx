@@ -226,6 +226,16 @@ function Tectonics() {
         return out;
     }, [data, visibility, visibleBoundaries, velocityArrows, selectedPlate]);
 
+    // deck.gl applies this inline to its tooltip <div>, so var() works.
+    const TOOLTIP_STYLE = {
+        fontSize: '12px',
+        backgroundColor: 'var(--color-surface)',
+        color: 'var(--color-text)',
+        border: '1px solid var(--color-border-strong)',
+        borderRadius: 'var(--radius-sm)',
+        boxShadow: 'var(--shadow-panel)',
+    };
+
     const getTooltip = ({object, layer}) => {
         if (!object || !layer) return null;
         if (layer.id === 'boundaries') {
@@ -234,13 +244,13 @@ function Tectonics() {
                 html: `<div><b>${STEP_CLASS_LABEL[p.stepClass] || p.stepClass}</b><br/>`
                     + `Plates: ${p.plateBound}<br/>`
                     + `Relative velocity: ${p.velocity} mm/yr</div>`,
-                style: {fontSize: '12px', backgroundColor: '#fff', color: '#333'},
+                style: TOOLTIP_STYLE,
             };
         }
         if (layer.id === 'plates') {
             return {
                 html: `<div><b>${object.properties.PlateName}</b> (${object.properties.Code})</div>`,
-                style: {fontSize: '12px', backgroundColor: '#fff', color: '#333'},
+                style: TOOLTIP_STYLE,
             };
         }
         return null;
@@ -280,11 +290,12 @@ function Tectonics() {
                         top: '50%',
                         left: '50%',
                         transform: 'translate(-50%, -50%)',
-                        backgroundColor: '#fff',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                        backgroundColor: 'var(--color-surface)',
+                        boxShadow: 'var(--shadow-panel)',
+                        borderRadius: 'var(--radius-sm)',
                         padding: '12px 20px',
                         fontSize: '14px',
-                        color: loadError ? '#b00020' : '#6b6b76',
+                        color: loadError ? 'var(--color-danger)' : 'var(--color-text-muted)',
                         zIndex: 9999,
                     }}
                 >

@@ -4,12 +4,13 @@ import {PLOT_TYPES} from "./Hurricane";
 // Positioned by the bottom-right control stack in Hurricane.jsx.
 const settingsPanelStyles = {
     maxWidth: '320px',
-    backgroundColor: '#fff',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+    backgroundColor: 'var(--color-surface)',
+    boxShadow: 'var(--shadow-panel)',
+    borderRadius: 'var(--radius)',
     padding: '6px 12px',
     fontSize: '13px',
     lineHeight: 2,
-    color: '#6b6b76',
+    color: 'var(--color-text-muted)',
     outline: 'none',
 };
 
@@ -252,11 +253,11 @@ function SettingsPanel(props) {
     return (settingsOpen ?
         <div style={settingsPanelStyles} role="region" aria-label="Rendering settings">
             <div style={{height: "40px", marginBottom: 0, paddingBottom: 0}}>
-                <h3 style={{float: "left", marginTop: 0, marginBottom: 0}}>Settings</h3>
+                <h3 style={{float: "left", marginTop: 0, marginBottom: 0, color: "var(--color-text)"}}>Settings</h3>
                 <button
                     ref={collapseButtonRef}
                     onClick={evt => toggleSettingsPanel(evt)}
-                    style={{float: "right", }}
+                    style={{float: "right", border: "none", background: "none", fontSize: 20, lineHeight: 1, cursor: "pointer", color: "var(--color-text-muted)"}}
                     aria-label="Collapse settings"
                     aria-expanded="true"
                 >
