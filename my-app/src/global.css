@@ -42,6 +42,16 @@
     --color-overlay: rgba(0, 0, 0, 0.55);
     --color-overlay-soft: rgba(0, 0, 0, 0.45);
 
+    /* Chart chrome (Recharts axes, grid, reference lines; see "Charts"
+       below) and map chrome drawn by deck.gl, which reads these through
+       useThemeTokens(). Series and category colours are data and stay with
+       the pages. */
+    --chart-text: var(--color-text-muted);
+    --chart-axis: var(--color-border-strong);
+    --chart-grid: #D5D9D2;
+    --chart-reference: #555555;   /* Snow "Average" line and bars */
+    --map-ink: #282828;           /* Tectonics velocity arrows, line casing */
+
     /* Shape */
     --radius-sm: 6px;
     --radius: 10px;
@@ -87,6 +97,10 @@
 
     --color-overlay: rgba(0, 0, 0, 0.7);
     --color-overlay-soft: rgba(0, 0, 0, 0.6);
+
+    --chart-grid: #363B36;
+    --chart-reference: #8F958E;
+    --map-ink: #DADDD8;
 
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
     --shadow-panel: 0 6px 24px rgba(0, 0, 0, 0.6);
@@ -351,13 +365,74 @@ input[type="range"] {
     color: var(--color-text);
 }
 
-/* Recharts' default tooltip box is page chrome, so it follows the theme.
-   Recharts sets these properties inline, hence !important. Series, axis and
-   grid colours are data encodings and stay with the pages. */
+/* ---- Charts (Recharts) ----
+   Axes, grid, labels, legend text and the default tooltip are chrome and
+   follow the theme. Recharts writes these colours as SVG presentation
+   attributes, which any CSS rule overrides; the few it sets inline need
+   !important. Series colours (lines, bars, dots, legend icons) are data and
+   stay with the pages. */
+.recharts-cartesian-axis-tick-value,
+.recharts-cartesian-axis .recharts-label,
+.recharts-cartesian-axis-tick-value tspan {
+    fill: var(--chart-text);
+}
+
+.recharts-cartesian-axis-line,
+.recharts-cartesian-axis-tick-line {
+    stroke: var(--chart-axis);
+}
+
+.recharts-cartesian-grid line {
+    stroke: var(--chart-grid);
+}
+
+/* Legend and tooltip text in the theme's text colour, not the series
+   colour (several series are below 4.5:1 as text). The series colour stays
+   on the legend icon and on a swatch before each tooltip row. */
+.recharts-legend-item-text {
+    color: var(--color-text) !important;
+}
+
 .recharts-default-tooltip {
     background-color: var(--color-surface) !important;
     border-color: var(--color-border-strong) !important;
     color: var(--color-text);
+}
+
+.recharts-default-tooltip .recharts-tooltip-label {
+    color: var(--color-text);
+}
+
+.recharts-default-tooltip .recharts-tooltip-item > span {
+    color: var(--color-text);
+}
+
+.recharts-default-tooltip .recharts-tooltip-item::before {
+    content: "";
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-right: 6px;
+    border-radius: 2px;
+    background: currentColor;
+}
+
+/* ---- Maps (deck.gl over react-map-gl) ----
+   deck.gl renders the react-map-gl <Map> beneath its own canvas by cloning
+   it with an inline z-index of -1. That made the map a stacking context
+   below the canvas, so the canvas covered the Mapbox wordmark and
+   attribution: visible, but every click went to deck.gl. Lift the deck
+   canvas to 1 and stop the map forming a stacking context: the basemap
+   canvas (z-index auto) still paints below deck.gl, and Mapbox's control
+   corners (z-index 2 in mapbox-gl.css) paint above it. The corners keep
+   pointer-events: none, so only the controls themselves take clicks; see
+   isolateMapControls() in src/hooks/mapControls.js for the rest. */
+#deckgl-wrapper > #deckgl-overlay {
+    z-index: 1;
+}
+
+#deckgl-wrapper .mapboxgl-map {
+    z-index: auto !important;
 }
 
 /* ============================================================
