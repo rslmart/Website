@@ -29,8 +29,8 @@ const PANEL_STYLES = {
         marginTop: 8,
         maxHeight: 160,
         overflowY: "auto",
-        border: "1px solid #ddd",
-        borderRadius: 4,
+        border: "1px solid var(--color-border-strong)",
+        borderRadius: "var(--radius-sm)",
         padding: "4px 8px",
     },
     checkboxRow: {
@@ -44,9 +44,9 @@ const PANEL_STYLES = {
     legend: {
         marginTop: 10,
         paddingTop: 8,
-        borderTop: "1px solid #eee",
+        borderTop: "1px solid var(--color-border)",
         fontSize: 11,
-        color: "#7f8c8d",
+        color: "var(--color-text-muted)",
     },
     legendRow: {
         display: "flex",
@@ -73,30 +73,30 @@ const PANEL_STYLES = {
         flex: 1,
     },
     legendCount: {
-        color: "#2c3e50",
+        color: "var(--color-text)",
         fontVariantNumeric: "tabular-nums",
         fontWeight: 600,
     },
     connections: {
         marginTop: 10,
         paddingTop: 8,
-        borderTop: "1px solid #eee",
+        borderTop: "1px solid var(--color-border)",
     },
     groupBlock: {
         marginTop: 10,
         paddingTop: 8,
-        borderTop: "1px solid #eee",
+        borderTop: "1px solid var(--color-border)",
     },
     groupTitle: {
         fontSize: 12,
         fontWeight: 600,
-        color: "#2c3e50",
+        color: "var(--color-text)",
         marginBottom: 6,
     },
     connectionsTitle: {
         fontSize: 12,
         fontWeight: 600,
-        color: "#2c3e50",
+        color: "var(--color-text)",
         marginBottom: 6,
     },
     connectionsRow: {
@@ -104,19 +104,19 @@ const PANEL_STYLES = {
         alignItems: "center",
         gap: 6,
         fontSize: 12,
-        color: "#34495e",
+        color: "var(--color-text-muted)",
         padding: "3px 0",
     },
     connectionsHint: {
         fontSize: 11,
-        color: "#95a5a6",
+        color: "var(--color-text-faint)",
         marginTop: 4,
     },
     depthValue: {
         marginLeft: "auto",
         fontVariantNumeric: "tabular-nums",
         fontWeight: 600,
-        color: "#2c3e50",
+        color: "var(--color-text)",
     },
 };
 
@@ -171,7 +171,7 @@ function FilterPanel(props) {
             </div>
 
             <div style={PANEL_STYLES.selectContainer}>
-                <div style={{ fontSize: 12, color: "#7f8c8d" }}>
+                <div style={{ fontSize: 12, color: "var(--color-text-muted)" }}>
                     Select one or more to compare
                 </div>
                 <div style={PANEL_STYLES.checkboxList}>

@@ -109,7 +109,7 @@ const NodeToolTip = ({ data }) => {
             <div style={{
                 fontWeight: 'bold',
                 marginBottom: '8px',
-                color: '#2c3e50'
+                color: 'var(--color-text)'
             }}>
                 {data.label}
             </div>
@@ -121,10 +121,10 @@ const NodeToolTip = ({ data }) => {
                         margin: '4px 0',
                         lineHeight: '1.4'
                     }}>
-                        <span style={{ fontWeight: '500', color: '#7f8c8d' }}>
+                        <span style={{ fontWeight: '500', color: 'var(--color-text-muted)' }}>
                           {formatKey(key)}:
                         </span>
-                        <span style={{ marginLeft: '8px', color: '#2c3e50' }}>
+                        <span style={{ marginLeft: '8px', color: 'var(--color-text)' }}>
                           {formatValue(key, value)}
                         </span>
                     </div>

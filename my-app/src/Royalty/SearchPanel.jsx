@@ -13,8 +13,8 @@ const STYLES = {
         boxSizing: "border-box",
         padding: "6px 8px",
         fontSize: 14,
-        border: "1px solid #ccc",
-        borderRadius: 4,
+        border: "1px solid var(--color-border-strong)",
+        borderRadius: "var(--radius-sm)",
     },
     dropdown: {
         position: "absolute",
@@ -22,10 +22,11 @@ const STYLES = {
         left: 0,
         right: 0,
         marginTop: 2,
-        background: "white",
-        border: "1px solid #ccc",
-        borderRadius: 4,
-        boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
+        background: "var(--color-surface)",
+        color: "var(--color-text)",
+        border: "1px solid var(--color-border-strong)",
+        borderRadius: "var(--radius-sm)",
+        boxShadow: "var(--shadow-panel)",
         maxHeight: 240,
         overflowY: "auto",
         zIndex: 1002,
@@ -38,14 +39,14 @@ const STYLES = {
     sharedNav: {
         marginTop: 12,
         paddingTop: 10,
-        borderTop: "1px solid #eee",
+        borderTop: "1px solid var(--color-border)",
     },
     sharedHeaderRow: {
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
         fontSize: 12,
-        color: "#7f8c8d",
+        color: "var(--color-text-muted)",
         marginBottom: 6,
     },
     sharedControls: {
@@ -56,9 +57,10 @@ const STYLES = {
     stepButton: {
         padding: "2px 10px",
         cursor: "pointer",
-        border: "1px solid #ccc",
-        borderRadius: 4,
-        background: "#f7f7f7",
+        border: "1px solid var(--color-border-strong)",
+        borderRadius: "var(--radius-sm)",
+        background: "var(--color-bg)",
+        color: "var(--color-text)",
         fontSize: 14,
         lineHeight: 1.4,
     },
@@ -66,7 +68,7 @@ const STYLES = {
         flex: 1,
         textAlign: "center",
         fontSize: 13,
-        color: "#2c3e50",
+        color: "var(--color-text)",
         cursor: "pointer",
         whiteSpace: "nowrap",
         overflow: "hidden",
@@ -229,7 +231,7 @@ function SearchPanel({ people, sharedPeople, monarchOrder, onZoomTo, embedded })
                                 key={person.id}
                                 style={{
                                     ...STYLES.option,
-                                    background: idx === activeIndex ? '#eef3fb' : 'white',
+                                    background: idx === activeIndex ? 'var(--color-primary-soft)' : 'var(--color-surface)',
                                 }}
                                 onMouseEnter={() => setActiveIndex(idx)}
                                 onMouseDown={(e) => {
