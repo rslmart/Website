@@ -1,5 +1,6 @@
-// Run with: node --test src/Snow/snowStats.test.mjs   (from my-app/)
-import { test } from 'node:test';
+// @vitest-environment node
+// Run with: npm test   (from my-app/). Migrated from node --test to Vitest.
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
