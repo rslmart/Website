@@ -34,9 +34,9 @@ function Bio() {
                         <div className={styles.date}>Oct 2025 - Present</div>
                     </div>
                     <ul>
-                        <li>Build new features and add support for 10+ STT, TTS, LLM, and realtime providers to the Inference Gateway (Go, WebSockets) (<a href="https://lnkd.in/gXW-K4d8" target="_blank" rel="noopener noreferrer" className={styles.link}>read about it here</a>)</li>
-                        <li>Created and own the voice cloning service, from first commit to production (<a href="https://www.linkedin.com/posts/voice-agents-are-everywhere-now-taking-reservations-ugcPost-7458183168945463296-fNon/" target="_blank" rel="noopener noreferrer" className={styles.link}>read about it here</a>)</li>
-                        <li>Designed and launched realtime speech-to-speech support end to end, including failover and usage tracking (<a href="https://www.linkedin.com/posts/voice-agents-get-built-in-three-different-ugcPost-7516561022988468224-4sWy/" target="_blank" rel="noopener noreferrer" className={styles.link}>read about it here</a>)</li>
+                        <li>Build new features and add support for 10+ STT, TTS, LLM, and realtime providers to the Inference Gateway (Go, WebSockets) (<a href="https://livekit.com/blog/introducing-livekit-inference" target="_blank" rel="noopener noreferrer" className={styles.link}>LiveKit Inference launch post</a>)</li>
+                        <li>Created and own the voice cloning service, from first commit to production (<a href="https://www.linkedin.com/posts/voice-agents-are-everywhere-now-taking-reservations-ugcPost-7458183168945463296-fNon/" target="_blank" rel="noopener noreferrer" className={styles.link}>voice cloning launch post</a>)</li>
+                        <li>Designed and launched realtime speech-to-speech support end to end, including failover and usage tracking (<a href="https://www.linkedin.com/posts/voice-agents-get-built-in-three-different-ugcPost-7516561022988468224-4sWy/" target="_blank" rel="noopener noreferrer" className={styles.link}>speech-to-speech launch post</a>)</li>
                         <li>Created a continuous LLM latency benchmarking system (Go) that powers LiveKit's public latency benchmarks (<a href="https://livekit.com/benchmarks/latency" target="_blank" rel="noopener noreferrer" className={styles.link}>view benchmarks</a>)</li>
                         <li>Improved reliability with provider failover and fallbacks; own monitoring, alerting, and incident response for my services</li>
                     </ul>
@@ -110,7 +110,7 @@ function Bio() {
                     <div className={styles.date}>Summer 2016 & 2018</div>
                 </div>
                 <ul>
-                    <li>Developed python tools to help Information Security Team and server management</li>
+                    <li>Developed Python tools to help Information Security Team and server management</li>
                     <li>Full stack development of tooling website using Flask and Apache</li>
                 </ul>
             </div>
@@ -206,7 +206,7 @@ function Bio() {
             </div>
 
             <div className={styles.cvSubSection}>
-                <h3 className={styles.sectionTitle}>Devops Guru</h3>
+                <h3 className={styles.sectionTitle}>DevOps Guru</h3>
                 <p className={styles.cvParagraph}>
                     From December 2022 to October 2023, I worked as a backend developer on DevOps Guru,
                     an AWS service that is currently available in 16 regions. This machine learning-powered
@@ -251,7 +251,7 @@ function Bio() {
                 </p>
                 <p className={styles.cvParagraph}>
                     In the summers of 2016 and 2018, I completed internships with the Online Engineering team at
-                    Take Two, a leading video game publisher under the Rockstar/2K brand. During my time with the
+                    Take-Two, a leading video game publisher under the Rockstar/2K brand. During my time with the
                     team, I collaborated on writing Python scripts to boost productivity while learning how the
                     massive GTA Online servers were managed. The internship later transitioned into the Information
                     Security team, where I received experience on corporate information security measures employed
@@ -264,8 +264,8 @@ function Bio() {
                 <p className={styles.cvParagraph}>
                     <strong>RoyalTrees:</strong> After moving to Europe I became fascinated with the intricate and
                     long history of the monarchies there. The drama was sometimes hard to track however so I wanted
-                    to create a tool to visualize these large, complicated families. As part of this I used python
-                    to scrape and organize data from wikidata. I then used react and javascript to turn this data
+                    to create a tool to visualize these large, complicated families. As part of this I used Python
+                    to scrape and organize data from Wikidata. I then used React and JavaScript to turn this data
                     into clean, easy to follow family trees on my website.{" "}
                     <Link to="/RoyalTree">
                         View Project
