@@ -133,6 +133,55 @@ that isn't to localhost (Google Fonts, map tiles) and lists them in the
 `blockedRequests` fixture. Reports go to `playwright-report/` (open with
 `npx playwright show-report`) and failure traces to `test-results/`.
 
+## Theme
+
+The site has a light and a dark theme in a green, gold, black and white
+palette (approved 2026-11-17). Colours are CSS custom properties in
+[`my-app/src/global.css`](my-app/src/global.css): `:root` holds the light
+values and `:root[data-theme="dark"]` the dark ones, with `color-scheme` set
+to match so native controls and scrollbars follow. Use the tokens instead of
+hex values in page and component styles.
+
+| Token | Light | Dark | Use |
+|---|---|---|---|
+| `--color-bg` | `#F4F5F2` | `#0B0B0B` | page background |
+| `--color-surface` | `#FFFFFF` | `#161816` | cards, panels, modals, inputs |
+| `--color-surface-translucent` | white 92% | `#161816` 92% | panels floating over maps |
+| `--color-primary` | `#166534` | `#22A355` | links, primary buttons, focus ring, CTAs |
+| `--color-primary-hover` | `#0F3D24` | `#4ADE80` | hover/pressed |
+| `--color-primary-soft` | primary 12% | primary 14% | selected tint, focus halo |
+| `--color-on-primary` | `#FFFFFF` | `#0B0B0B` | text on primary |
+| `--color-accent` | `#D4A017` | `#E6B325` | gold rules and badges (decorative only on light) |
+| `--color-accent-text` | `#8C6A0A` | `#E6B325` | gold-toned text |
+| `--color-text` | `#111111` | `#FFFFFF` | body text, headings |
+| `--color-text-muted` | `#4F554E` | `#B3B8B1` | secondary text |
+| `--color-text-faint` | `#686E67` | `#8F958E` | tertiary text |
+| `--color-danger` | `#B00020` | `#FF7A7A` | errors |
+| `--color-border` | `#E1E4DE` | `#2A2E2A` | dividers, card borders |
+| `--color-border-strong` | `#858B84` | `#6F756E` | control outlines (≥3:1) |
+| `--color-chrome` / `-chrome-text` / `-chrome-accent` | `#0B0B0B` / white / `#D4A017` | `#000000` / white / `#E6B325` | black header/footer bars |
+| `--color-tooltip-bg` / `-tooltip-text` | `#111111` / white | `#262A26` / white | tooltips |
+| `--color-overlay` / `-overlay-soft` | black 55% / 45% | black 70% / 60% | modal and drawer scrims |
+| `--shadow-sm` / `-panel` / `-raised` / `-modal` | black .12/.14/.22/.35 | black .5/.6/.65/.7 | elevation |
+
+Every text pair is ≥4.5:1 and every UI pair ≥3:1 in both themes.
+
+**Choosing the theme.** An inline script in
+[`my-app/index.html`](my-app/index.html) sets `<html data-theme>` before
+first paint, so there's no flash of the wrong theme: the saved choice
+(`localStorage` key `theme`), else `prefers-color-scheme`. In React,
+[`useTheme`](my-app/src/hooks/useTheme.js) (used by `RootLayout` in
+`src/index.jsx`) follows system changes live and saves the choice made with
+the toggle ([`ThemeToggle`](my-app/src/components/ThemeToggle.jsx), top-right
+of Home and the 404 page). If storage is blocked, the theme follows the system
+and the toggle still works for the visit. The script and the hook must agree:
+`src/hooks/useTheme.test.jsx` checks the storage key and the light-only list.
+
+**Light-only pages.** `LIGHT_ONLY_PATHS` (Bio, Hurricane, RoyalTree, Snow,
+Tectonics) stay light and hide the toggle until their own styles move onto
+the tokens. `<meta name="theme-color">` is `#166534`, with `#0B0B0B` for
+`prefers-color-scheme: dark`.
+
 ## Data & hosting model
 
 The site is a static bundle plus a set of pre-processed data files. There are two

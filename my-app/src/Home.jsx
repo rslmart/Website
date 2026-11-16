@@ -7,31 +7,26 @@ const PROJECTS = [
         to: "/Bio",
         title: "Resume / CV",
         desc: "My background, experience, skills, and the projects I've built.",
-        accent: "#2563eb",
     },
     {
         to: "/Hurricane",
         title: "Hurricanes",
         desc: "Every tropical cyclone on record (1842–present) on an interactive map, with tracks and satellite imagery.",
-        accent: "#e0533d",
     },
     {
         to: "/RoyalTree",
         title: "RoyalTree",
         desc: "Interactive royal genealogies reconstructed from Wikidata — see how dynasties connect.",
-        accent: "#9b59b6",
     },
     {
         to: "/Snow",
         title: "WA Snowfall",
         desc: "Washington mountain-pass snowfall by season, with ENSO (El Niño / La Niña) context.",
-        accent: "#0ea5e9",
     },
     {
         to: "/Tectonics",
         title: "Tectonic Plates",
         desc: "Global plate boundaries, orogens, and plate velocities rendered on a 3D map.",
-        accent: "#16a34a",
     },
 ];
 
@@ -53,7 +48,6 @@ function Home() {
                         key={project.to}
                         to={project.to}
                         className="home-card"
-                        style={{ "--accent": project.accent }}
                     >
                         <h2 className="home-card-title">{project.title}</h2>
                         <p className="home-card-desc">{project.desc}</p>
