@@ -153,8 +153,11 @@ positions, qualifiers and so on) with English labels. Relationship fields
 `clean_and_combine` loads the existing `monarchy_data.json` and
 `monarchy_family_trees.json` and, for each rebuilt monarchy, replaces its
 succession paths and upserts the people on those paths along with their
-parents, spouses, siblings and unmarried partners. It never deletes people, so
-the combined file accumulates across runs. `combine_ancestors` then folds in
+parents, spouses and siblings. It never deletes people, so
+the combined file accumulates across runs.
+**Known bug:** `CleanRoyalTreeData.py` also tries to upsert `unmarried partner`
+entries, but that property is labelled (names, not Q-IDs) by this point, so
+partners never reach the combined data. Tracked for the overhaul. `combine_ancestors` then folds in
 each monarchy's labelled ancestors and rewrites `monarchy_ancestors.json`.
 
 ### 8. Houses

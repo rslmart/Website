@@ -111,12 +111,12 @@ People without an uploaded portrait render as a solid colored node.
 
 ```bash
 cd my-app/src/Royalty/Data
-uv sync --frozen                    # or: python3.11 -m venv .venv && pip install --require-hashes -r requirements.txt
+uv sync --frozen                    # or, without uv: see Data/README.md (venv + pip, then drop the `uv run` prefix)
 
 uv run python pipeline.py --all             # full rebuild (network) → public/royalty/*.json.gz
 uv run python pipeline.py England --skip-lists   # rebuild one realm from the cached monarch list
 uv run python pipeline.py --houses-only     # offline: rebuild house payloads
-uv run python pipeline.py --split-only      # offline: refresh the monarchy payloads
+uv run python pipeline.py --split-only      # offline: refresh the monarchy and house payloads
 uv run python buildMonarchImages.py --dry-run   # (separate) portraits → s3://makoa.link/monarchy/
 ```
 
