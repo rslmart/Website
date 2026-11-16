@@ -1,0 +1,23 @@
+/* Snow page chrome that needs per-theme values. Chart series, axes and grid
+   colours are data encodings and stay in SnowPage.jsx. */
+
+/* ENSO status badge: a tinted pill per phase. Each pair is >=4.5:1 in both
+   themes (light: dark text on a pale tint; dark: light text on a faint tint
+   over the dark surface). */
+.enso-badge {
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-weight: bold;
+    background-color: var(--enso-bg);
+    color: var(--enso-fg);
+}
+
+.enso-badge[data-phase="La Nina"] { --enso-bg: #E3F0FB; --enso-fg: #1F6FB2; }
+.enso-badge[data-phase="El Nino"] { --enso-bg: #FBE6E6; --enso-fg: #B5322E; }
+.enso-badge[data-phase="Neutral"],
+.enso-badge[data-phase="Unknown"] { --enso-bg: #ECECEC; --enso-fg: #555555; }
+
+:root[data-theme="dark"] .enso-badge[data-phase="La Nina"] { --enso-bg: #13283A; --enso-fg: #8CC4F2; }
+:root[data-theme="dark"] .enso-badge[data-phase="El Nino"] { --enso-bg: #3A1716; --enso-fg: #FF9E99; }
+:root[data-theme="dark"] .enso-badge[data-phase="Neutral"],
+:root[data-theme="dark"] .enso-badge[data-phase="Unknown"] { --enso-bg: #262A26; --enso-fg: #D3D7D1; }

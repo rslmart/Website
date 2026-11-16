@@ -8,6 +8,7 @@ import oni from './Data/oni.json';
 import HomeButton from '../components/HomeButton';
 import MobileDrawer from '../components/MobileDrawer';
 import { withViewport } from '../hooks/useViewport';
+import './Snow.css';
 import {
     AVERAGE_SEASON,
     LA_NINA_AVG,
@@ -70,12 +71,6 @@ const describeEnso = (season) => {
     return `${phase}, ${ensoStrength(anom)} (ONI ${formatOni(anom)})`;
 }
 
-const ensoColors = {
-    'La Nina': { bg: '#e3f0fb', fg: '#1f6fb2' },
-    'El Nino': { bg: '#fbe6e6', fg: '#b5322e' },
-    'Neutral': { bg: '#ececec', fg: '#555555' },
-    'Unknown': { bg: '#ececec', fg: '#555555' },
-}
 
 const passNames = {
     'Blewett_Pass_US-97': 'Blewett Pass US-97',
@@ -124,7 +119,7 @@ class Snow extends Component {
 
     legendFormatter = (value) => (
         <span style={{
-            color: this.state.hiddenSeries[value] ? '#bbb' : '#333',
+            color: this.state.hiddenSeries[value] ? 'var(--color-text-faint)' : 'var(--color-text)',
             textDecoration: this.state.hiddenSeries[value] ? 'line-through' : 'none',
             cursor: 'pointer'
         }}>
@@ -297,7 +292,8 @@ class Snow extends Component {
             right: 0,
             zIndex: 1000,
             backgroundColor: 'var(--color-surface)',
-            padding: '10px 20px 10px 72px',
+            // Room on the left for the fixed Home button and theme menu.
+            padding: '10px 20px 10px 120px',
             boxShadow: 'var(--shadow-sm)',
             display: 'flex',
             justifyContent: 'space-between', // Changed to space-between
@@ -308,14 +304,14 @@ class Snow extends Component {
         const titleStyle = {
             fontSize: '1.5rem',
             fontWeight: 'bold',
-            color: '#333'
+            color: 'var(--color-text)'
         };
 
         const brandStyle = {
             display: 'block',
             fontSize: '0.9rem',
             fontWeight: 'normal',
-            color: '#666'
+            color: 'var(--color-text-muted)'
         };
 
         const ensoBadgeContainerStyle = {
@@ -332,11 +328,9 @@ class Snow extends Component {
             width: '200px'
         };
 
+        // Colours, border and focus ring come from the global select styles.
         const selectStyle = {
             padding: '6px',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-            backgroundColor: 'white'
         };
 
         const isMobile = this.props.viewport && this.props.viewport.isMobile;
@@ -346,7 +340,7 @@ class Snow extends Component {
         const mobileHeaderStyle = {
             backgroundColor: 'var(--color-surface)',
             boxShadow: 'var(--shadow-sm)',
-            padding: '10px 12px 10px 64px',
+            padding: '10px 12px 10px 116px',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
@@ -356,7 +350,7 @@ class Snow extends Component {
         const mobileTitleStyle = {
             fontSize: '1.05rem',
             fontWeight: 'bold',
-            color: '#333',
+            color: 'var(--color-text)',
             lineHeight: 1.25,
         };
 
@@ -369,7 +363,7 @@ class Snow extends Component {
                     alignItems: 'center',
                     gap: '12px',
                     height: '100vh',
-                    color: '#666'
+                    color: 'var(--color-text-muted)'
                 }}>
                     <HomeButton />
                     {this.state.loadError ? (
@@ -391,7 +385,6 @@ class Snow extends Component {
         // Current ENSO status = the most recent season's ONI classification.
         const latestSeason = Object.keys(this.state.snowFallData[this.state.passName]).sort().pop();
         const currentEnsoPhase = ensoPhase(oni[latestSeason]) || 'Unknown';
-        const currentEnsoColor = ensoColors[currentEnsoPhase] || ensoColors['Unknown'];
 
         const seasonOptions = Object.keys(this.state.snowFallData[this.state.passName])
             .filter(season => seasonHasData(this.state.snowFallData[this.state.passName][season]));
@@ -410,13 +403,7 @@ class Snow extends Component {
             </select>
         );
         const ensoBadge = (
-            <span style={{
-                padding: '4px 12px',
-                borderRadius: '12px',
-                fontWeight: 'bold',
-                backgroundColor: currentEnsoColor.bg,
-                color: currentEnsoColor.fg
-            }}>
+            <span className="enso-badge" data-phase={currentEnsoPhase}>
                 {describeEnso(latestSeason)}
             </span>
         );
@@ -434,9 +421,9 @@ class Snow extends Component {
                         </span>
                     </div>
                     <div style={ensoBadgeContainerStyle}>
-                        <span style={{ fontSize: '0.75rem', color: '#666' }}>Current ENSO status</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Current ENSO status</span>
                         {ensoBadge}
-                        <span style={{ fontSize: '0.7rem', color: '#999' }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-faint)' }}>
                             {latestSeason}-{Number(latestSeason) + 1} winter
                         </span>
                     </div>
@@ -546,14 +533,14 @@ class Snow extends Component {
                         <div style={{
                             textAlign: 'center',
                             fontSize: '0.9rem',
-                            color: '#666'
+                            color: 'var(--color-text-muted)'
                         }}>
                             Data Source: {' '}
                             <a
                                 href="https://wsdot.com/travel/real-time/mountainpasses/snowfallreport"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                style={{ color: '#8884d8', textDecoration: 'none' }}
+                                style={{ color: 'var(--color-primary)' }}
                             >
                                 WSDOT Snowfall Data
                             </a>
@@ -568,7 +555,7 @@ class Snow extends Component {
                         <div className="mobile-drawer-section">Current ENSO status</div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 6 }}>
                             {ensoBadge}
-                            <span style={{ fontSize: '0.75rem', color: '#999' }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-faint)' }}>
                                 {latestSeason}-{Number(latestSeason) + 1} winter
                             </span>
                         </div>
