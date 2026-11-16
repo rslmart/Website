@@ -54,6 +54,10 @@ account and CLI flags):
 
 ### Per-monarchy payload schema (`public/royalty/<Monarchy>.json.gz`)
 
+The machine-checked version of these shapes is in
+[`Data/validate.py`](Data/validate.py) (`uv run python validate.py check`;
+see the Data README).
+
 ```jsonc
 {
   "successionList": [["Q83476", "Q187114"], ...],  // genealogical path per reign

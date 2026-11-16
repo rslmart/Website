@@ -13,7 +13,8 @@ Python **3.11 or newer** is required (the code uses `match`). The version is
 pinned in [`.python-version`](.python-version) (3.11) and
 [`pyproject.toml`](pyproject.toml) (`requires-python >= 3.11`). Dependencies
 are locked in [`uv.lock`](uv.lock): requests and beautifulsoup4 for the
-pipeline, plus pillow and boto3 for the portrait script.
+pipeline, plus pillow and boto3 for the portrait script. pytest is a dev
+dependency (`uv sync` installs it; `requirements.txt` leaves it out).
 
 With [uv](https://docs.astral.sh/uv/) (recommended):
 
@@ -80,6 +81,59 @@ for normal builds and `--ancestors-only`. `--deep-ancestors` does not validate
 them.
 
 Portraits are a separate script, covered under [Portraits](#portraits).
+
+## Checking and diffing the payloads
+
+[`validate.py`](validate.py) checks and compares `public/royalty/` offline. Both
+commands are read-only and take a few seconds.
+
+```bash
+# Schema + invariants for every payload. Exit 1 on any issue not in the allow-list.
+python validate.py check            # add -v to list every failure, --json for tooling
+
+# Data-level diff against a git ref (default HEAD) or a directory
+python validate.py diff
+python validate.py diff --base master
+python validate.py diff --base /path/to/old/royalty -v   # -v prints each change as JSON
+```
+
+`check` validates each file against a JSON Schema subset for its type
+(monarchy, house, person record, `index.json`, `houses.json`) and these
+invariants:
+
+- the node key equals the record's `id`; no one is their own parent; father and
+  mother differ;
+- birth is not after death, and each parent in the payload was born before the
+  child (compared at the shared precision: `-00-00` means year only);
+- every `monarchList` and `successionList` ID is in `nodes`, and no succession
+  path is empty;
+- house members are in `nodes`, their ranks equal `Ranks.rank_tier`, and house
+  monarchs are members;
+- `index.json` and `houses.json` match the files on disk, and a person's record
+  is identical in every file.
+
+Known current issues are allowed in [`check_allowlist.py`](check_allowlist.py),
+with a reason and the step expected to fix each. Small rules list their subjects
+there; the bulk rules (dates, empty paths, missing monarchs) keep them in
+`check_allowlist.json`. `python validate.py check --update-allowlist` rewrites
+that JSON from the current output: review its diff, which should only shrink
+unless the change explains why. Allow-list entries that no longer occur are
+printed as stale.
+
+`diff` reports, per changed file: people added, removed, changed (with field
+names) or moved between `nodes` and `extendedNodes`; parent and succession
+edges added or removed; `monarchList`/`successionList` changes, including pure
+reorders; list fields whose items only changed order; and house member and rank
+changes. Gzip headers, JSON key order and node order are ignored.
+
+Use both as evidence for a data change: run `check`, then `diff` against the
+commit before the change, and explain every change it reports.
+
+Unit tests for these tools (tiny inline fixtures, no network):
+
+```bash
+uv run pytest
+```
 
 ## Stages of a normal build
 
@@ -211,12 +265,14 @@ edits for a monarchy:
    individual entries from `data/properties.json` only if a label itself changed.
 2. Run `python pipeline.py <M>` (add `--skip-lists` if the Wikipedia list hasn't
    changed).
-3. Review `git diff --stat src/Royalty/Data/data public/royalty`, check the page
-   locally (`npm run dev` in `my-app/`), and commit the data files with the code.
+3. Run `python validate.py check` and `python validate.py diff`, explain the
+   changes, check the page locally (`npm run dev` in `my-app/`), and commit the
+   data files with the code.
 
-Note that the combined files only grow (see stages 6–7), and the JSON key order
-is not stable between runs. Two runs over identical inputs can produce
-byte-different but JSON-equal files.
+Note that the combined files only grow (see stages 6–7), and their JSON key
+order is not stable between runs. The payloads in `public/royalty/` are
+byte-deterministic: the split and house writers sort node IDs and write gzip
+with `mtime=0`, so unchanged data gives unchanged bytes.
 
 Wikidata calls go through `utils._get_json_with_retry`, which sends the
 `User-Agent` in `utils.WIKIMEDIA_HEADERS` and retries failures. The newer
@@ -248,8 +304,8 @@ fewer entries than there are people with images.
 
 The pipeline writes only local files. Publishing works like this:
 
-1. Commit the regenerated `src/Royalty/Data/data/*.json` and
-   `public/royalty/*` files.
+1. Run `python validate.py check`, then commit the regenerated
+   `src/Royalty/Data/data/*.json` and `public/royalty/*` files.
 2. `npm run build` in `my-app/` copies `public/royalty/` to `build/royalty/`.
 3. [`my-app/deploy.sh`](../../../deploy.sh) (`npm run deploy`) uploads the
    fingerprinted `build/assets/` with an immutable cache, syncs the rest of
