@@ -24,30 +24,31 @@ uses the Wikidata Action API, **not** SPARQL.
 
 ## How the data is gathered and processed
 
-The pipeline is orchestrated by [`Data/pipeline.py`](Data/pipeline.py). The short
-version (see [`Data/README.md`](Data/README.md) for the full stage-by-stage
-account and CLI flags):
+The pipeline is one command, `python -m royaltree` ([`Data/royaltree/`](Data/royaltree)),
+over one local SQLite entity store (`Data/data/royaltree.sqlite`, git-ignored). The
+short version (see [`Data/README.md`](Data/README.md) for the full stage-by-stage
+account, the store and the flags):
 
 1. **Scrape monarch lists** — [`Data/GetListOfMonarchs.py`](Data/GetListOfMonarchs.py)
    reads Wikipedia list pages for each realm, resolves article titles to Wikidata
    Q-ids, filters to humans (`P31 = Q5`), and writes ordered id lists to
-   `Data/data/monarch_list.json`.
-2. **Fetch people + build succession paths** — [`Data/GetData.py`](Data/GetData.py)
-   batch-fetches each monarch from Wikidata (extracting parents `P22`/`P25`,
+   `Data/data/monarch_list.json`. Runs only when a list is missing or with `--lists`.
+2. **Fetch people + build succession paths** — [`Data/royaltree/graph.py`](Data/royaltree/graph.py)
+   reads people from the store and fetches only missing ones from Wikidata
+   ([`wikidata.py`](Data/royaltree/wikidata.py) extracts parents `P22`/`P25`,
    spouses `P26`, children `P40`, siblings `P3373`, dates, places, titles,
    positions, and more), then does a bounded BFS over family edges to connect each
    monarch to the next in the list.
-3. **Gather ancestors** — [`Data/GatherAncestors.py`](Data/GatherAncestors.py)
-   walks parents upward from each listed monarch (depth 5 + siblings for European realms; a deeper depth-12
-   pass for the Mongol khanates) so separate monarchies can be joined at shared
-   ancestors.
-4. **Label** — [`Data/GetData.py`](Data/GetData.py) replaces display-only Q-ids
-   with English labels, cached in `Data/data/properties.json`. Relationship edges
-   stay as Q-ids.
-5. **Combine + group houses** — merged into `monarchy_data.json` /
-   `monarchy_family_trees.json` (people are upserted, never removed);
-   [`Data/BuildHouses.py`](Data/BuildHouses.py) groups people by family (`P53`)
-   and ranks them with [`Data/Ranks.py`](Data/Ranks.py).
+3. **Gather ancestors** — the same module walks parents upward from each listed
+   monarch (depth 5 + siblings for European realms; a deeper depth-12 pass for
+   the Mongol khanates) so separate monarchies can be joined at shared ancestors.
+4. **Label + combine** — [`Data/royaltree/build.py`](Data/royaltree/build.py)
+   derives `monarchy_data.json` / `monarchy_family_trees.json` /
+   `monarchy_ancestors.json` from the store for every tree, with display-only
+   Q-ids replaced by English labels (relationship edges stay as Q-ids). One record
+   per person, so rebuilding one tree never changes another's people.
+5. **Group houses** — [`Data/BuildHouses.py`](Data/BuildHouses.py) groups people
+   by family (`P53`) and ranks them with [`Data/Ranks.py`](Data/Ranks.py).
 6. **Split for the frontend** — [`Data/SplitDataForFrontend.py`](Data/SplitDataForFrontend.py)
    writes one gzipped payload per monarchy/house to `public/royalty/*.json.gz`
    plus `index.json` (monarchy names) and `houses.json`.
@@ -55,7 +56,7 @@ account and CLI flags):
 ### Per-monarchy payload schema (`public/royalty/<Monarchy>.json.gz`)
 
 The machine-checked version of these shapes is in
-[`Data/validate.py`](Data/validate.py) (`uv run python validate.py check`;
+[`Data/validate.py`](Data/validate.py) (`uv run python -m royaltree check`;
 see the Data README).
 
 ```jsonc
@@ -88,7 +89,7 @@ A person node looks like:
 ## Portraits
 
 [`Data/buildMonarchImages.py`](Data/buildMonarchImages.py) (run standalone, not
-part of `pipeline.py`) takes each person's first Commons image, downloads a 200px
+part of the `royaltree` CLI) takes each person's first Commons image, downloads a 200px
 thumbnail from `commons.wikimedia.org/wiki/Special:FilePath/…`, converts to JPEG,
 and uploads to `s3://makoa.link/monarchy/<Qid>.jpg` (boto3, AWS profile `makoa`).
 Progress is tracked in `Data/monarch_images_manifest.json`. Portraits reach S3
@@ -117,10 +118,11 @@ People without an uploaded portrait render as a solid colored node.
 cd my-app/src/Royalty/Data
 uv sync --frozen                    # or, without uv: see Data/README.md (venv + pip, then drop the `uv run` prefix)
 
-uv run python pipeline.py --all             # full rebuild (network) → public/royalty/*.json.gz
-uv run python pipeline.py England --skip-lists   # rebuild one realm from the cached monarch list
-uv run python pipeline.py --houses-only     # offline: rebuild house payloads
-uv run python pipeline.py --split-only      # offline: refresh the monarchy and house payloads
+uv run python -m royaltree build England --offline   # rebuild one realm from the store, no network (seconds)
+uv run python -m royaltree build Thailand            # fetch only what the store lacks, then rebuild
+uv run python -m royaltree fetch England --refresh   # refetch people whose Wikidata revision changed
+uv run python -m royaltree split                     # offline, no store needed: houses + all payloads
+uv run python -m royaltree check && uv run python -m royaltree diff   # validate vs HEAD
 uv run python buildMonarchImages.py --dry-run   # (separate) portraits → s3://makoa.link/monarchy/
 ```
 

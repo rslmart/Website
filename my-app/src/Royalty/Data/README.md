@@ -5,7 +5,9 @@ monarch lists are scraped from English Wikipedia. Person facts come from
 [Wikidata](https://www.wikidata.org/) through the Action API (`wbgetentities`,
 50 IDs per call), not SPARQL. Portraits come from Wikimedia Commons.
 
-Everything except portraits is orchestrated by [`pipeline.py`](pipeline.py).
+Everything except portraits runs through one command, `python -m royaltree`
+([`royaltree/`](royaltree/)), over one local entity store
+(`data/royaltree.sqlite`).
 
 ## Setup
 
@@ -21,7 +23,8 @@ With [uv](https://docs.astral.sh/uv/) (recommended):
 ```bash
 cd my-app/src/Royalty/Data
 uv sync --frozen            # creates .venv/ from uv.lock
-uv run python pipeline.py --help
+uv run python -m royaltree --help
+uv run pytest               # offline unit tests
 ```
 
 Without uv, use the hash-pinned export in [`requirements.txt`](requirements.txt):
@@ -31,54 +34,65 @@ cd my-app/src/Royalty/Data
 python3.11 -m venv .venv
 source .venv/bin/activate
 pip install --require-hashes -r requirements.txt
-python pipeline.py --help
+python -m royaltree --help
 ```
 
 `.venv/` is git-ignored. After changing a dependency in `pyproject.toml`, run
 `uv lock`, then regenerate `requirements.txt` with
 `uv export --frozen --no-dev --no-emit-project --format requirements-txt -o requirements.txt`.
 
-All scripts use paths relative to this directory. `pipeline.py` `chdir`s here
-itself, so it can be run from anywhere. Run the other scripts from here.
+Run the commands from this directory (`python -m` needs it on the path).
+`--data-dir` (default `data/`) and `--out-dir` (default
+`../../../public/royalty`) can point anywhere.
 
 ## Commands
 
-The examples use `python` inside the activated venv. With uv, prefix them with
-`uv run`.
-
 ```bash
-# Full build of one or more monarchies (network: Wikipedia + Wikidata)
-python pipeline.py England France Spain
+# Rebuild one tree from the store with no network (seconds; any request is an error)
+python -m royaltree build England --offline
 
-# Full build of every known monarchy (the 41 names in GetListOfMonarchs.monarchies)
-python pipeline.py --all
+# Rebuild every tree offline (about 10 s), then compare with the committed payloads
+python -m royaltree build --all --offline
+python -m royaltree diff                      # validate.py diff --base HEAD
 
-# Reuse data/monarch_list.json and skip the brittle Wikipedia scraping stage
-python pipeline.py England --skip-lists
+# Build a tree, fetching only people and labels the store doesn't have yet.
+# A missing monarch list is scraped first; --lists forces a re-scrape.
+python -m royaltree build Thailand
 
-# Normal build without the common-ancestor stages
-python pipeline.py England --skip-ancestors
+# Update the store only (no files written)
+python -m royaltree fetch England
 
-# Layer common-ancestor data onto the existing build (no succession rebuild; network)
-python pipeline.py England France Spain --ancestors-only
+# Pick up Wikidata edits: check revisions (props=info, 50 per request) and
+# refetch only the people whose revision changed. --since skips rows already
+# verified after that date. Refuses to refetch more than --max-refetch (2000).
+python -m royaltree fetch England --refresh --since 2026-11-01
 
-# Fetch the deep Mongol-house lineages (khanates -> Genghis Khan), fold them in
-# and rebuild houses (network). With no names it defaults to
-# GatherAncestors.DEEP_ANCESTOR_MONARCHIES.
-python pipeline.py --deep-ancestors
+# Offline: rebuild houses and every payload from the committed combined files
+# (works on a fresh clone without a store)
+python -m royaltree split
 
-# Rebuild only the house groupings and their payloads (offline)
-python pipeline.py --houses-only
+# Schema + invariants, and the data-level diff (see below)
+python -m royaltree check
+python -m royaltree diff --base master -v
 
-# Rebuild only public/royalty/ from the combined files (offline)
-python pipeline.py --split-only
+# One-time migration of the old data/*.json caches (no network)
+python -m royaltree import-legacy --from /path/to/old/data
 ```
 
-Flag precedence: `--houses-only`, then `--deep-ancestors`, then
-`--split-only`, then `--ancestors-only`. The first one set wins and the others
-are ignored. Monarchy names are validated against `GetListOfMonarchs.monarchies`
-for normal builds and `--ancestors-only`. `--deep-ancestors` does not validate
-them.
+Options shared by every command: `--data-dir`, `--out-dir`, `--offline`,
+`--max-requests N` (default 3000: the run stops cleanly at the cap and the next
+run resumes) and `--summary-json PATH`. Tree commands also take `--all`,
+`--lists`, `--refresh`, `--since DATE`, `--max-refetch N` and
+`--fresh-membership` (see [Store](#the-entity-store)).
+
+Every run ends with a summary on stderr. It is also stored in the store's `runs`
+table:
+
+```
+== royaltree build: ok in 8.28s; 0 requests, 0 429s, 0 maxlag waits, 0 5xx, 0 network errors, waited 0.0s
+   traverse:England                 0.15s      0 req   0 429
+   combine                          ...
+```
 
 Portraits are a separate script, covered under [Portraits](#portraits).
 
@@ -89,7 +103,7 @@ commands are read-only and take a few seconds.
 
 ```bash
 # Schema + invariants for every payload. Exit 1 on any issue not in the allow-list.
-python validate.py check            # add -v to list every failure, --json for tooling
+python -m royaltree check           # or: python validate.py check; add -v to list every failure, --json for tooling
 
 # Data-level diff against a git ref (default HEAD) or a directory
 python validate.py diff
@@ -135,33 +149,25 @@ Unit tests for these tools (tiny inline fixtures, no network):
 uv run pytest
 ```
 
-## Stages of a normal build
+## Stages of a build
 
-`python pipeline.py <M...>` (`pipeline.run`) runs these steps in order:
+`python -m royaltree build <M...>` runs these stages (each is timed in the
+summary):
 
-| # | Function | Reads | Writes |
-|---|----------|-------|--------|
-| 1 | `GetListOfMonarchs.get_monarch_lists` (skipped by `--skip-lists`) | Wikipedia list pages and navboxes; Wikipedia API (title -> Q-ID) | `data/monarch_list.json` (only the requested keys are replaced) |
-| 2 | `GetData.get_monarch_data` | `data/monarch_list.json`; Wikidata | `data/<M>.json` (entity cache), `data/<M>_family_tree.json` |
-| 3 | `GatherAncestors.gather_ancestors` (European realms only) | `data/monarch_list.json`, `data/<M>.json`; Wikidata | `data/<M>_ancestors.json`; adds people to `data/<M>.json` |
-| 4 | `GatherAncestors.gather_deep_ancestors` (Mongol houses only) | as above | as above |
-| 5 | `GetData.label_people` | `data/<M>.json`, `data/properties.json`; Wikidata for unseen labels | `data/<M>_labelled.json`, `data/properties.json` |
-| 6 | `CleanRoyalTreeData.clean_and_combine` | `data/<M>_family_tree.json`, `data/<M>_labelled.json`, existing combined files | `data/monarchy_data.json`, `data/monarchy_family_trees.json` |
-| 7 | `GatherAncestors.combine_ancestors` | `data/<M>_ancestors.json`, `data/<M>_labelled.json` | folds into `data/monarchy_data.json`; `data/monarchy_ancestors.json` |
-| 8 | `BuildHouses.build_houses` | `data/monarchy_data.json`, `data/monarch_list.json` | `data/houses.json` |
-| 9 | `SplitDataForFrontend.split` | combined files, `data/monarchy_ancestors.json` | `public/royalty/<M>.json.gz`, `public/royalty/index.json` |
-| 10 | `SplitDataForFrontend.split_houses` | `data/houses.json` | `public/royalty/<House>.json.gz`, `public/royalty/houses.json` |
+| Stage | Code | Network (skipped with `--offline`) | Writes |
+|---|---|---|---|
+| `lists` (only if a list is missing, or `--lists`) | `GetListOfMonarchs.get_monarch_lists` | Wikipedia + Wikidata | `data/monarch_list.json` |
+| `revision-check`, `refetch` (only with `--refresh`/`--since`) | `cli.refresh` | Wikidata `props=info` | store |
+| `traverse:<M>` per requested tree | `graph.traverse_tree` | Wikidata, for people not in the store | store: people, the tree's paths, ancestors and member set |
+| `combine` (every stored tree) | `build.combine` | Wikidata, for labels not in the store | nothing yet |
+| `write-combined` | `build.write_combined` | | `data/monarchy_data.json`, `monarchy_family_trees.json`, `monarchy_ancestors.json` |
+| `houses` | `BuildHouses.build_houses` | | `data/houses.json` |
+| `split` | `SplitDataForFrontend` | | `public/royalty/*`, removes payloads no longer indexed |
 
-`--skip-ancestors` drops steps 3, 4 and 7. The shortcut commands run subsets:
+`fetch` runs `lists` to `combine` and writes no files. `split` runs `houses` and
+`split` only.
 
-| Command | Steps |
-|---------|-------|
-| `--ancestors-only <M...>` | 3, 5, 7, 8, 9, 10 |
-| `--deep-ancestors [M...]` | 4, 5, 7, 8, 9, 10 |
-| `--houses-only` | 8, 10 |
-| `--split-only` | 9, 10 (10 is skipped with a message if `data/houses.json` is missing) |
-
-### 1. Monarch lists
+### Monarch lists
 
 `GetListOfMonarchs.get_monarch_lists` has one branch per monarchy. Older
 branches parse a specific navbox (`aria-labelledby` anchor plus `td` classes)
@@ -170,51 +176,46 @@ through `get_monarch_list` / `get_monarch_list_with_i`. Newer branches use
 Egyptian period). `Chinggisids` is the union of the Mongol lists
 (`build_chinggisids`). Article titles are resolved to Q-IDs in batches through
 the Wikipedia API, and only humans (`P31 = Q5`) are kept. This stage depends on
-exact Wikipedia markup and is the most fragile one. Use `--skip-lists` when you
-only need to rebuild from Wikidata.
+exact Wikipedia markup and is the most fragile one, so it runs only when a list
+is missing or with `--lists`.
 
-### 2. People and succession paths
+### People and succession paths
 
-`GetData.DataRetriever` fetches entities in batches and keeps the fields in
-`GetData.PROPERTIES`: parents (`P22`/`P25`), spouses (`P26`), children (`P40`),
+`royaltree/wikidata.py` parses each entity into a person record with the fields
+in `PROPERTIES`: parents (`P22`/`P25`), spouses (`P26`), children (`P40`),
 siblings (`P3373`), family (`P53`), dates, places, titles, positions with their
 qualifiers, and more. The `from`/`to` keys deliberately merge `replaces`/
-`follows` and `replaced by`/`followed by`. `construct_family_tree_from_monarch_list`
-then runs a level-batched BFS over family edges from each monarch to the next
-one in the list. It is capped by `MAX_BFS_DEPTH` (8) and `MAX_BFS_NODES` (4000)
-and records `[]` when no path is found.
+`follows` and `replaced by`/`followed by`. `graph.family_tree` then runs a
+level-batched BFS over family edges from each monarch to the earliest of the
+next five in the list. It is capped by `MAX_BFS_DEPTH` (8) and `MAX_BFS_NODES`
+(4000) and records `[]` when no path is found.
 
-### 3–4. Ancestors
+### Ancestors
 
-`gather_ancestors` follows `father`/`mother` out to `MAX_ANCESTOR_DEPTH` (5)
-from every listed monarch and adds the siblings of each ancestor. It
-runs only for `EUROPEAN_MONARCHIES` and lets multi-monarchy views show shared
-ancestry. `gather_deep_ancestors` is a deeper (`DEEP_ANCESTOR_DEPTH` = 12),
-sibling-free pass for `DEEP_ANCESTOR_MONARCHIES`. It reconnects the khanates
-(Golden Horde, Chagatai, Ilkhanate) to Genghis Khan through the paternal chain
-the BFS never climbs. Both are no-ops for other monarchies. People whose
-`father` is missing in Wikidata stay unconnected.
+`graph.gather_ancestors` follows `father`/`mother` out to 5 generations from
+every listed monarch and adds the siblings of each ancestor, for
+`EUROPEAN_MONARCHIES`, so multi-monarchy views show shared ancestry. The Mongol
+houses (`DEEP_ANCESTOR_MONARCHIES`) get a deeper (12), sibling-free pass that
+reconnects the khanates to Genghis Khan. Other trees have no ancestor stage.
+People whose `father` is missing in Wikidata stay unconnected.
 
-### 5. Labels
+### Labels and combine
 
-`GetData.PropertyRetriever` replaces display-only Q-IDs (places, titles,
-positions, qualifiers and so on) with English labels. Relationship fields
-(`id`, `father`, `mother`, `spouse`, `child`, `sibling`, `relative`, `from`,
-`to`) stay as Q-IDs. Everything else is labelled, including `unmarried partner`.
+`build.combine` derives the combined files from the store for **every** stored
+tree. Each tree contributes its succession nodes plus their parents, spouses
+and siblings, and its labelled ancestors. Every contribution is limited to the
+tree's member set (the people its own traversals requested). Display-only
+Q-IDs (places, titles, positions, qualifiers) become English labels. The
+relationship fields (`id`, `father`, `mother`, `spouse`, `child`, `sibling`,
+`relative`, `from`, `to`) stay as Q-IDs. Because each person has one store
+record and membership depends only on the tree's own traversal, rebuilding one
+tree never changes another tree's people, whatever the build order.
 
-### 6–7. Combine
+**Known bug:** `unmarried partner` is labelled (names, not Q-IDs) before
+membership is computed, so partners never reach the combined data. It is kept
+as-is for payload stability and will be fixed in `-wdqs-fetch`.
 
-`clean_and_combine` loads the existing `monarchy_data.json` and
-`monarchy_family_trees.json` and, for each rebuilt monarchy, replaces its
-succession paths and upserts the people on those paths along with their
-parents, spouses and siblings. It never deletes people, so
-the combined file accumulates across runs.
-**Known bug:** `CleanRoyalTreeData.py` also tries to upsert `unmarried partner`
-entries, but that property is labelled (names, not Q-IDs) by this point, so
-partners never reach the combined data. Tracked for the overhaul. `combine_ancestors` then folds in
-each monarchy's labelled ancestors and rewrites `monarchy_ancestors.json`.
-
-### 8. Houses
+### Houses
 
 `BuildHouses.build_houses` groups everyone in the combined pool by `family`
 (`P53`), merges obvious variants through `HOUSE_ALIASES`, and keeps houses
@@ -224,66 +225,86 @@ description, refined by a curated Q-ID map. Each house also carries a
 father/mother ancestor pool capped at `ANCESTOR_DEPTH` (8), so the frontend can
 connect a rank-filtered subset into one subtree.
 
-### 9–10. Frontend payloads
+### Frontend payloads
 
 `SplitDataForFrontend` writes one gzipped JSON file per monarchy and per house
 into `my-app/public/royalty/`, plus `index.json` (monarchy names) and
-`houses.json` (house index). The payload contract is described in
-[`../README.md`](../README.md).
+`houses.json` (house index). It also removes `.json.gz` files that are no
+longer indexed, for example a house that fell under 20 members. The output is
+byte-deterministic (sorted nodes, gzip `mtime=0`) and every file is written
+atomically. The payload contract is described in [`../README.md`](../README.md).
 
-## Caches and data files
+## The entity store
 
-Committed (inputs to the offline commands):
+`data/royaltree.sqlite` (git-ignored, about 65 MB after the migration) is the
+only cache. It has three tables:
+
+- `entities(qid, kind, data, source, lastrevid, fetched_at, checked_at)`: one
+  row per QID and kind. `kind` is `person` (parsed record) or `label`. `source`
+  is `wbgetentities` or `legacy:<file>`. `lastrevid` is the Wikidata revision
+  the row reflects (NULL for imported rows). The table is source-agnostic:
+  `-wdqs-fetch` adds its own kind next to these.
+- `trees(monarchy, name, data)`: per-tree `family_tree` (succession paths),
+  `ancestors` (closure) and `touched` (member set).
+- `runs`: one summary per run.
+
+Each 50-ID batch is committed in one transaction (WAL journal), so a killed or
+interrupted run keeps every finished batch and corrupts nothing. Rerunning the
+same command resumes: it finds those people in the store and fetches only the
+rest. An advisory lock (`royaltree.sqlite.lock`) stops a second writer.
+
+The member set is **sticky**. A run adds what it requested to the tree's
+earlier set, as the old per-tree caches did, so relatives that only an earlier
+run fetched stay in the tree. `--fresh-membership` recomputes the set from this
+run alone. This drops about 1,300 relatives that today's payloads show, mostly
+parents of monarchs in trees without an ancestor stage.
+
+**Request hygiene** (`royaltree/http.py`). Every request goes through one
+session with the User-Agent `RoyalTreeBot/1.0 (+https://makoa.link)` and a
+`(10 s, 60 s)` timeout. It is sent serially, with `maxlag=5` on Wikidata, and
+backs off on HTTP 429/5xx (honouring `Retry-After`). maxlag waits have their
+own, more patient retry budget. Counters feed the summary.
+
+## Data files
+
+Committed (inputs to the offline `split`):
 
 - `data/monarch_list.json`: ordered monarch Q-IDs per monarchy.
-- `data/monarchy_data.json`: deduplicated, labelled person records for all monarchies.
+- `data/monarchy_data.json`: deduplicated, labelled person records for all trees
+  (written sorted by Q-ID).
 - `data/monarchy_family_trees.json`: succession paths per monarchy.
 - `data/monarchy_ancestors.json`: monarchy -> ancestor Q-IDs (feeds `extendedNodes`).
-- `data/properties.json`: Q-ID -> English label cache, which is expensive to rebuild.
 - `monarch_images_manifest.json`: Q-IDs whose portraits are already uploaded.
 - `../../../public/royalty/*`: the payloads the app fetches.
 
-Regenerable (git-ignored, recreated by the pipeline):
+Git-ignored: `data/royaltree.sqlite*` (the store) and `data/houses.json` (about
+56 MB; `split` regenerates it). The old per-tree caches (`data/<M>.json`,
+`<M>_labelled.json`, `<M>_family_tree.json`, `<M>_ancestors.json`) and
+`data/properties.json` are no longer read or written. Import them once with
+`import-legacy`.
 
-- `data/<M>.json`: raw Wikidata entity cache per monarchy.
-- `data/<M>_family_tree.json`: per-monarchy BFS succession paths.
-- `data/<M>_labelled.json`: per-monarchy labelled people.
-- `data/<M>_ancestors.json`: per-monarchy ancestor (plus sibling) Q-IDs.
-- `data/houses.json`: house members, ranks and node pools (~56 MB). Regenerate it
-  with `python pipeline.py --houses-only` instead of committing it.
-
-A fresh clone can therefore run `--houses-only` and `--split-only` offline.
-Every other command fetches from Wikipedia and/or Wikidata.
+A fresh clone without a store can run `split` offline. A fresh clone can also
+`build <M>` from an empty `data/` directory with the network: the list is
+scraped, then people and labels are fetched.
 
 ## Refreshing data
 
-The caches never expire. Once an entity is in `data/<M>.json`, or a label is in
-`data/properties.json`, it is reused on every later run. To pick up Wikidata
-edits for a monarchy:
+Rows never expire on their own. To pick up Wikidata edits for a tree:
 
-1. Delete `data/<M>.json` (and `data/<M>_ancestors.json` if relevant). Remove
-   individual entries from `data/properties.json` only if a label itself changed.
-2. Run `python pipeline.py <M>` (add `--skip-lists` if the Wikipedia list hasn't
-   changed).
-3. Run `python validate.py check` and `python validate.py diff`, explain the
-   changes, check the page locally (`npm run dev` in `my-app/`), and commit the
-   data files with the code.
+1. `python -m royaltree fetch <M> --refresh` checks the revisions of the tree's
+   stored people (one request per 50) and refetches only the changed ones.
+   Imported rows have no known revision, so the first refresh of a tree refetches
+   them. The cap applies: a refresh that would refetch more than `--max-refetch`
+   entities stops before fetching anything. Use `--since DATE` to check only
+   rows not verified since then.
+2. `python -m royaltree build <M>` (or `--offline` right after the fetch)
+   rebuilds the files, then `check` and `diff`.
 
-Note that the combined files only grow (see stages 6–7), and their JSON key
-order is not stable between runs. The payloads in `public/royalty/` are
-byte-deterministic: the split and house writers sort node IDs and write gzip
-with `mtime=0`, so unchanged data gives unchanged bytes.
-
-Wikidata calls go through `utils._get_json_with_retry`, which sends the
-`User-Agent` in `utils.WIKIMEDIA_HEADERS` and retries failures. The newer
-list scrapers (`_get_soup`, `_resolve_titles_to_qids`) send `_SCRAPER_UA`. The
-legacy list branches (`get_monarch_list`, `get_monarch_list_with_i`,
-`convert_wiki_list_to_wiki_data_list` and some inline `requests.get` calls in
-`get_monarch_lists`) send no User-Agent, so Wikipedia may reject them.
+Labels of non-person items (places, titles) are not revision-checked yet.
 
 ## Portraits
 
-`buildMonarchImages.py` is a standalone script and not part of `pipeline.py`.
+`buildMonarchImages.py` is a standalone script and not part of the `royaltree` CLI.
 For every person in `data/monarchy_data.json` with a Commons `image`, it
 downloads a 200 px thumbnail from `commons.wikimedia.org/wiki/Special:FilePath/`,
 re-encodes it as JPEG (quality 82) with Pillow, and uploads it with boto3
