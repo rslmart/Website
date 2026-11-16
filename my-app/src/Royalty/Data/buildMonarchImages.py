@@ -20,7 +20,7 @@ The job is resumable: completed Q-IDs are recorded in monarch_images_manifest.js
 and skipped on re-run. Run with the pipeline venv (or uv):
 
     ./.venv/bin/python buildMonarchImages.py
-    uv run --with boto3 --with pillow --with requests python buildMonarchImages.py
+    uv run python buildMonarchImages.py
 
 Useful flags: --ids Q102005 (test one), --limit N, --workers N, --dry-run,
 --force (ignore manifest), --width PX.

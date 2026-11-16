@@ -2,13 +2,10 @@
 # Retrieve one person from wikidata
 # Retrieve list of people from wikidata
 import json
-from collections import deque, defaultdict
-
-import requests
-import utils
-from datetime import datetime
 import os
 import re
+
+import utils
 
 class DataRetriever:
   def __init__(self, local_file="data.json", save=True):
@@ -111,19 +108,6 @@ class PropertyRetriever:
       with open(self.local_file, 'w') as json_file:
         json.dump(self.properties, json_file)
     self.save = save
-
-  def get_label_from_id(self, item_id):
-    if item_id in self.properties:
-      return self.properties[item_id]
-    else:
-      item_data = utils.get_wikidata_data(item_id)
-      if item_data:
-        label = item_data["labels"].get("en", {}).get("value")
-        self.properties[item_id] = label
-        if self.save:
-          with open(self.local_file, 'w') as outfile:
-            json.dump(self.properties, outfile)
-        return label
 
   def get_labels_from_item_ids(self, item_ids):
     result = {}
@@ -228,11 +212,11 @@ PROPERTIES = {
   "P580": "start time",
   "P582": "end time",
   # "from"/"to" intentionally unify two different Wikidata predecessor/successor
-  # relations so the succession walk in get_monarch_list() can follow a chain
+  # relations so anything walking the succession chain can follow it
   # regardless of which one a given entity uses:
   #   from <- replaces (P1365) and follows (P155)
   #   to   <- replaced by (P1366) and followed by (P156)
-  # Do not split these apart without updating get_monarch_list().
+  # Do not split these apart without updating the code that reads them.
   "P1365": "from",
   "P1366": "to",
   "P1534": "end cause",
@@ -241,54 +225,6 @@ PROPERTIES = {
   "P156": "to",
   "P1001": "of",
 }
-
-def get_property_label(property_id):
-  url = f"https://www.wikidata.org/w/api.php?action=wbgetentities&ids={property_id}&languages=en&props=labels&format=json"
-
-  try:
-    response = requests.get(url)
-    response.raise_for_status()  # Raise an exception for bad status codes
-    data = response.json()
-
-    if "entities" in data and property_id in data["entities"]:
-      return data["entities"][property_id]["labels"].get("en", {}).get("value")
-    else:
-      print(f"No data found for property ID: {property_id}")
-      return None
-
-  except requests.exceptions.RequestException as e:
-    print(f"Error fetching data: {e}")
-    return None
-
-def get_item_label_from_id(item_id):
-  item_data = utils.get_wikidata_data(item_id)
-  if item_data:
-    return (item_id, item_data["labels"].get("en", {}).get("value"))
-
-def get_dict_of_properties():
-  item_ids = ["Q517", "Q3044", "Q9682"]
-  properties = {}
-  for item_id in item_ids:
-    item_data = utils.get_wikidata_data(item_id)
-
-    if item_data:
-      print("Item ID:", item_id)
-      print("Label:", item_data.get("labels", {}).get("en", {}).get("value"))
-      print("Description:", item_data.get("descriptions", {}).get("en", {}).get("value"))
-
-      # Access claims (statements)
-      claims = item_data.get("claims", {})
-      for property_id, claim_list in claims.items():
-        print(f"Property ID: {property_id} {get_property_label(property_id)}")
-        properties[property_id] = get_property_label(property_id)
-        for claim in claim_list:
-          try:
-            value = claim["mainsnak"]["datavalue"]["value"]
-            print(f"  Value: {value}")
-          except KeyError:
-            print(f"  No value available for this claim.")
-  utils.saveData(properties, "properties")
-
 
 # BFS tuning. A generous depth lets sparse ancient genealogies (e.g. Egyptian
 # dynasties) connect distant relatives. The danger is densely interconnected
@@ -424,117 +360,6 @@ def get_monarch_data(inclde):
     construct_family_tree_from_monarch_list(monarchy, "./data/" + monarchy + "_family_tree.json")
     print("Finished:", monarchy)
 
-def get_monarch_list(monarchy, position_set, start_person_id):
-  retriever = DataRetriever(save=False)
-  path = [start_person_id]
-  current_node = start_person_id
-  prev_node = None
-  connection_indices = defaultdict(int)
-
-  while True:
-    found = False
-    start_index = connection_indices[current_node]
-    current_person = retriever.get_person_from_item_id(current_node)
-    print(current_person['label'], 'https://www.wikidata.org/wiki/' + current_person['id'])
-    connections = current_person.get('noble title', []) + current_person.get('position held', [])
-    connections = [conn for conn in connections if conn['id'] in position_set]
-
-    # Correct title changes (ie King of England -> King of Great Britian)
-    for conn in connections:
-      if 'to' not in conn and 'from' in conn:
-        candidates = [c for c in connections if 'to' in c and 'from' not in c]
-        if len(candidates) > 0:
-          c = candidates[0]
-          conn['to'] = c['to']
-          c['from'] = conn['from']
-
-    # Special napolean rule
-    if current_person['id'] == 'Q7732':
-      path = path + ['Q517', 'Q7750', 'Q7758', 'Q7771', 'Q7721']
-    else:
-      # Check connections from current index to end
-      for i in range(start_index, len(connections)):
-        conn = connections[i]
-        from_nodes = conn.get('from')
-        if isinstance(from_nodes, str):
-          from_nodes = [from_nodes]
-        elif from_nodes is None:
-          from_nodes = []
-
-        to_nodes = conn.get('to', [])
-        if not isinstance(to_nodes, list):
-          to_nodes = [to_nodes] if to_nodes is not None else []
-
-        if not to_nodes:
-          continue  # Skip if no 'to' nodes
-
-        to_node = to_nodes[0]
-
-        if prev_node is None:
-          # Handle the first step, ignore 'from' field
-          path.append(to_node)
-          prev_node = current_node
-          connection_indices[current_node] = i + 1
-          current_node = to_node
-          found = True
-          break
-        else:
-          if prev_node in from_nodes:
-            path.append(to_node)
-            prev_node = current_node
-            connection_indices[current_node] = i + 1
-            current_node = to_node
-            found = True
-            break
-
-      if not found:
-        # Check connections from beginning to start_index if not all were checked
-        for i in range(0, start_index):
-          conn = connections[i]
-          from_nodes = conn.get('from')
-          if isinstance(from_nodes, str):
-            from_nodes = [from_nodes]
-          elif from_nodes is None:
-            from_nodes = []
-
-          to_nodes = conn.get('to', [])
-          if not isinstance(to_nodes, list):
-            to_nodes = [to_nodes] if to_nodes is not None else []
-
-          if not to_nodes:
-            continue  # Skip if no 'to' nodes
-
-          to_node = to_nodes[0]
-
-          if prev_node is None:
-            # Handle the first step, ignore 'from' field
-            path.append(to_node)
-            prev_node = current_node
-            connection_indices[current_node] = i + 1
-            current_node = to_node
-            found = True
-            break
-          else:
-            if prev_node in from_nodes:
-              path.append(to_node)
-              prev_node = current_node
-              connection_indices[current_node] = i + 1
-              current_node = to_node
-              found = True
-              break
-
-    if not found:
-      break
-
-  with open("data/monarch_list.json") as json_file:
-    monarch_lists = json.load(json_file)
-  monarch_lists[monarchy] = path
-  with open("data/monarch_list.json", 'w') as json_file:
-    json.dump(monarch_lists, json_file, indent=4)
-
-monarchies_list = ['Austria', 'Bavaria', 'Bohemia', 'Denmark', 'England', 'France', 'Germany', 'Han', 'Holy_Roman_Empire',
-               'Hungary', 'Iceland', 'Japan', 'Joseon', 'Ming', 'Naples', 'Norway', 'Ottoman', 'Poland', 'Portugal',
-               'Qing', 'Russia', 'Scotland', 'Shang', 'Spain', 'Sweden', 'Tang', 'Yuan', 'Zhou']
 def label_people(monarchies):
   for monarchy in monarchies:
     PropertyRetriever().add_labels_to_people(monarchy)

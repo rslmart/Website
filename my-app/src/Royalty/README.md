@@ -19,9 +19,8 @@ at once; the app bridges them through shared ancestors.
 | Person facts (parents, spouses, dates, titles, etc.) | **Wikidata** via the Action API (`wbgetentities`) |
 | Portraits | **Wikimedia Commons** (from each person's Wikidata `P18` image) |
 
-There is a legacy SPARQL/`wikibase-sdk` stub (`Data/get-data.js`) left over from
-prototyping; the production pipeline is pure Python and uses the Wikidata Action
-API, **not** SPARQL.
+The pipeline is pure Python (3.11+, dependencies locked in `Data/uv.lock`) and
+uses the Wikidata Action API, **not** SPARQL.
 
 ## How the data is gathered and processed
 
@@ -39,14 +38,16 @@ account and CLI flags):
    positions, and more), then does a bounded BFS over family edges to connect each
    monarch to the next in the list.
 3. **Gather ancestors** — [`Data/GatherAncestors.py`](Data/GatherAncestors.py)
-   walks parents upward (depth 5 + siblings for European realms; a deeper depth-12
+   walks parents upward from each listed monarch (depth 5 + siblings for European realms; a deeper depth-12
    pass for the Mongol khanates) so separate monarchies can be joined at shared
    ancestors.
 4. **Label** — [`Data/GetData.py`](Data/GetData.py) replaces display-only Q-ids
    with English labels, cached in `Data/data/properties.json`. Relationship edges
    stay as Q-ids.
 5. **Combine + group houses** — merged into `monarchy_data.json` /
-   `monarchy_family_trees.json`; `BuildHouses` groups people by family (`P53`).
+   `monarchy_family_trees.json` (people are upserted, never removed);
+   [`Data/BuildHouses.py`](Data/BuildHouses.py) groups people by family (`P53`)
+   and ranks them with [`Data/Ranks.py`](Data/Ranks.py).
 6. **Split for the frontend** — [`Data/SplitDataForFrontend.py`](Data/SplitDataForFrontend.py)
    writes one gzipped payload per monarchy/house to `public/royalty/*.json.gz`
    plus `index.json` (monarchy names) and `houses.json`.
@@ -85,8 +86,9 @@ A person node looks like:
 [`Data/buildMonarchImages.py`](Data/buildMonarchImages.py) (run standalone, not
 part of `pipeline.py`) takes each person's first Commons image, downloads a 200px
 thumbnail from `commons.wikimedia.org/wiki/Special:FilePath/…`, converts to JPEG,
-and uploads to `s3://makoa.link/monarchy/<Qid>.jpg`. Progress is tracked in
-`Data/monarch_images_manifest.json`.
+and uploads to `s3://makoa.link/monarchy/<Qid>.jpg` (boto3, AWS profile `makoa`).
+Progress is tracked in `Data/monarch_images_manifest.json`. Portraits reach S3
+directly, not through `deploy.sh`.
 
 The frontend derives the portrait URL purely from the Q-id
 (`https://makoa.link/monarchy/<Qid>.jpg`) — there is no client-side manifest.
@@ -108,13 +110,21 @@ People without an uploaded portrait render as a solid colored node.
 ## Regenerating the data
 
 ```bash
-cd src/Royalty/Data
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+cd my-app/src/Royalty/Data
+uv sync --frozen                    # or, without uv: see Data/README.md (venv + pip, then drop the `uv run` prefix)
 
-python pipeline.py --all            # full rebuild → public/royalty/*.json.gz
-python pipeline.py --split-only     # only refresh the frontend payloads
-python buildMonarchImages.py        # (separate) portraits → s3://makoa.link/monarchy/
+uv run python pipeline.py --all             # full rebuild (network) → public/royalty/*.json.gz
+uv run python pipeline.py England --skip-lists   # rebuild one realm from the cached monarch list
+uv run python pipeline.py --houses-only     # offline: rebuild house payloads
+uv run python pipeline.py --split-only      # offline: refresh the monarchy and house payloads
+uv run python buildMonarchImages.py --dry-run   # (separate) portraits → s3://makoa.link/monarchy/
 ```
 
-See [`Data/README.md`](Data/README.md) for every stage, flag, and cache file.
+Wikidata entities and labels are cached forever in `Data/data/`; delete a
+realm's `data/<M>.json` to refetch it. Regenerated `Data/data/*.json` and
+`public/royalty/*` files are committed. `npm run build` copies `public/royalty/`
+into `build/`, and `my-app/deploy.sh` syncs that to S3 (no `--delete`) and
+invalidates CloudFront.
+
+See [`Data/README.md`](Data/README.md) for every stage, flag, cache file, the
+refresh path and the deploy details.

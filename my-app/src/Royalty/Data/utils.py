@@ -1,7 +1,5 @@
 import requests
 import time
-from datetime import datetime
-import json
 
 # Wikimedia's API now rejects requests without a descriptive User-Agent
 # (HTTP 403). See https://meta.wikimedia.org/wiki/User-Agent_policy.
@@ -31,30 +29,6 @@ def _get_json_with_retry(url, max_retries=6):
       delay = min(delay * 2, 60)
   print(f"Giving up after {max_retries} attempts: {url}")
   return None
-
-def datetime_encoder(obj):
-    if isinstance(obj, datetime):
-        return obj.isoformat()
-
-    raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
-
-def saveData(data, file_name):
-    print("Saving Data: {}".format(len(data)))
-    # Convert dictionary to JSON string using the custom encoder
-    json_data = json.dumps(data, default=datetime_encoder, indent=4)
-    # Write JSON data to a file
-    with open("{}.json".format(file_name), "w") as file:
-        file.write(json_data)
-
-
-def get_wikidata_data(item_id):
-  url = f"https://www.wikidata.org/w/api.php?action=wbgetentities&ids={item_id}&languages=en&format=json"
-  data = _get_json_with_retry(url)
-  if data and "entities" in data and item_id in data["entities"]:
-    return data["entities"][item_id]
-  print(f"No data found for item ID: {item_id}")
-  return None
-
 
 def get_wikidata_data_for_list(item_ids):
   result = {}
