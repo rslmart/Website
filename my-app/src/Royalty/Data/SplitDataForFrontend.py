@@ -52,7 +52,20 @@ def _important_nodes(succession_list, data):
             important.add(person["father"])
         if "mother" in person:
             important.add(person["mother"])
-    return {node_id: data[node_id] for node_id in important if node_id in data}
+    # Sorted so the payload bytes don't depend on set (hash-seed) order.
+    return {node_id: data[node_id] for node_id in sorted(important) if node_id in data}
+
+
+def _write_gz(path, payload):
+    """Write ``payload`` as compact gzipped JSON, byte-deterministically.
+
+    ``mtime=0`` keeps the gzip header stable, so an unchanged payload gives
+    identical bytes (and ``aws s3 sync`` skips it). Returns the raw size.
+    """
+    raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    with gzip.GzipFile(path, "wb", mtime=0) as out:
+        out.write(raw)
+    return len(raw)
 
 
 def split():
@@ -87,14 +100,12 @@ def split():
             payload["extendedNodes"] = {
                 qid: data[qid] for qid in extended_ids if qid in data
             }
-        raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
         out_path = os.path.join(PUBLIC_DIR, monarchy + ".json.gz")
-        with gzip.open(out_path, "wb") as out:
-            out.write(raw)
+        raw_size = _write_gz(out_path, payload)
         extra = ""
         if "extendedNodes" in payload:
             extra = f", {len(payload['extendedNodes'])} extended"
-        print(f"{monarchy}: {len(payload['nodes'])} nodes{extra} -> {out_path} ({len(raw)} B raw)")
+        print(f"{monarchy}: {len(payload['nodes'])} nodes{extra} -> {out_path} ({raw_size} B raw)")
 
     with open(os.path.join(PUBLIC_DIR, "index.json"), "w") as f:
         json.dump(monarchies, f)
@@ -128,12 +139,10 @@ def split_houses():
             "members": house.get("members", {}),
             "nodes": house.get("nodes", {}),
         }
-        raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
-        with gzip.open(os.path.join(PUBLIC_DIR, slug + ".json.gz"), "wb") as out:
-            out.write(raw)
+        raw_size = _write_gz(os.path.join(PUBLIC_DIR, slug + ".json.gz"), payload)
         index.append({"id": slug, "name": house.get("name", slug)})
         print(f"{slug}: {len(payload['members'])} members, "
-              f"{len(payload['nodes'])} nodes ({len(raw)} B raw)")
+              f"{len(payload['nodes'])} nodes ({raw_size} B raw)")
 
     index.sort(key=lambda h: h["name"])
     with open(os.path.join(PUBLIC_DIR, "houses.json"), "w") as f:
