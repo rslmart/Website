@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from "react";
 
 /* Site theme: "light" or "dark", applied as <html data-theme="...">, which
    switches the colour tokens in global.css.
@@ -25,18 +25,25 @@ export function isLightOnlyPath(pathname) {
     return LIGHT_ONLY_PATHS.includes(pathname.toLowerCase().replace(/\/+$/, ""));
 }
 
-// Used only while storage is unreadable.
-let memoryChoice = null;
+// In-memory choice, used once storage has failed to read or write
+// (undefined = storage is working).
+let memoryChoice;
 const listeners = new Set();
 
 /* The saved explicit choice, "light" | "dark", or null for "follow system". */
 export function readStoredTheme() {
+    if (memoryChoice !== undefined) return memoryChoice;
     try {
         const value = window.localStorage.getItem(THEME_STORAGE_KEY);
         return value === "light" || value === "dark" ? value : null;
     } catch {
-        return memoryChoice;
+        return null;
     }
+}
+
+/* Tests only: forget an in-memory fallback choice. */
+export function resetThemeMemoryForTests() {
+    memoryChoice = undefined;
 }
 
 /* Save a choice: "light", "dark" or "system". */
@@ -45,6 +52,7 @@ export function setThemeChoice(choice) {
     try {
         if (value) window.localStorage.setItem(THEME_STORAGE_KEY, value);
         else window.localStorage.removeItem(THEME_STORAGE_KEY);
+        memoryChoice = undefined;
     } catch {
         memoryChoice = value;
     }
@@ -94,9 +102,5 @@ export default function useTheme(pathname) {
         document.documentElement.dataset.theme = theme;
     }, [theme]);
 
-    const toggle = useCallback(() => {
-        setThemeChoice(preferred === "dark" ? "light" : "dark");
-    }, [preferred]);
-
-    return { theme, lightOnly, toggle, choice, system };
+    return { theme, lightOnly, choice, system };
 }

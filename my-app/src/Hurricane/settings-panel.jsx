@@ -257,7 +257,7 @@ function SettingsPanel(props) {
                 <button
                     ref={collapseButtonRef}
                     onClick={evt => toggleSettingsPanel(evt)}
-                    style={{float: "right", }}
+                    style={{float: "right", border: "none", background: "none", fontSize: 20, lineHeight: 1, cursor: "pointer", color: "var(--color-text-muted)"}}
                     aria-label="Collapse settings"
                     aria-expanded="true"
                 >

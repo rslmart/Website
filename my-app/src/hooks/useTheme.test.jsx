@@ -4,7 +4,7 @@ import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ThemeToggle from "../components/ThemeToggle";
-import useTheme, { LIGHT_ONLY_PATHS, THEME_STORAGE_KEY, isLightOnlyPath } from "./useTheme";
+import useTheme, { LIGHT_ONLY_PATHS, THEME_STORAGE_KEY, isLightOnlyPath, resetThemeMemoryForTests } from "./useTheme";
 
 /* A matchMedia stand-in whose prefers-color-scheme answer tests can flip. */
 function mockSystemTheme(initial) {
@@ -25,8 +25,8 @@ function mockSystemTheme(initial) {
 }
 
 function Shell({ pathname = "/" }) {
-    const { theme, lightOnly, toggle } = useTheme(pathname);
-    return lightOnly ? <p>light only</p> : <ThemeToggle theme={theme} onToggle={toggle} />;
+    const { theme, lightOnly } = useTheme(pathname);
+    return lightOnly ? <p>light only</p> : <ThemeToggle theme={theme} />;
 }
 
 const htmlTheme = () => document.documentElement.dataset.theme;
@@ -43,6 +43,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+    resetThemeMemoryForTests();
     vi.restoreAllMocks();
 });
 
@@ -115,6 +116,19 @@ describe("useTheme", () => {
         vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
             throw new Error("SecurityError");
         });
+        vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+            throw new Error("QuotaExceededError");
+        });
+
+        render(<Shell />);
+        expect(htmlTheme()).toBe("dark");
+
+        await choose("Light");
+        expect(htmlTheme()).toBe("light");
+    });
+
+    it("applies a choice when storage reads but cannot write", async () => {
+        mockSystemTheme("dark");
         vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
             throw new Error("QuotaExceededError");
         });

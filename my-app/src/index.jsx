@@ -150,13 +150,15 @@ function RouteError() {
 function RootLayout() {
     useEffect(() => writeReloadFlag(null), []);
     const { pathname } = useLocation();
-    const { theme, lightOnly, toggle } = useTheme(pathname);
+    const { theme, lightOnly } = useTheme(pathname);
+    // The toggle comes after the page in the DOM so Tab reaches the page's
+    // Home button (visually to its left) first.
     return (
         <CanonicalPath>
             <ScrollRestoration />
             <RouteFocus />
-            {!lightOnly && <ThemeToggle theme={theme} onToggle={toggle} />}
             <Outlet />
+            {!lightOnly && <ThemeToggle theme={theme} />}
         </CanonicalPath>
     );
 }
