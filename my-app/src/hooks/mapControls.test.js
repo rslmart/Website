@@ -25,4 +25,22 @@ describe("isolateMapControls", () => {
         expect(deckHandler).not.toHaveBeenCalled();
         wrapper.remove();
     });
+
+    it("lets a drag end over a control (pointerup/move still reach window)", () => {
+        const wrapper = document.createElement("div");
+        wrapper.innerHTML = `<div class="mapboxgl-map"><div class="mapboxgl-control-container">
+            <a class="mapboxgl-ctrl-logo" href="#logo">Mapbox</a></div></div>`;
+        document.body.appendChild(wrapper);
+        isolateMapControls({ target: { getContainer: () => wrapper.querySelector(".mapboxgl-map") } });
+        const onWindow = vi.fn();
+        window.addEventListener("pointerup", onWindow);
+        window.addEventListener("pointermove", onWindow);
+        const logo = wrapper.querySelector("a");
+        logo.dispatchEvent(new Event("pointermove", { bubbles: true }));
+        logo.dispatchEvent(new Event("pointerup", { bubbles: true }));
+        expect(onWindow).toHaveBeenCalledTimes(2);
+        window.removeEventListener("pointerup", onWindow);
+        window.removeEventListener("pointermove", onWindow);
+        wrapper.remove();
+    });
 });

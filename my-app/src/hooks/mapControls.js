@@ -4,13 +4,14 @@
    the deck.gl canvas. Pointer events on a control still bubble up to the
    deck.gl wrapper, where deck.gl would treat a click on the attribution as a
    click on the map (selecting a plate or storm under it) or start a pan.
-   Stop them at the control container; the controls' own handlers and link
-   navigation still run. Pass as the <Map onLoad> handler. */
+   Stop the gesture-starting events at the control container; the controls'
+   own handlers and link navigation still run. Move/up/end events must keep
+   bubbling: deck.gl's input library listens for them on window, and a drag
+   released over the attribution would otherwise never end (the map keeps
+   panning). Pass as the <Map onLoad> handler. */
 
 const CONTROL_EVENTS = [
-    "pointerdown", "pointerup", "pointermove",
-    "mousedown", "mouseup", "mousemove",
-    "touchstart", "touchend", "touchmove",
+    "pointerdown", "mousedown", "touchstart",
     "click", "dblclick", "wheel", "contextmenu",
 ];
 

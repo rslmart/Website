@@ -14,7 +14,7 @@ describe("Tectonics basemap", () => {
         delete document.documentElement.dataset.theme;
     });
 
-    it("uses light-v11 in light and dark-v11 in dark, following theme changes", async () => {
+    it("uses light-v10 in light and dark-v10 in dark, following theme changes", async () => {
         render(
             <MemoryRouter>
                 <Tectonics />
@@ -22,8 +22,8 @@ describe("Tectonics basemap", () => {
         );
         const map = screen.getByTestId("mock-map");
         expect(MAP_STYLES).toEqual({
-            light: "mapbox://styles/mapbox/light-v11",
-            dark: "mapbox://styles/mapbox/dark-v11",
+            light: "mapbox://styles/mapbox/light-v10",
+            dark: "mapbox://styles/mapbox/dark-v10",
         });
         expect(map).toHaveAttribute("data-map-style", MAP_STYLES.light);
 

@@ -49,11 +49,14 @@ const INITIAL_VIEW_STATE = {
     bearing: 0,
 };
 
-// Basemap per site theme. The v11 styles are pinned to Web Mercator below,
+// Basemap per site theme. v10, not v11: the v11 styles use fog/globe
+// properties that mapbox-gl 2.8.2 rejects (console errors, and the switch to
+// dark silently failed in the Conductor's check with a token, 2026-11-17).
+// Moving to v11 needs a mapbox-gl upgrade. Pinned to Web Mercator below,
 // because deck.gl's MapView draws in Web Mercator.
 export const MAP_STYLES = {
-    light: 'mapbox://styles/mapbox/light-v11',
-    dark: 'mapbox://styles/mapbox/dark-v11',
+    light: 'mapbox://styles/mapbox/light-v10',
+    dark: 'mapbox://styles/mapbox/dark-v10',
 };
 
 // On the light basemap the green ridge and orange transform lines are below

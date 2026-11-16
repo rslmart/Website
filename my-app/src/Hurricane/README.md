@@ -139,10 +139,10 @@ The map requires `VITE_MAPBOX_TOKEN` (see the root README).
 
 The basemap is `mapbox://styles/mapbox/dark-v9` (`MAP_STYLE` in `Hurricane.jsx`)
 in both site themes; only the panels, drawers and tooltips follow the theme
-(user ruling, 2026-11-17). It stays on v9 rather than `dark-v11` because the
-Saffir–Simpson colours were chosen against it and the move hasn't been compared
-side by side with a token. Switching is a one-line change once a visual check
-shows `dark-v11` reads the same (`website-site-theme-maps-charts` report).
+(user ruling, 2026-11-17). It stays on v9: the Saffir–Simpson colours were
+chosen against it, and the v11 styles need a newer mapbox-gl than the 2.8.2 the
+site uses (v11's fog/globe properties are rejected; see `MAP_STYLES` in
+`src/Tectonics/Tectonics.jsx`).
 
 ## Regenerating the data
 
