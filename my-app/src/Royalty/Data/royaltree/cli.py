@@ -4,7 +4,8 @@ Commands
   fetch          bring the store up to date for some trees (network; incremental)
   build          fetch (unless --offline), derive the combined files, houses and
                  public/royalty payloads
-  split          only rewrite public/royalty/ from the combined files in --data-dir
+  split          offline: rebuild houses and public/royalty/ from the committed
+                 combined files in --data-dir (no store needed)
   check / diff   validate.py on --out-dir (schema + invariants / data-level diff)
   import-legacy  one-time, network-free import of the old data/*.json caches
 
@@ -199,9 +200,8 @@ def derive_outputs(run, args):
     BuildHouses.DATA_DIR = args.data_dir
     SplitDataForFrontend.DATA_DIR = args.data_dir
     SplitDataForFrontend.PUBLIC_DIR = args.out_dir
-    if run.command == "build":
-        with run.stage("houses"):
-            BuildHouses.build_houses()
+    with run.stage("houses"):  # local and cheap; lets a fresh clone rebuild every payload
+        BuildHouses.build_houses()
     with run.stage("split"):
         names = SplitDataForFrontend.split() + SplitDataForFrontend.split_houses()
         run.counters["payloads_written"] = len(names)
@@ -226,6 +226,9 @@ def build_parser():
                         help="no network: any request is an error")
     common.add_argument("--max-requests", type=int, default=DEFAULT_MAX_REQUESTS,
                         help="abort the run after this many HTTP requests (default: %(default)s)")
+    common.add_argument("--maxlag", type=int, default=http.MAXLAG,
+                        help="Wikidata maxlag in seconds (default: %(default)s, the bot "
+                             "recommendation; requests wait while the servers lag more)")
     common.add_argument("--summary-json", help="also write the run summary here")
 
     trees = argparse.ArgumentParser(add_help=False)
@@ -248,7 +251,7 @@ def build_parser():
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("fetch", parents=[common, trees], help="update the store (network)")
     sub.add_parser("build", parents=[common, trees], help="fetch + derive + split")
-    sub.add_parser("split", parents=[common], help="rewrite public/royalty from the combined files")
+    sub.add_parser("split", parents=[common], help="houses + public/royalty from the combined files")
     # Other options (--base, --verbose, --json, --update-allowlist) pass through to validate.py.
     sub.add_parser("check", parents=[common], help="validate.py check on --out-dir")
     sub.add_parser("diff", parents=[common], help="validate.py diff on --out-dir (e.g. --base HEAD)")
@@ -269,7 +272,7 @@ def main(argv=None):
         parser.error(f"unrecognized arguments: {' '.join(extra)}")
 
     http.configure(offline=args.offline or args.command in ("split", "import-legacy"),
-                   max_requests=args.max_requests)
+                   max_requests=args.max_requests, maxlag=args.maxlag)
     run = Run(args.command)
     store = None
     status = "ok"

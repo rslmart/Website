@@ -5,6 +5,7 @@ Wikimedia etiquette (see report): identify the client with a URL in the
 User-Agent, send requests serially, pass ``maxlag`` to the Action API and wait
 ``Retry-After`` seconds when told to.
 """
+import sys
 import time
 from collections import Counter
 from urllib.parse import urlsplit
@@ -16,6 +17,10 @@ DEFAULT_TIMEOUT = (10, 60)  # (connect, read) seconds
 MAX_RETRIES = 6
 MAXLAG = 5  # seconds; the value Wikimedia recommends for bots
 MAX_WAIT = 120
+# Wikidata's lag (which includes query-service lag) can sit above 5s for
+# minutes; maxlag waits get their own budget so a lagged server delays the run
+# (roughly 15 min at most) instead of failing it.
+MAXLAG_RETRIES = 20
 
 
 class NetworkDisabled(RuntimeError):
@@ -60,9 +65,12 @@ _state = {"offline": False, "max_requests": None, "session": None}
 _sleep = time.sleep  # replaced in tests
 
 
-def configure(offline=False, max_requests=None):
+def configure(offline=False, max_requests=None, maxlag=None):
+    global MAXLAG
     _state["offline"] = offline
     _state["max_requests"] = max_requests
+    if maxlag is not None:
+        MAXLAG = maxlag
 
 
 def is_offline():
@@ -77,8 +85,9 @@ def _session():
     return _state["session"]
 
 
-def _wait(seconds):
+def _wait(seconds, why=""):
     seconds = min(max(seconds, 0), MAX_WAIT)
+    print(f"[royaltree] waiting {seconds:.0f}s ({why})", file=sys.stderr, flush=True)
     STATS.wait_seconds += seconds
     _sleep(seconds)
 
@@ -99,8 +108,12 @@ def get(url, params=None, headers=None, timeout=None, retries=MAX_RETRIES, **kwa
     hdrs["User-Agent"] = USER_AGENT  # never let a caller drop or change it
     host = urlsplit(url).netloc
     delay = 2.0
+    lag_delay = 5.0
+    lag_waits = 0
     last = None
-    for _ in range(retries):
+    attempt = 0
+    while attempt < retries:
+        attempt += 1
         cap = _state["max_requests"]
         if cap is not None and STATS.requests >= cap:
             raise RequestBudgetExceeded(f"--max-requests {cap} reached; rerun to resume")
@@ -112,24 +125,28 @@ def get(url, params=None, headers=None, timeout=None, retries=MAX_RETRIES, **kwa
         except requests.RequestException as exc:
             STATS.network_errors += 1
             last = exc
-            _wait(delay)
+            _wait(delay, f"network error: {type(exc).__name__}")
             delay = min(delay * 2, 60)
             continue
         if resp.status_code == 429:
             STATS.status_429 += 1
             last = f"HTTP 429"
-            _wait(_retry_after(resp, delay))
+            _wait(_retry_after(resp, delay), "HTTP 429")
             delay = min(delay * 2, 60)
             continue
         if resp.headers.get("MediaWiki-API-Error") == "maxlag":
             STATS.maxlag += 1
             last = "maxlag"
-            _wait(_retry_after(resp, 5))
+            if lag_waits < MAXLAG_RETRIES:
+                lag_waits += 1
+                attempt -= 1  # maxlag has its own budget
+            _wait(max(_retry_after(resp, 5), lag_delay), "maxlag: server lagged")
+            lag_delay = min(lag_delay * 1.5, 60)
             continue
         if resp.status_code >= 500:
             STATS.server_errors += 1
             last = f"HTTP {resp.status_code}"
-            _wait(_retry_after(resp, delay))
+            _wait(_retry_after(resp, delay), last)
             delay = min(delay * 2, 60)
             continue
         return resp

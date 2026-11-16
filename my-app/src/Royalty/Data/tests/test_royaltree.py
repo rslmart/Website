@@ -185,6 +185,16 @@ def test_429_maxlag_and_5xx_back_off(fake_http):
     assert (s["requests"], s["429s"], s["maxlag_waits"], s["5xx"]) == (4, 1, 1, 1)
 
 
+def test_maxlag_has_its_own_patient_budget(fake_http):
+    lag = FakeResponse(200, headers={"MediaWiki-API-Error": "maxlag", "Retry-After": "5"})
+    fake_http.script = [lag] * 8 + [FakeResponse(payload={"ok": 1})]
+    assert http.get_json("https://www.wikidata.org/w/api.php", retries=2) == {"ok": 1}
+    assert http.STATS.maxlag == 8
+    fake_http.script = [lag] * (http.MAXLAG_RETRIES + 2)
+    with pytest.raises(http.FetchError):
+        http.get("https://www.wikidata.org/w/api.php", retries=2)
+
+
 def test_gives_up_after_retries(fake_http):
     fake_http.script = [FakeResponse(429)] * 3
     with pytest.raises(http.FetchError):
