@@ -31,6 +31,12 @@ function Shell({ pathname = "/" }) {
 
 const htmlTheme = () => document.documentElement.dataset.theme;
 
+/* Open the theme menu and pick an option. */
+async function choose(option) {
+    await userEvent.click(screen.getByRole("button", { name: /^Theme:/ }));
+    await userEvent.click(screen.getByRole("radio", { name: option }));
+}
+
 beforeEach(() => {
     window.localStorage.clear();
     delete document.documentElement.dataset.theme;
@@ -56,7 +62,8 @@ describe("useTheme", () => {
         const { unmount } = render(<Shell />);
         expect(htmlTheme()).toBe("light");
 
-        await userEvent.click(screen.getByRole("button", { name: "Switch to dark theme" }));
+        expect(screen.getByRole("button", { name: "Theme: System (light)" })).toBeInTheDocument();
+        await choose("Dark");
         expect(htmlTheme()).toBe("dark");
         expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe("dark");
 
@@ -68,7 +75,39 @@ describe("useTheme", () => {
         delete document.documentElement.dataset.theme;
         render(<Shell />);
         expect(htmlTheme()).toBe("dark");
-        expect(screen.getByRole("button", { name: "Switch to light theme" })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Theme: Dark" })).toBeInTheDocument();
+    });
+
+    it("returns to following the system and forgets the saved choice", async () => {
+        const setSystem = mockSystemTheme("light");
+        window.localStorage.setItem(THEME_STORAGE_KEY, "dark");
+        render(<Shell />);
+        expect(htmlTheme()).toBe("dark");
+
+        await choose("System");
+        expect(htmlTheme()).toBe("light");
+        expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBeNull();
+        expect(screen.getByRole("radio", { name: "System" })).toBeChecked();
+
+        act(() => setSystem("dark"));
+        expect(htmlTheme()).toBe("dark");
+        expect(screen.getByRole("button", { name: "Theme: System (dark)" })).toBeInTheDocument();
+    });
+
+    it("opens on the current choice, and Escape closes it and returns focus", async () => {
+        mockSystemTheme("light");
+        render(<Shell />);
+        const button = screen.getByRole("button", { name: /^Theme:/ });
+        expect(button).toHaveAttribute("aria-expanded", "false");
+
+        await userEvent.click(button);
+        expect(button).toHaveAttribute("aria-expanded", "true");
+        expect(screen.getByRole("radio", { name: "System" })).toHaveFocus();
+
+        await userEvent.keyboard("{Escape}");
+        expect(button).toHaveAttribute("aria-expanded", "false");
+        expect(button).toHaveFocus();
+        expect(screen.queryByRole("radio")).toBeNull();
     });
 
     it("falls back to the system theme and still toggles when storage throws", async () => {
@@ -83,7 +122,7 @@ describe("useTheme", () => {
         render(<Shell />);
         expect(htmlTheme()).toBe("dark");
 
-        await userEvent.click(screen.getByRole("button", { name: "Switch to light theme" }));
+        await choose("Light");
         expect(htmlTheme()).toBe("light");
     });
 

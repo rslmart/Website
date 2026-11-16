@@ -150,7 +150,7 @@ input[type="date"] {
     font-size: 13px;
     color: var(--color-text);
     background-color: var(--color-surface);
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-strong);
     border-radius: var(--radius-sm);
     padding: 5px 8px;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -161,7 +161,7 @@ input[type="text"]:hover,
 input[type="number"]:hover,
 input[type="search"]:hover,
 input[type="date"]:hover {
-    border-color: var(--color-border-strong);
+    border-color: var(--color-text-muted);
 }
 
 select:focus,
@@ -244,14 +244,71 @@ input[type="radio"] {
     /* position supplied inline per page */
 }
 
-/* Light/dark toggle, fixed to the top-right of the shell pages (Home, 404).
-   Not shown on light-only pages (see src/hooks/useTheme.js). */
-.theme-fab {
+/* Theme menu (src/components/ThemeToggle.jsx). Top-right on the shell pages
+   (Home, 404); on pages with the Home button it sits beside it, top-left,
+   where no page puts its own controls. Hidden on light-only pages (see
+   src/hooks/useTheme.js). */
+.theme-menu {
     position: fixed;
     top: 16px;
     right: 16px;
     z-index: 10001;
+}
+
+:root:has(.home-fab) .theme-menu {
+    right: auto;
+    left: 64px;
+}
+
+.theme-fab {
     border: 1px solid var(--color-border-strong);
+}
+
+.theme-menu-panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    min-width: 160px;
+    padding: 8px 14px 10px;
+    background: var(--color-surface);
+    color: var(--color-text);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-raised);
+    font-size: 14px;
+}
+
+:root:has(.home-fab) .theme-menu-panel {
+    right: auto;
+    left: 0;
+}
+
+.theme-menu-panel[hidden] {
+    display: none;
+}
+
+.theme-menu-panel fieldset {
+    border: 0;
+    margin: 0;
+    padding: 0;
+}
+
+.theme-menu-panel legend {
+    padding: 0;
+    margin-bottom: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+}
+
+.theme-menu-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    cursor: pointer;
 }
 
 /* Modal shell shared by the help guides. */
@@ -330,11 +387,23 @@ input[type="radio"] {
         height: 44px;
     }
 
-    .theme-fab {
+    .theme-menu {
         top: calc(12px + env(safe-area-inset-top, 0px));
         right: calc(12px + env(safe-area-inset-right, 0px));
+    }
+
+    :root:has(.home-fab) .theme-menu {
+        right: auto;
+        left: calc(64px + env(safe-area-inset-left, 0px));
+    }
+
+    .theme-fab {
         width: 44px;
         height: 44px;
+    }
+
+    .theme-menu-option {
+        min-height: 44px;
     }
 
     /* --- Bottom-sheet drawer (Controls) --- */
