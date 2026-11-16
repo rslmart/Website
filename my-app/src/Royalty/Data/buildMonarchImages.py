@@ -50,8 +50,8 @@ S3_PROFILE = "makoa"
 THUMB_WIDTH = 200
 JPEG_QUALITY = 82
 
-# Wikimedia requires a descriptive User-Agent (see utils.WIKIMEDIA_HEADERS).
-HEADERS = {"User-Agent": "MonarchyBot/0.1 (makoa1693@gmail.com)"}
+# Wikimedia requires a descriptive User-Agent (see royaltree/http.py).
+HEADERS = {"User-Agent": "RoyalTreeBot/1.0 (+https://makoa.link)"}
 FILEPATH_BASE = "https://commons.wikimedia.org/wiki/Special:FilePath"
 
 _print_lock = threading.Lock()

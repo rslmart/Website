@@ -1,9 +1,14 @@
-import requests
 from bs4 import BeautifulSoup
 import json
 import os
 import re
-import utils
+
+from royaltree import http as requests  # project UA, timeouts, back-off, counters
+from royaltree.store import atomic_write
+from royaltree.wikidata import get_entities
+
+# Where saveData writes; the CLI points this at --data-dir.
+MONARCH_LIST_PATH = os.path.join('data', 'monarch_list.json')
 
 
 def flatten(l):
@@ -50,7 +55,7 @@ def convert_wiki_list_to_wiki_data_list(wiki_list, name_filter={}):
             wiki_data_id = re.search(pattern, wiki_data_url).group(1)
             if wiki_data_id not in wiki_data_list:
                 wiki_data_list.append(wiki_data_id)
-    wiki_data = utils.get_wikidata_data_for_list(wiki_data_list)
+    wiki_data = get_entities(wiki_data_list)
     wiki_data_list = [w for w in wiki_data_list if wiki_data[w]['claims']['P31'][0]['mainsnak']['datavalue']['value']['id'] == 'Q5']
     return wiki_data_list
 
@@ -71,7 +76,7 @@ def convert_wiki_list_to_wiki_data_list(wiki_list, name_filter={}):
 # relative hrefs and to page redirects.
 # ---------------------------------------------------------------------------
 
-_SCRAPER_UA = {"User-Agent": "RoyaltyTreeBot/1.0 (personal genealogy chart project)"}
+_SCRAPER_UA = {"User-Agent": requests.USER_AGENT}
 
 # Ancient king lists link a handful of classical chroniclers who are humans
 # (Q5) but obviously not pharaohs; drop them so they don't pollute the list.
@@ -215,7 +220,7 @@ def _resolve_titles_to_qids(titles):
 
 def _keep_humans(qids):
     """Keep only Q-IDs whose instance-of (P31) includes human (Q5)."""
-    data = utils.get_wikidata_data_for_list(qids)
+    data = get_entities(qids)
     humans = []
     for q in qids:
         entity = data.get(q)
@@ -283,7 +288,7 @@ def build_chinggisids():
 
 def saveData(list_name, monarch_list):
     print("Saving Data: {} {}".format(list_name, len(monarch_list)))
-    file_path = 'data/monarch_list.json'
+    file_path = MONARCH_LIST_PATH
     if not os.path.exists(file_path):
         data = {}
     else:
@@ -294,8 +299,7 @@ def saveData(list_name, monarch_list):
     # Convert dictionary to JSON string using the custom encoder
     json_data = json.dumps(data, indent=4)
     # Write JSON data to a file
-    with open(file_path, "w") as file:
-        file.write(json_data)
+    atomic_write(file_path, json_data)
 
 def get_monarch_lists(monarchies):
     if "England" in monarchies:

@@ -45,7 +45,7 @@ ALLOWLIST = {
     "schema-person": {
         "reason": "null inside a labelled list: the referenced item had no "
                   "English label (or, for 'unmarried partner', the known "
-                  "label-before-combine bug in CleanRoyalTreeData.py). Fix in "
+                  "label-before-combine bug, now in royaltree/build.py combine). Fix in "
                   "-wdqs-fetch.",
         "subjects": {
             "Q10290543:occupation",
@@ -60,12 +60,6 @@ ALLOWLIST = {
             "Q72686:occupation",
             "Q827937:occupation",
         },
-    },
-    "succession-dangling": {
-        "reason": "A succession path names a person missing from "
-                  "monarchy_data.json, so the frontend can't draw it. Fix in "
-                  "-monarch-registry / -wdqs-fetch.",
-        "subjects": {"Poland.json.gz:Q75385627"},
     },
     # --- Bulk rules (subjects in check_allowlist.json) -----------------------
     "monarch-missing": {

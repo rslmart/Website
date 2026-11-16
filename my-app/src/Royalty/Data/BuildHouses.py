@@ -16,7 +16,7 @@ parent links are missing) simply stay disconnected and render as honest
 sub-trees; the frontend's component layout tiles them.
 
 Output: data/houses.json = { <slug>: {name, members, monarchs, nodes} }
-Run via pipeline.py (after clean_and_combine / combine_ancestors) or standalone.
+Run via ``python -m royaltree build`` (after the combine step) or standalone.
 """
 import json
 import os
@@ -24,6 +24,7 @@ import re
 from collections import defaultdict
 
 import Ranks
+from royaltree.store import atomic_write
 
 DATA_DIR = "./data"
 
@@ -105,8 +106,7 @@ def build_houses(min_members=MIN_HOUSE_MEMBERS, ancestor_depth=ANCESTOR_DEPTH):
             "nodes": nodes,
         }
 
-    with open(os.path.join(DATA_DIR, "houses.json"), "w") as f:
-        json.dump(houses, f)
+    atomic_write(os.path.join(DATA_DIR, "houses.json"), json.dumps(houses))
 
     print(f"Built {len(houses)} houses (>= {min_members} members):")
     for slug in sorted(houses, key=lambda s: -len(houses[s]["members"]))[:25]:
