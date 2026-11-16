@@ -67,6 +67,19 @@ body {
     border-radius: 3px;
 }
 
+/* Hidden on screen but still read by screen readers (route focus label). */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
 /* Modernize native form controls used across the viz panels. Scoped to the
    specific inputs the panels use so Mapbox / Recharts controls are untouched. */
 select,
