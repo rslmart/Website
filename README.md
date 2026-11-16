@@ -15,6 +15,8 @@ Live at [makoa.link](https://makoa.link).
 - **deck.gl** + **react-map-gl / Mapbox GL** for the map pages (Hurricane, Tectonics)
 - **Cytoscape.js** (+ dagre) for the RoyalTree genealogy graph
 - **Recharts** for the Snow dashboard
+- **Vitest** + **React Testing Library** (jsdom) and **MSW** for unit tests;
+  **Playwright** (Chromium) for browser smoke tests
 - Hosting: **AWS S3** (`makoa.link` bucket) behind **CloudFront**
 
 ## Project structure
@@ -81,6 +83,55 @@ npm run build        # production build into build/
 npm run preview      # preview the production build locally
 npm run deploy       # build + deploy to S3/CloudFront (see below)
 ```
+
+## Testing
+
+Tests run locally only (there is no CI). From `my-app/`:
+
+```bash
+npm test                        # unit + component tests (Vitest, ~1 s)
+npm run test:watch              # same, re-running on change
+npx playwright install chromium # once per machine, for the e2e suite
+npm run test:e2e                # browser smoke tests (Playwright, ~15 s)
+```
+
+**Unit and component tests** (`npm test`) are `src/**/*.test.{js,jsx,mjs}`
+files next to the code they test, run by Vitest in jsdom with
+[React Testing Library](https://testing-library.com/docs/react-testing-library/intro/)
+and jest-dom matchers. Configuration is in
+[`vitest.config.js`](my-app/vitest.config.js), which reuses the app's Vite
+config, and [`src/test/setup.js`](my-app/src/test/setup.js):
+
+- **Offline:** an [MSW](https://mswjs.io/) server fails any test that makes a
+  request to anything but localhost, even if the code swallows the error. Mock
+  the responses a test needs with `server.use(http.get(url, () =>
+  HttpResponse.json(...)))`, importing `server` from
+  [`src/test/networkGuard.js`](my-app/src/test/networkGuard.js) and `http`
+  and `HttpResponse` from `msw`. Handlers are reset after each test.
+- **No Mapbox token:** `VITE_MAPBOX_TOKEN` is always empty in tests, so the
+  map pages are tested in their no-token state.
+- **Mocks:** mapbox-gl, react-map-gl, deck.gl and Cytoscape need WebGL or a
+  canvas, so they are replaced by light DOM mocks in
+  [`src/test/mocks/`](my-app/src/test/mocks/) (deck.gl's
+  `WebMercatorViewport` keeps its real math). Recharts stays real except
+  `ResponsiveContainer`, which gets a fixed 800 × 400 size. `ResizeObserver`
+  and `matchMedia` are polyfilled. Real rendering is covered only by e2e.
+- Pure-logic tests can opt out of jsdom with a `// @vitest-environment node`
+  first line (see `src/Snow/snowStats.test.mjs`).
+- **Known bugs** are written as `it.fails(...)` with the goal id in the name,
+  so fixing the bug turns the test red and forces it to be updated.
+
+**Browser smoke tests** (`npm run test:e2e`) live in
+[`my-app/e2e/`](my-app/e2e/) and run Chromium with a desktop and a phone
+project ([`playwright.config.js`](my-app/playwright.config.js)). Playwright
+makes a production build into `build-e2e/` (never `build/`, so
+`deploy.sh --skip-build` can't ship it) with `VITE_MAPBOX_TOKEN` forced empty,
+then serves it with `vite preview` on port 4317 with `--strictPort`. Set
+`PORT=...` to use another port, e.g. when two worktrees run e2e at once.
+Import `test` and `expect` from `e2e/fixtures.js`: it aborts every request
+that isn't to localhost (Google Fonts, map tiles) and lists them in the
+`blockedRequests` fixture. Reports go to `playwright-report/` (open with
+`npx playwright show-report`) and failure traces to `test-results/`.
 
 ## Data & hosting model
 
