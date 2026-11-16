@@ -1,7 +1,9 @@
 import React, {useEffect, useMemo, useState} from 'react';
 import DeckGL from '@deck.gl/react';
+import {MapView} from '@deck.gl/core';
 import {GeoJsonLayer, LineLayer} from '@deck.gl/layers';
-import {Map} from 'react-map-gl';
+import {AttributionControl, Map} from 'react-map-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
 import LegendPanel from './LegendPanel';
 import InfoPanel from './InfoPanel';
 import HomeButton from '../components/HomeButton';
@@ -44,6 +46,11 @@ const INITIAL_VIEW_STATE = {
     pitch: 0,
     bearing: 0,
 };
+
+// Draw the deck.gl layers on every world copy the basemap shows. The default
+// view is centred on the Pacific (longitude 150), so the Americas and the
+// eastern Pacific sit on the copy east of the antimeridian.
+const MAP_VIEW = new MapView({repeat: true});
 
 const DEFAULT_VISIBILITY = {
     convergent: true,
@@ -243,6 +250,7 @@ function Tectonics() {
         <div className="mobile-dvh" style={{width: '100vw', height: '100vh'}}>
             <HomeButton />
             <DeckGL
+                views={MAP_VIEW}
                 viewState={viewState}
                 controller={true}
                 onViewStateChange={({viewState: vs}) => setViewState(vs)}
@@ -253,7 +261,15 @@ function Tectonics() {
                     reuseMaps
                     mapboxAccessToken={import.meta.env.VITE_MAPBOX_TOKEN}
                     mapStyle="mapbox://styles/mapbox/light-v10"
-                />
+                    attributionControl={false}
+                >
+                    {/* On phones the Controls button covers the bottom-right
+                        corner, so the attribution moves beside the logo. */}
+                    <AttributionControl
+                        key={isMobile ? 'mobile' : 'desktop'}
+                        position={isMobile ? 'bottom-left' : 'bottom-right'}
+                    />
+                </Map>
             </DeckGL>
 
             {(loading || loadError) && (
