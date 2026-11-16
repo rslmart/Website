@@ -48,11 +48,8 @@ function SourcesPanel({ open, toggle, embedded }) {
         return (
             <button
                 onClick={toggle}
+                aria-expanded="false"
                 style={{
-                    position: "absolute",
-                    bottom: 24,
-                    right: 20,
-                    zIndex: 9999,
                     fontSize: 12,
                     padding: "4px 10px",
                     backgroundColor: "#fff",
@@ -71,11 +68,7 @@ function SourcesPanel({ open, toggle, embedded }) {
     return (
         <div
             style={{
-                position: "absolute",
-                bottom: 24,
-                right: 20,
                 maxWidth: 300,
-                zIndex: 9999,
                 backgroundColor: "#fff",
                 borderRadius: 4,
                 boxShadow: "0 2px 4px rgba(0,0,0,0.3)",

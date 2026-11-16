@@ -3,7 +3,8 @@ import DeckGL from '@deck.gl/react';
 import {GridLayer, HeatmapLayer} from '@deck.gl/aggregation-layers';
 import {LineLayer, PolygonLayer, ScatterplotLayer} from '@deck.gl/layers';
 import {WebMercatorViewport} from '@deck.gl/core';
-import {Map} from 'react-map-gl';
+import {AttributionControl, Map} from 'react-map-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
 import FilterPanel from "./filter-panel";
 import SettingsPanel from "./settings-panel";
 import StormInfo from "./storm-info";
@@ -641,7 +642,16 @@ class Hurricane extends Component {
                         reuseMaps
                         mapboxAccessToken={import.meta.env.VITE_MAPBOX_TOKEN}
                         mapStyle="mapbox://styles/mapbox/dark-v9"
-                    />
+                        attributionControl={false}
+                    >
+                        {/* On phones the Controls button covers the
+                            bottom-right corner, so the attribution moves
+                            beside the logo. */}
+                        <AttributionControl
+                            key={isMobile ? 'mobile' : 'desktop'}
+                            position={isMobile ? 'bottom-left' : 'bottom-right'}
+                        />
+                    </Map>
 
                     {this.state.hoverInfo && this.state.hoverInfo.object && (
                         <div
@@ -742,22 +752,35 @@ class Hurricane extends Component {
                     />
                 )}
                 {!isMobile && (
-                    <SettingsPanel
-                        settingsOpen={this.state.settingsOpen}
-                        onSettingsChange={this.onSettingsChange}
-                        toggleSettingsPanel={evt => {this.setState(prevState => ({ settingsOpen: !prevState.settingsOpen}))}}
-                        scatterplotSettings={this.state.scatterplotSettings}
-                        lineSettings={this.state.lineSettings}
-                        gridSettings={this.state.gridSettings}
-                        heatmapSettings={this.state.heatmapSettings}
-                        plotType={this.state.plotType}
-                    />
-                )}
-                {!isMobile && (
-                    <SourcesPanel
-                        open={this.state.sourcesOpen}
-                        toggle={() => this.setState(prevState => ({ sourcesOpen: !prevState.sourcesOpen }))}
-                    />
+                    // Bottom-right control stack: Settings sits beside the
+                    // sources button instead of underneath it, and the stack
+                    // clears the Mapbox attribution along the bottom edge.
+                    <div
+                        style={{
+                            position: "absolute",
+                            right: 20,
+                            bottom: 24,
+                            zIndex: 9999,
+                            display: "flex",
+                            alignItems: "flex-end",
+                            gap: 8,
+                        }}
+                    >
+                        <SettingsPanel
+                            settingsOpen={this.state.settingsOpen}
+                            onSettingsChange={this.onSettingsChange}
+                            toggleSettingsPanel={evt => {this.setState(prevState => ({ settingsOpen: !prevState.settingsOpen}))}}
+                            scatterplotSettings={this.state.scatterplotSettings}
+                            lineSettings={this.state.lineSettings}
+                            gridSettings={this.state.gridSettings}
+                            heatmapSettings={this.state.heatmapSettings}
+                            plotType={this.state.plotType}
+                        />
+                        <SourcesPanel
+                            open={this.state.sourcesOpen}
+                            toggle={() => this.setState(prevState => ({ sourcesOpen: !prevState.sourcesOpen }))}
+                        />
+                    </div>
                 )}
                 {isMobile && (
                     <ControlsFab onClick={() => this.setState({ controlsDrawerOpen: true })} />

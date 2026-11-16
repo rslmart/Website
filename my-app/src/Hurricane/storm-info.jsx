@@ -124,7 +124,7 @@ function StormInfo(props) {
             {/* Header and close button remains the same */}
             <div style={{ marginBottom: "20px" }}>
                 <h3 style={{ float: "left", marginTop: 0, marginBottom: 0 }}>{stormInfo["name"]} {stormInfo["season"]}</h3>
-                <button onClick={evt => exitStormInfo(evt)} style={{ float: "right" }}>&times;</button>
+                <button onClick={evt => exitStormInfo(evt)} style={{ float: "right" }} aria-label="Close storm details">&times;</button>
             </div>
 
             {/* IR imagery: HURSAT-B1 (1978-2015, pre-rendered to S3) or RAMMB/CIRA (2016+).
@@ -226,7 +226,7 @@ function StormInfo(props) {
             {/* Rest of the component remains the same */}
             <div key={'selectedPoint'} className="input">
                 <label>{"Select Point:  "}</label>
-                <button name="backwardSelectedPoint" onClick={evt => onChange(evt)}>{"<"}</button>
+                <button name="backwardSelectedPoint" onClick={evt => onChange(evt)} aria-label="Previous track point">{"<"}</button>
                 <input
                     name="selectedPoint"
                     type="range"
@@ -235,7 +235,7 @@ function StormInfo(props) {
                     max={stormInfo.track_points.length - 1}
                     onChange={evt => onChange(evt)}
                 />
-                <button name="forwardSelectedPoint" onClick={evt => onChange(evt)}>{">"}</button>
+                <button name="forwardSelectedPoint" onClick={evt => onChange(evt)} aria-label="Next track point">{">"}</button>
             </div>
             <div>Date/Time: {pointInfo.date_time}</div>
             <div>Wind: {pointInfo.wind} Pressure: {pointInfo.pressure}</div>

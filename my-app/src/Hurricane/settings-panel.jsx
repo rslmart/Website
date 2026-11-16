@@ -1,20 +1,29 @@
 import * as React from 'react';
 import {PLOT_TYPES} from "./Hurricane";
 
+// Positioned by the bottom-right control stack in Hurricane.jsx.
 const settingsPanelStyles = {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
     maxWidth: '320px',
     backgroundColor: '#fff',
     boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
     padding: '6px 12px',
-    margin: '20px',
     fontSize: '13px',
     lineHeight: 2,
     color: '#6b6b76',
     outline: 'none',
-    zIndex: 9999,
+};
+
+// Matches the collapsed "Filters +" button in filter-panel.jsx.
+const openButtonStyles = {
+    border: "none",
+    backgroundColor: "var(--color-surface)",
+    boxShadow: "var(--shadow-panel)",
+    borderRadius: "var(--radius-sm)",
+    padding: "8px 12px",
+    fontSize: "13px",
+    fontWeight: 600,
+    color: "var(--color-text)",
+    cursor: "pointer",
 };
 
 function SettingsPanel(props) {
@@ -231,14 +240,28 @@ function SettingsPanel(props) {
     }
 
     return (settingsOpen ?
-        <div style={settingsPanelStyles}>
+        <div style={settingsPanelStyles} role="region" aria-label="Rendering settings">
             <div style={{height: "40px", marginBottom: 0, paddingBottom: 0}}>
                 <h3 style={{float: "left", marginTop: 0, marginBottom: 0}}>Settings</h3>
-                <button onClick={evt => toggleSettingsPanel(evt)} style={{float: "right", }}>-</button>
+                <button
+                    onClick={evt => toggleSettingsPanel(evt)}
+                    style={{float: "right", }}
+                    aria-label="Collapse settings"
+                    aria-expanded="true"
+                >
+                    -
+                </button>
             </div>
             {getSettingsDiv(plotType)}
         </div> :
-        <button onClick={evt => toggleSettingsPanel(evt)} style={{position: "absolute", bottom: 20, right: 20}}>+</button>
+        <button
+            onClick={evt => toggleSettingsPanel(evt)}
+            style={openButtonStyles}
+            aria-label="Open rendering settings"
+            aria-expanded="false"
+        >
+            Settings +
+        </button>
         );
 }
 
