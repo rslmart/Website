@@ -222,6 +222,16 @@ input[type="radio"] {
     box-shadow: var(--shadow-raised);
 }
 
+@media (prefers-reduced-motion: reduce) {
+    .fab {
+        transition: none;
+    }
+
+    .fab:hover {
+        transform: none;
+    }
+}
+
 /* Persistent home button, fixed to the top-left on every sub-page. */
 .home-fab {
     position: fixed;

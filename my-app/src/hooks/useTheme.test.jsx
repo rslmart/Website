@@ -138,7 +138,7 @@ describe("index.html no-flash script", () => {
     });
 
     it("declares a theme-color for each scheme", () => {
-        expect(html).toContain('<meta name="theme-color" content="#166534" />');
+        expect(html).toContain('<meta name="theme-color" content="#166534" media="(prefers-color-scheme: light)" />');
         expect(html).toContain('<meta name="theme-color" content="#0B0B0B" media="(prefers-color-scheme: dark)" />');
     });
 });
