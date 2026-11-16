@@ -12,6 +12,8 @@ import {
 import "./global.css";
 import Home from "./Home";
 import NotFound from "./NotFound";
+import ThemeToggle from "./components/ThemeToggle";
+import useTheme from "./hooks/useTheme";
 
 /* Each page is its own chunk, fetched only when its route is visited, so
    e.g. /Snow and /Bio never download mapbox-gl or deck.gl. React Router's
@@ -147,10 +149,13 @@ function RouteError() {
    the top and restores the previous position on Back/Forward. */
 function RootLayout() {
     useEffect(() => writeReloadFlag(null), []);
+    const { pathname } = useLocation();
+    const { theme, lightOnly, toggle } = useTheme(pathname);
     return (
         <CanonicalPath>
             <ScrollRestoration />
             <RouteFocus />
+            {!lightOnly && <ThemeToggle theme={theme} onToggle={toggle} />}
             <Outlet />
         </CanonicalPath>
     );

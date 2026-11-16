@@ -234,6 +234,16 @@ input[type="radio"] {
     /* position supplied inline per page */
 }
 
+/* Light/dark toggle, fixed to the top-right of the shell pages (Home, 404).
+   Not shown on light-only pages (see src/hooks/useTheme.js). */
+.theme-fab {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 10001;
+    border: 1px solid var(--color-border-strong);
+}
+
 /* Modal shell shared by the help guides. */
 .modal-overlay {
     position: fixed;
@@ -306,6 +316,13 @@ input[type="radio"] {
     }
 
     .help-fab {
+        width: 44px;
+        height: 44px;
+    }
+
+    .theme-fab {
+        top: calc(12px + env(safe-area-inset-top, 0px));
+        right: calc(12px + env(safe-area-inset-right, 0px));
         width: 44px;
         height: 44px;
     }
