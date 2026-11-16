@@ -350,6 +350,15 @@ input[type="radio"] {
     color: var(--color-text);
 }
 
+/* Recharts' default tooltip box is page chrome, so it follows the theme.
+   Recharts sets these properties inline, hence !important. Series, axis and
+   grid colours are data encodings and stay with the pages. */
+.recharts-default-tooltip {
+    background-color: var(--color-surface) !important;
+    border-color: var(--color-border-strong) !important;
+    color: var(--color-text);
+}
+
 /* ============================================================
    Mobile-only experience for the data-viz pages.
    Everything below is gated behind viewport width/height media

@@ -659,13 +659,14 @@ class Hurricane extends Component {
                             style={{position: 'absolute',
                                 left: this.state.hoverInfo.x,
                                 top: this.state.hoverInfo.y,
-                                backgroundColor: '#fff',
-                                boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                                backgroundColor: 'var(--color-surface)',
+                                boxShadow: 'var(--shadow-panel)',
+                                borderRadius: 'var(--radius-sm)',
                                 padding: '6px 12px',
                                 margin: '20px',
                                 fontSize: '13px',
                                 lineHeight: 2,
-                                color: '#6b6b76',
+                                color: 'var(--color-text-muted)',
                                 outline: 'none',
                                 zIndex: 9999,
                                 pointerEvents: 'none',}}
@@ -693,11 +694,12 @@ class Hurricane extends Component {
                         top: '50%',
                         left: '50%',
                         transform: 'translate(-50%, -50%)',
-                        backgroundColor: '#fff',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                        backgroundColor: 'var(--color-surface)',
+                        boxShadow: 'var(--shadow-panel)',
+                        borderRadius: 'var(--radius-sm)',
                         padding: '12px 20px',
                         fontSize: '14px',
-                        color: this.state.loadError ? '#b00020' : '#6b6b76',
+                        color: this.state.loadError ? 'var(--color-danger)' : 'var(--color-text-muted)',
                         zIndex: 9999,
                     }}>
                         {this.state.loadError
@@ -836,7 +838,7 @@ class Hurricane extends Component {
                     open={this.state.helpOpen}
                     onOpen={() => this.setState({ helpOpen: true })}
                     onClose={this.closeHelp}
-                    fabPosition={isMobile ? { top: 12, right: 12 } : { top: 20, left: 70 }}
+                    fabPosition={isMobile ? { top: 12, right: 12 } : { top: 16, left: 112 }}
                 />
             </div>
         );

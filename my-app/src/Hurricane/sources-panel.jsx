@@ -24,7 +24,7 @@ const SOURCES = [
 ];
 
 const linkStyle = {
-    color: "#4a7fd6",
+    color: "var(--color-primary)",
     textDecoration: "none",
 };
 
@@ -34,7 +34,7 @@ function SourcesPanel({ open, toggle, embedded }) {
             <div style={{ fontSize: 12, lineHeight: 1.5, color: "var(--color-text-muted)" }}>
                 {SOURCES.map((source) => (
                     <div key={source.name} style={{ marginBottom: 6 }}>
-                        <div style={{ color: "#9b9ba6" }}>{source.label}</div>
+                        <div style={{ color: "var(--color-text-faint)" }}>{source.label}</div>
                         <a href={source.href} target="_blank" rel="noopener noreferrer" style={linkStyle}>
                             {source.name}
                         </a>
@@ -52,11 +52,11 @@ function SourcesPanel({ open, toggle, embedded }) {
                 style={{
                     fontSize: 12,
                     padding: "4px 10px",
-                    backgroundColor: "#fff",
+                    backgroundColor: "var(--color-surface)",
                     border: "none",
-                    borderRadius: 4,
-                    boxShadow: "0 2px 4px rgba(0,0,0,0.3)",
-                    color: "#6b6b76",
+                    borderRadius: "var(--radius-sm)",
+                    boxShadow: "var(--shadow-panel)",
+                    color: "var(--color-text-muted)",
                     cursor: "pointer",
                 }}
             >
@@ -69,20 +69,20 @@ function SourcesPanel({ open, toggle, embedded }) {
         <div
             style={{
                 maxWidth: 300,
-                backgroundColor: "#fff",
-                borderRadius: 4,
-                boxShadow: "0 2px 4px rgba(0,0,0,0.3)",
+                backgroundColor: "var(--color-surface)",
+                borderRadius: "var(--radius-sm)",
+                boxShadow: "var(--shadow-panel)",
                 padding: "8px 12px",
                 fontSize: 12,
                 lineHeight: 1.5,
-                color: "#6b6b76",
+                color: "var(--color-text-muted)",
             }}
         >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                 <strong>Data &amp; imagery sources</strong>
                 <button
                     onClick={toggle}
-                    style={{ border: "none", background: "none", cursor: "pointer", color: "#6b6b76", fontSize: 14 }}
+                    style={{ border: "none", background: "none", cursor: "pointer", color: "var(--color-text-muted)", fontSize: 14 }}
                     aria-label="Close sources"
                 >
                     &times;
@@ -90,7 +90,7 @@ function SourcesPanel({ open, toggle, embedded }) {
             </div>
             {SOURCES.map((source) => (
                 <div key={source.name} style={{ marginBottom: 4 }}>
-                    <div style={{ color: "#9b9ba6" }}>{source.label}</div>
+                    <div style={{ color: "var(--color-text-faint)" }}>{source.label}</div>
                     <a href={source.href} target="_blank" rel="noopener noreferrer" style={linkStyle}>
                         {source.name}
                     </a>
