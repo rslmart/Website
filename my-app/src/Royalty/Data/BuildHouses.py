@@ -96,7 +96,8 @@ def build_houses(min_members=MIN_HOUSE_MEMBERS, ancestor_depth=ANCESTOR_DEPTH):
         members = {qid: Ranks.rank_tier(data[qid]) for qid in member_ids}
         monarchs = [qid for qid in member_ids if qid in monarch_ids]
         pool = _ancestor_pool(member_ids, data, ancestor_depth)
-        nodes = {qid: data[qid] for qid in pool if qid in data}
+        # Sorted so the payload bytes don't depend on set (hash-seed) order.
+        nodes = {qid: data[qid] for qid in sorted(pool) if qid in data}
         houses[slug] = {
             "name": canon,
             "members": members,
