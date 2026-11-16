@@ -49,16 +49,25 @@ vi.mock("recharts", async (importOriginal) => ({
 
 beforeAll(listen);
 
-afterEach(() => {
-    cleanup();
-    server.resetHandlers();
+function failOnBlockedRequests(when) {
     const blocked = takeBlockedRequests();
     if (blocked.length) {
         throw new Error(
-            `Test made real network request(s): ${blocked.join(", ")}. ` +
+            `Real network request(s) ${when}: ${blocked.join(", ")}. ` +
                 "Mock them with MSW (server.use(...) from src/test/networkGuard.js)."
         );
     }
+}
+
+afterEach(() => {
+    cleanup();
+    server.resetHandlers();
+    failOnBlockedRequests("in this test");
 });
 
-afterAll(() => server.close());
+// Also catch requests from beforeAll/afterAll hooks or promises left running
+// after the last test in a file.
+afterAll(() => {
+    server.close();
+    failOnBlockedRequests("outside a test (hooks or unawaited work)");
+});
