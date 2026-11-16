@@ -27,6 +27,16 @@ const openButtonStyles = {
 };
 
 function SettingsPanel(props) {
+    const openButtonRef = React.useRef(null);
+    const collapseButtonRef = React.useRef(null);
+    const wasOpen = React.useRef(props.settingsOpen);
+    // The open and collapse buttons are different elements, so move focus to
+    // whichever one is now rendered after a toggle (otherwise it drops to body).
+    React.useEffect(() => {
+        if (props.embedded || wasOpen.current === props.settingsOpen) return;
+        wasOpen.current = props.settingsOpen;
+        (props.settingsOpen ? collapseButtonRef : openButtonRef).current?.focus();
+    }, [props.settingsOpen, props.embedded]);
     const {settingsOpen, onSettingsChange, toggleSettingsPanel, scatterplotSettings, lineSettings, gridSettings,
         heatmapSettings, plotType, embedded
     } = props;
@@ -244,6 +254,7 @@ function SettingsPanel(props) {
             <div style={{height: "40px", marginBottom: 0, paddingBottom: 0}}>
                 <h3 style={{float: "left", marginTop: 0, marginBottom: 0}}>Settings</h3>
                 <button
+                    ref={collapseButtonRef}
                     onClick={evt => toggleSettingsPanel(evt)}
                     style={{float: "right", }}
                     aria-label="Collapse settings"
@@ -255,6 +266,7 @@ function SettingsPanel(props) {
             {getSettingsDiv(plotType)}
         </div> :
         <button
+            ref={openButtonRef}
             onClick={evt => toggleSettingsPanel(evt)}
             style={openButtonStyles}
             aria-label="Open rendering settings"

@@ -268,6 +268,7 @@ function Tectonics() {
                     <AttributionControl
                         key={isMobile ? 'mobile' : 'desktop'}
                         position={isMobile ? 'bottom-left' : 'bottom-right'}
+                        compact={isMobile ? false : undefined}
                     />
                 </Map>
             </DeckGL>

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
     createBrowserRouter,
@@ -61,6 +61,9 @@ function RouteFocus() {
     const { pathname } = useLocation();
     const labelRef = useRef(null);
     const isFirstRender = useRef(true);
+    // The label only carries text while it is the focus target, so pages with
+    // an <h1> aren't announced twice.
+    const [labelText, setLabelText] = useState("");
 
     useEffect(() => {
         if (isFirstRender.current) {
@@ -68,17 +71,22 @@ function RouteFocus() {
             return;
         }
         const heading = document.querySelector("h1");
-        const target = heading ?? labelRef.current;
-        if (!target) return;
-        if (target === heading && !heading.hasAttribute("tabindex")) {
-            heading.setAttribute("tabindex", "-1");
+        if (heading) {
+            setLabelText("");
+            if (!heading.hasAttribute("tabindex")) heading.setAttribute("tabindex", "-1");
+            heading.focus({ preventScroll: true });
+            return;
         }
-        target.focus({ preventScroll: true });
+        setLabelText(pageName(pathname));
     }, [pathname]);
+
+    useEffect(() => {
+        if (labelText) labelRef.current?.focus({ preventScroll: true });
+    }, [labelText]);
 
     return (
         <div ref={labelRef} tabIndex={-1} className="visually-hidden">
-            {pageName(pathname)}
+            {labelText}
         </div>
     );
 }
@@ -107,7 +115,7 @@ function writeReloadFlag(value) {
    reload once to pick up the new build; the flag stops a reload loop. */
 function RouteError() {
     const error = useRouteError();
-    const isChunkError = /dynamically imported module|module script failed|error loading dynamically imported/i
+    const isChunkError = /dynamically imported module|module script failed|error loading dynamically imported|unable to preload css/i
         .test(String(error?.message ?? error));
 
     useEffect(() => {
