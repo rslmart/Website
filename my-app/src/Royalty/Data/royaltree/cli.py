@@ -270,6 +270,8 @@ def main(argv=None):
         return validate.main(["--public", args.out_dir, args.command, *extra])
     if extra:
         parser.error(f"unrecognized arguments: {' '.join(extra)}")
+    if getattr(args, "offline", False) and (getattr(args, "refresh", False) or getattr(args, "since", None)):
+        parser.error("--refresh/--since need the network; drop --offline")
 
     http.configure(offline=args.offline or args.command in ("split", "import-legacy"),
                    max_requests=args.max_requests, maxlag=args.maxlag)

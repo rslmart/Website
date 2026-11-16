@@ -126,8 +126,9 @@ uv run python -m royaltree check && uv run python -m royaltree diff   # validate
 uv run python buildMonarchImages.py --dry-run   # (separate) portraits → s3://makoa.link/monarchy/
 ```
 
-Wikidata entities and labels are cached forever in `Data/data/`; delete a
-realm's `data/<M>.json` to refetch it. Regenerated `Data/data/*.json` and
+Wikidata entities and labels live in one git-ignored store,
+`Data/data/royaltree.sqlite`; `python -m royaltree fetch <M> --refresh` refetches a
+realm's changed entities. Regenerated `Data/data/*.json` and
 `public/royalty/*` files are committed. `npm run build` copies `public/royalty/`
 into `build/`, and `my-app/deploy.sh` syncs that to S3 (no `--delete`) and
 invalidates CloudFront.

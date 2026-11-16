@@ -160,6 +160,10 @@ def prune(names):
     """Delete .json.gz payloads not in ``names`` (e.g. a house that fell below
     MIN_HOUSE_MEMBERS), so no unindexed file lingers. Returns what was removed."""
     keep = {n + ".json.gz" for n in names}
+    # Safety: only prune a folder split() has just written (it has index.json),
+    # never an arbitrary --out-dir that happens to hold other .json.gz files.
+    if not os.path.exists(os.path.join(PUBLIC_DIR, "index.json")):
+        raise SystemExit(f"Refusing to prune {PUBLIC_DIR}: not a royalty payload folder")
     removed = sorted(f for f in os.listdir(PUBLIC_DIR) if f.endswith(".json.gz") and f not in keep)
     for f in removed:
         os.remove(os.path.join(PUBLIC_DIR, f))
