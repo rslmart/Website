@@ -8,6 +8,7 @@ import oni from './Data/oni.json';
 import HomeButton from '../components/HomeButton';
 import MobileDrawer from '../components/MobileDrawer';
 import { withViewport } from '../hooks/useViewport';
+import useThemeTokens from '../hooks/useThemeTokens';
 import './Snow.css';
 import {
     AVERAGE_SEASON,
@@ -210,7 +211,7 @@ class Snow extends Component {
                         data={this.state.data}
                         margin={{ top: 5, right: 30, left: 20, bottom: 50 }}
                     >
-                        <CartesianGrid strokeDasharray="3 3" />
+                        <CartesianGrid strokeDasharray="3 3" vertical={!isMobile} />
                         <XAxis
                             dataKey="name"
                             tick={{ dy: 5, dx: -10, fontSize: 12 }}
@@ -256,7 +257,7 @@ class Snow extends Component {
                             connectNulls={true}
                             dataKey={`${AVERAGE_SEASON}${dataKey}`}
                             name={AVERAGE_SEASON}
-                            stroke={"#555555"}
+                            stroke={this.props.referenceColor}
                             strokeDasharray="5 5"
                             hide={!!this.state.hiddenSeries[AVERAGE_SEASON]}
                         />
@@ -482,7 +483,7 @@ class Snow extends Component {
                                     barSize={40}
                                     barGap={-40}
                                 >
-                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <CartesianGrid strokeDasharray="3 3" vertical={!isMobile} />
                                     <XAxis
                                         dataKey="name"
                                         tick={{ dy: 5, dx: -10, fontSize: 12 }}
@@ -523,8 +524,8 @@ class Snow extends Component {
                                     <Bar
                                         dataKey={`${AVERAGE_SEASON}newDailySnowFall`}
                                         name={AVERAGE_SEASON}
-                                        fill="#555555"
-                                        stroke="#555555"
+                                        fill={this.props.referenceColor}
+                                        stroke={this.props.referenceColor}
                                         hide={!!this.state.hiddenSeries[AVERAGE_SEASON]}
                                     />
                                 </BarChart>
@@ -570,4 +571,13 @@ class Snow extends Component {
     }
 }
 
-export default withViewport(Snow);
+/* The Average series is a neutral reference, not a season: #555555 on the
+   light page, and the lighter --chart-reference grey in dark, where #555555
+   was 2.6:1 against the chart background. Recharts needs a real colour (it
+   also paints the legend icon), so read the token here. */
+function SnowWithChartTokens(props) {
+    const { tokens } = useThemeTokens(['--chart-reference']);
+    return <Snow {...props} referenceColor={tokens['--chart-reference'] || '#555555'} />;
+}
+
+export default withViewport(SnowWithChartTokens);
