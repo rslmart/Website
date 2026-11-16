@@ -185,6 +185,19 @@ class Store:
         return {m: json.loads(d) for m, d in self.conn.execute(
             "SELECT monarchy, data FROM trees WHERE name=? ORDER BY monarchy", (name,))}
 
+    # -- meta -------------------------------------------------------------
+    def meta_get(self, key, default=None):
+        row = self.conn.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
+        return json.loads(row[0]) if row else default
+
+    def meta_set(self, key, value):
+        """Store a JSON value under ``key``; None deletes it."""
+        with self.conn:
+            if value is None:
+                self.conn.execute("DELETE FROM meta WHERE key=?", (key,))
+            else:
+                self.conn.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (key, dumps(value)))
+
     # -- runs -------------------------------------------------------------
     def add_run(self, started_at, summary):
         with self.conn:

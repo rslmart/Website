@@ -15,6 +15,7 @@ Examples (from my-app/src/Royalty/Data)
   python -m royaltree fetch England --refresh --since 2026-11-01
   python -m royaltree build --all --offline && python -m royaltree diff
   python -m royaltree import-legacy --from data.legacy
+  python -m royaltree fetch --all --refresh-conflicts --max-refetch 5000
 
 Every run ends with a summary: stages, durations, request counts, 429s.
 """
@@ -175,11 +176,36 @@ def refresh(run, store, monarchies, since, max_refetch):
             graph.Retriever(store, False, run.counters)._fetch(refetch)
 
 
+def refresh_conflicts(run, store, max_refetch):
+    """Refetch the people whose legacy caches disagreed (recorded by import-legacy).
+
+    Covers the whole recorded set, whatever trees are named. Only rows still
+    without a known revision are due, so an interrupted run resumes and a
+    finished one is a no-op. Counts against --max-refetch like --refresh.
+    """
+    from royaltree.legacy import CONFLICTS_KEY
+    conflicts = store.meta_get(CONFLICTS_KEY)
+    if conflicts is None:
+        raise SystemExit("no legacy conflict set in the store; run "
+                         "import-legacy --from <legacy dir> --conflicts-only first")
+    info = store.info("person", conflicts)
+    due = [q for q in conflicts if q not in info or info[q][0] is None]
+    run.counters.update({"conflicts_recorded": len(conflicts), "conflicts_due": len(due)})
+    if len(due) > max_refetch:
+        raise SystemExit(f"--refresh-conflicts would refetch {len(due)} entities; cap is "
+                         f"--max-refetch {max_refetch}. Raise the cap to proceed.")
+    if due:
+        with run.stage("refetch-conflicts"):
+            graph.Retriever(store, False, run.counters)._fetch(due)
+
+
 # -- commands --------------------------------------------------------------
 def cmd_fetch(run, args, store, derive):
     monarchies = resolve_monarchies(args, _load_lists(args.data_dir))
     lists = ensure_lists(run, args, monarchies)
-    if (args.refresh or args.since) and not args.offline:
+    if args.refresh_conflicts:
+        refresh_conflicts(run, store, args.max_refetch)
+    if args.refresh or args.since:
         refresh(run, store, monarchies, args.since, args.max_refetch)
     for m in monarchies:
         with run.stage(f"traverse:{m}"):
@@ -211,7 +237,7 @@ def derive_outputs(run, args):
 def cmd_import(run, args, store):
     from royaltree.legacy import import_legacy
     with run.stage("import-legacy"):
-        import_legacy(store, args.source, run.counters)
+        import_legacy(store, args.source, run.counters, conflicts_only=args.conflicts_only)
     run.counters["store_people"] = store.count("person")
     run.counters["store_labels"] = store.count("label")
 
@@ -240,6 +266,9 @@ def build_parser():
                        help="revision-check stored people and refetch changed ones")
     trees.add_argument("--since", help="with --refresh: only rows not verified since this "
                                        "ISO date (implies --refresh)")
+    trees.add_argument("--refresh-conflicts", action="store_true",
+                       help="refetch the people whose legacy cache snapshots conflicted "
+                            "(recorded by import-legacy; counts against --max-refetch)")
     trees.add_argument("--fresh-membership", action="store_true",
                        help="recompute each tree's member set from this run only, dropping "
                             "relatives that only earlier runs fetched")
@@ -257,6 +286,9 @@ def build_parser():
     sub.add_parser("diff", parents=[common], help="validate.py diff on --out-dir (e.g. --base HEAD)")
     p = sub.add_parser("import-legacy", parents=[common], help="import the old JSON caches")
     p.add_argument("--from", dest="source", required=True, help="legacy data directory")
+    p.add_argument("--conflicts-only", action="store_true",
+                   help="only record the conflicting QIDs for --refresh-conflicts "
+                        "(reads the legacy dir; leaves imported rows untouched)")
     return parser
 
 
@@ -270,8 +302,9 @@ def main(argv=None):
         return validate.main(["--public", args.out_dir, args.command, *extra])
     if extra:
         parser.error(f"unrecognized arguments: {' '.join(extra)}")
-    if getattr(args, "offline", False) and (getattr(args, "refresh", False) or getattr(args, "since", None)):
-        parser.error("--refresh/--since need the network; drop --offline")
+    if getattr(args, "offline", False) and (getattr(args, "refresh", False) or getattr(args, "since", None)
+                                            or getattr(args, "refresh_conflicts", False)):
+        parser.error("--refresh/--since/--refresh-conflicts need the network; drop --offline")
 
     http.configure(offline=args.offline or args.command in ("split", "import-legacy"),
                    max_requests=args.max_requests, maxlag=args.maxlag)

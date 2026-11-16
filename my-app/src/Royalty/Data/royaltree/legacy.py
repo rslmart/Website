@@ -9,7 +9,11 @@ Reads (never writes) a legacy data directory:
 A QID cached by several trees can hold different snapshots. The import keeps
 one: the snapshot whose labelled form equals the committed monarchy_data.json
 record (that is what is published today), else the one from the most recently
-written cache file. Imported rows have no known revision (lastrevid NULL) and an
+written cache file. The QIDs with more than one snapshot are recorded in the
+store's meta table (CONFLICTS_KEY), because the kept snapshot is often an older
+one with fewer relatives; ``fetch --refresh-conflicts`` refetches exactly that
+set. ``conflicts_only=True`` records the set without importing anything.
+Imported rows have no known revision (lastrevid NULL) and an
 unknown fetch time, so a later revision check refetches them (capped).
 Makes no network requests.
 """
@@ -23,6 +27,7 @@ from royaltree.store import LEGACY_TIME
 
 log = logging.getLogger("royaltree")
 
+CONFLICTS_KEY = "legacy_conflicts"
 COMBINED = {"monarch_list.json", "monarchy_data.json", "monarchy_family_trees.json",
             "monarchy_ancestors.json", "properties.json", "houses.json"}
 
@@ -36,11 +41,8 @@ def _canon(obj):
     return json.dumps(obj, sort_keys=True)
 
 
-def import_legacy(store, legacy_dir, counters):
-    family_trees = _load(os.path.join(legacy_dir, "monarchy_family_trees.json"))
-    published = _load(os.path.join(legacy_dir, "monarchy_data.json"))
-    properties = _load(os.path.join(legacy_dir, "properties.json"))
-
+def _candidates(legacy_dir, counters):
+    """({qid: {canon: (mtime, record, tree)}}, {tree: sorted QIDs it cached})."""
     names = sorted(f[:-5] for f in os.listdir(legacy_dir)
                    if f.endswith(".json") and f not in COMBINED
                    and not f.endswith(("_labelled.json", "_ancestors.json", "_family_tree.json")))
@@ -58,6 +60,19 @@ def import_legacy(store, legacy_dir, counters):
                 slot[key] = (mtime, rec, m)
         counters["legacy_cache_files"] += 1
         counters["legacy_cache_records"] += len(cache)
+    return candidates, touched
+
+
+def import_legacy(store, legacy_dir, counters, conflicts_only=False):
+    candidates, touched = _candidates(legacy_dir, counters)
+    conflicts = sorted(q for q, slot in candidates.items() if len(slot) > 1)
+    store.meta_set(CONFLICTS_KEY, conflicts)
+    counters["import_conflicts_recorded"] = len(conflicts)
+    if conflicts_only:
+        return Counter()
+    family_trees = _load(os.path.join(legacy_dir, "monarchy_family_trees.json"))
+    published = _load(os.path.join(legacy_dir, "monarchy_data.json"))
+    properties = _load(os.path.join(legacy_dir, "properties.json"))
 
     stats = Counter()
     chosen = {}

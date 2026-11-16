@@ -256,11 +256,45 @@ def test_import_legacy_is_offline_and_prefers_published_snapshot(tmp_path):
         import_legacy(s, str(legacy), c)
         assert s.get("person", ["Q3"])["Q3"] == new_q3
         assert c["import_conflict_resolved_by_published"] == 1
+        assert s.meta_get("legacy_conflicts") == ["Q3"]  # only Q3 had two snapshots
         assert s.tree_get("Alpha", "ancestors") == ["Q1"]
         assert s.tree_get("Beta", "touched") == ["Q3", "Q4"]
         assert s.info("person", ["Q1"])["Q1"][0] is None  # revision unknown
         assert s.get("label", ["Q900", "Q3"]) == {"Q900": "House A", "Q3": "PQ3"}
     assert http.STATS.requests == 0
+
+
+def test_refresh_conflicts_refetches_recorded_set_only(tmp_path, fake_http):
+    legacy = tmp_path / "legacy"
+    legacy.mkdir()
+    (legacy / "Alpha.json").write_text(json.dumps({"Q1": PEOPLE["Q1"], "Q3": PEOPLE["Q3"]}))
+    (legacy / "Beta.json").write_text(json.dumps({"Q3": person("Q3", father="Q2"),
+                                                  "Q4": PEOPLE["Q4"]}))
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    (data_dir / "monarch_list.json").write_text(json.dumps(LISTS))
+    http.configure(offline=True)
+    with Store(str(data_dir)) as s:  # conflicts-only: records the set, imports nothing
+        c = Counter()
+        import_legacy(s, str(legacy), c, conflicts_only=True)
+        assert s.meta_get("legacy_conflicts") == ["Q3"] and s.count("person") == 0
+        s.put_many("person", PEOPLE, "legacy:x")  # revision unknown, like an import
+    http.configure(offline=False)
+    fake_http.entities = {q: entity(r, rev=7) for q, r in PEOPLE.items()}
+    run = cli.Run("fetch")
+    with Store(str(data_dir)) as s:
+        with pytest.raises(SystemExit):
+            cli.refresh_conflicts(cli.Run("fetch"), s, max_refetch=0)
+        cli.refresh_conflicts(run, s, max_refetch=1)
+        info = s.info("person", ["Q1", "Q3"])
+        assert (info["Q1"][0], info["Q3"][0]) == (None, 7)  # only the conflicted QID
+        n = http.STATS.requests
+        cli.refresh_conflicts(cli.Run("fetch"), s, max_refetch=1)  # done: no-op
+        assert http.STATS.requests == n
+    assert run.counters["conflicts_due"] == 1 and run.counters["people_fetched"] == 1
+    with pytest.raises(SystemExit):
+        cli.main(["fetch", "--all", "--offline", "--refresh-conflicts",
+                  "--data-dir", str(data_dir), "--out-dir", str(tmp_path / "o")])
 
 
 # -- order independence + determinism ---------------------------------------------

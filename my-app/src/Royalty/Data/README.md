@@ -77,12 +77,18 @@ python -m royaltree diff --base master -v
 
 # One-time migration of the old data/*.json caches (no network)
 python -m royaltree import-legacy --from /path/to/old/data
+
+# After the migration: refetch the people whose old caches disagreed (see
+# Refreshing data). --conflicts-only records that set for an already-migrated
+# store without re-importing.
+python -m royaltree import-legacy --from /path/to/old/data --conflicts-only
+python -m royaltree fetch --all --refresh-conflicts --max-refetch 5000 --maxlag 30
 ```
 
 Options shared by every command: `--data-dir`, `--out-dir`, `--offline`,
 `--max-requests N` (default 3000: the run stops cleanly at the cap and the next
 run resumes) and `--summary-json PATH`. Tree commands also take `--all`,
-`--lists`, `--refresh`, `--since DATE`, `--max-refetch N` and
+`--lists`, `--refresh`, `--since DATE`, `--refresh-conflicts`, `--max-refetch N` and
 `--fresh-membership` (see [Store](#the-entity-store)).
 
 Every run ends with a summary on stderr. It is also stored in the store's `runs`
@@ -157,6 +163,7 @@ summary):
 | Stage | Code | Network (skipped with `--offline`) | Writes |
 |---|---|---|---|
 | `lists` (only if a list is missing, or `--lists`) | `GetListOfMonarchs.get_monarch_lists` | Wikipedia + Wikidata | `data/monarch_list.json` |
+| `refetch-conflicts` (only with `--refresh-conflicts`) | `cli.refresh_conflicts` | Wikidata | store |
 | `revision-check`, `refetch` (only with `--refresh`/`--since`) | `cli.refresh` | Wikidata `props=info` | store |
 | `traverse:<M>` per requested tree | `graph.traverse_tree` | Wikidata, for people not in the store | store: people, the tree's paths, ancestors and member set |
 | `combine` (every stored tree) | `build.combine` | Wikidata, for labels not in the store | nothing yet |
@@ -301,6 +308,18 @@ Rows never expire on their own. To pick up Wikidata edits for a tree:
    rebuilds the files, then `check` and `diff`.
 
 Labels of non-person items (places, titles) are not revision-checked yet.
+
+**Conflicting legacy snapshots.** A person cached by several old trees could
+hold different snapshots, and `import-legacy` kept only one (the published one,
+else the newest file), often an older snapshot with fewer siblings or children.
+It records those QIDs in the store's `meta` table (`legacy_conflicts`; for an
+already-migrated store, `import-legacy --from <dir> --conflicts-only` records
+them without touching imported rows). `fetch --refresh-conflicts` refetches the
+whole recorded set, whatever trees are named, 50 per request. Only rows still
+without a known revision are due, so an interrupted run resumes and a finished
+one does nothing. It counts against `--max-refetch` (about 5,000 rows here, so
+raise the cap). Follow it with an online `build --all`, which fetches the
+relatives the fresh records newly reference.
 
 ## Portraits
 
