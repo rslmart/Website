@@ -35,10 +35,10 @@ function Bio() {
                     </div>
                     <ul>
                         <li>Build new features and add support for 10+ STT, TTS, LLM, and realtime providers to the Inference Gateway (Go, WebSockets) (<a href="https://lnkd.in/gXW-K4d8" target="_blank" rel="noopener noreferrer" className={styles.link}>read about it here</a>)</li>
-                        <li>Created and own the voice cloning service (Go, CockroachDB, S3, NATS), from first commit to multi-region production (<a href="https://www.linkedin.com/posts/voice-agents-are-everywhere-now-taking-reservations-ugcPost-7458183168945463296-fNon/" target="_blank" rel="noopener noreferrer" className={styles.link}>read about it here</a>)</li>
-                        <li>Designed and launched realtime speech-to-speech support end to end, from gateway failover to usage-based billing and quota enforcement (gRPC/protobuf) (<a href="https://www.linkedin.com/posts/voice-agents-get-built-in-three-different-ugcPost-7516561022988468224-4sWy/" target="_blank" rel="noopener noreferrer" className={styles.link}>read about it here</a>)</li>
-                        <li>Created a continuous LLM latency benchmarking system (Go, ClickHouse) that powers LiveKit's public latency benchmarks (<a href="https://livekit.com/benchmarks/latency" target="_blank" rel="noopener noreferrer" className={styles.link}>view benchmarks</a>)</li>
-                        <li>Improved reliability with TTS failover, fallback tiers, and cross-region routing; own dashboards, alerting, and incident response for my services</li>
+                        <li>Created and own the voice cloning service, from first commit to production (<a href="https://www.linkedin.com/posts/voice-agents-are-everywhere-now-taking-reservations-ugcPost-7458183168945463296-fNon/" target="_blank" rel="noopener noreferrer" className={styles.link}>read about it here</a>)</li>
+                        <li>Designed and launched realtime speech-to-speech support end to end, including failover and usage tracking (<a href="https://www.linkedin.com/posts/voice-agents-get-built-in-three-different-ugcPost-7516561022988468224-4sWy/" target="_blank" rel="noopener noreferrer" className={styles.link}>read about it here</a>)</li>
+                        <li>Created a continuous LLM latency benchmarking system (Go) that powers LiveKit's public latency benchmarks (<a href="https://livekit.com/benchmarks/latency" target="_blank" rel="noopener noreferrer" className={styles.link}>view benchmarks</a>)</li>
+                        <li>Improved reliability with provider failover and fallbacks; own monitoring, alerting, and incident response for my services</li>
                     </ul>
                 </div>
 
@@ -125,7 +125,7 @@ function Bio() {
                 </div>
                     <div className={styles.skillCategory}>
                     <h3>Familiar</h3>
-                    <p>TypeScript, Kubernetes, CockroachDB, ClickHouse, Grafana, Keras, Prometheus, C, CUDA, SQL, Matlab, AWS Lambda, API Gateway, DynamoDB, S3, Athena, Glue, Quicksight, Route 53, Cloudwatch, X-Ray</p>
+                    <p>TypeScript, Kubernetes, Grafana, Keras, Prometheus, C, CUDA, SQL, Matlab, AWS Lambda, API Gateway, DynamoDB, S3, Athena, Glue, Quicksight, Route 53, Cloudwatch, X-Ray</p>
                 </div>
             </div>
         </section>
@@ -179,19 +179,16 @@ function Bio() {
                 <p className={styles.cvParagraph}>
                     Since October 2025, I have worked on LiveKit Inference, a hosted gateway that gives voice AI
                     agents a single API for speech-to-text, text-to-speech, LLM, and realtime speech-to-speech
-                    models from more than ten providers. Most of my work is in Go, spanning the gateway itself,
-                    the gRPC contracts between services, and the Kubernetes configuration that deploys them across
-                    a multi-region fleet.
+                    models from more than ten providers. Most of my work is in Go, spanning the gateway itself
+                    and the services and infrastructure around it.
                 </p>
                 <p className={styles.cvParagraph}>
                     I created and own the voice cloning service, which lets customers clone a voice across several
-                    TTS providers and use it in their agents. I took it from the first commit to a multi-region
-                    production deployment, including plan-based quotas and a consent audit trail. I also designed
-                    and launched realtime speech-to-speech support in the gateway, built the usage metering and
-                    quota enforcement behind it, and created a benchmarking system that continuously measures LLM
+                    TTS providers and use it in their agents. I took it from the first commit to a production
+                    deployment. I also designed and launched realtime speech-to-speech support in the gateway,
+                    including the usage tracking behind it, and created a benchmarking system that continuously measures LLM
                     latency through LiveKit against calling providers directly. Alongside new features, I work on
-                    reliability: provider failover, cross-region routing, and the dashboards and alerts for the
-                    services I own.
+                    reliability: provider failover and the monitoring and alerting for the services I own.
                 </p>
             </div>
 
