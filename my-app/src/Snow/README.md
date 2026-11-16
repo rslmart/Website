@@ -103,7 +103,7 @@ very strong) by magnitude at 0.5 / 1.0 / 1.5 / 2.0.
     each of Dec–Mar, so empty (`[]`), gappy or in-progress seasons can't win.
   - Switching to a pass that lacks the chosen season falls back to that
     pass's newest season with data.
-  - Tests: `node --test src/Snow/snowStats.test.mjs` (from `my-app/`).
+  - Tests: `npm test` (from `my-app/`; Vitest runs `src/Snow/snowStats.test.mjs`).
 - If the data fetch fails, the page shows the error with a Retry button.
 - A badge shows the current winter's ENSO status, colored by phase.
 
