@@ -146,7 +146,8 @@ describe("useTheme", () => {
 
     it("matches light-only paths case-insensitively, with or without a trailing slash", () => {
         expect(isLightOnlyPath("/Bio")).toBe(true);
-        expect(isLightOnlyPath("/snow/")).toBe(true);
+        expect(isLightOnlyPath("/bio/")).toBe(true);
+        expect(isLightOnlyPath("/Snow")).toBe(false);
         expect(isLightOnlyPath("/")).toBe(false);
         expect(isLightOnlyPath("/Biology")).toBe(false);
     });

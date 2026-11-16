@@ -14,11 +14,10 @@ import { useCallback, useEffect, useLayoutEffect, useState, useSyncExternalStore
    - Storage can throw (private mode, blocked site data). Then the choice is
      kept in memory for this page load only and nothing is saved.
    - LIGHT_ONLY_PATHS stay light whatever the choice, until their own
-     styles move onto the tokens: Bio until website-prop-bio-readability-a11y,
-     the four data pages until website-site-theme-page-chrome. */
+     styles move onto the tokens: Bio until website-prop-bio-readability-a11y. */
 
 export const THEME_STORAGE_KEY = "theme";
-export const LIGHT_ONLY_PATHS = ["/bio", "/hurricane", "/royaltree", "/snow", "/tectonics"];
+export const LIGHT_ONLY_PATHS = ["/bio"];
 
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 
