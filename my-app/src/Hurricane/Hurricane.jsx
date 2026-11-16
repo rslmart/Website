@@ -14,6 +14,7 @@ import HomeButton from "../components/HomeButton";
 import ControlsFab from "../components/ControlsFab";
 import MobileDrawer from "../components/MobileDrawer";
 import { withViewport } from "../hooks/useViewport";
+import { isolateMapControls } from "../hooks/mapControls";
 
 const HELP_SEEN_KEY = "hurricaneHelpSeen";
 
@@ -54,6 +55,11 @@ Filters
     Search in distance from point
     Wind Radii
  */
+
+// The basemap stays dark in both site themes (user ruling 2026-11-17): the
+// category colours are tuned against it. Still dark-v9, not dark-v11; see
+// the Hurricane README (Map style).
+export const MAP_STYLE = "mapbox://styles/mapbox/dark-v9";
 
 export const PLOT_TYPES = {
     STORM: "Storm",
@@ -641,8 +647,9 @@ class Hurricane extends Component {
                     <Map
                         reuseMaps
                         mapboxAccessToken={import.meta.env.VITE_MAPBOX_TOKEN}
-                        mapStyle="mapbox://styles/mapbox/dark-v9"
+                        mapStyle={MAP_STYLE}
                         attributionControl={false}
+                        onLoad={isolateMapControls}
                     >
                         {/* On phones the Controls button covers the
                             bottom-right corner, so the attribution moves

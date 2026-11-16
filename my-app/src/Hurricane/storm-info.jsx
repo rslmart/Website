@@ -199,7 +199,9 @@ function StormInfo(props) {
                                         {...props}
                                         r={index === selectedPoint ? 6 : 4}
                                         fill={payload.fill}
-                                        stroke={index === selectedPoint ? '#000' : 'none'}
+                                        stroke="none"
+                                        // Selection ring in the text colour, so it shows on both themes' panels.
+                                        style={index === selectedPoint ? { stroke: 'var(--color-text)' } : undefined}
                                         strokeWidth={1}
                                         opacity={index === selectedPoint ? 1 : 0.8}
                                     />
@@ -220,8 +222,10 @@ function StormInfo(props) {
                                         padding: "0 8px",
                                     }}
                                 >
+                                    {/* Text in the theme colour; the series colour stays on the swatch. */}
                                     {payload?.map((entry, index) => (
-                                        <p key={index} style={{ color: entry.color }}>
+                                        <p key={index} style={{ color: 'var(--color-text)' }}>
+                                            <span aria-hidden="true" style={{ display: 'inline-block', width: 8, height: 8, marginRight: 6, borderRadius: 2, background: entry.color }} />
                                             {entry.name}: {Math.round(entry.value)}{entry.name === 'Wind Speed' ? ' kts' : ' mb'}
                                         </p>
                                     ))}

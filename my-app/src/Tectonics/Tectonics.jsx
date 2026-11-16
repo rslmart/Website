@@ -10,6 +10,8 @@ import HomeButton from '../components/HomeButton';
 import ControlsFab from '../components/ControlsFab';
 import MobileDrawer from '../components/MobileDrawer';
 import useViewport from '../hooks/useViewport';
+import useThemeTokens, {cssColorToRgba} from '../hooks/useThemeTokens';
+import {isolateMapControls} from '../hooks/mapControls';
 import {
     CATEGORIES,
     STEP_CLASS_LABEL,
@@ -46,6 +48,24 @@ const INITIAL_VIEW_STATE = {
     pitch: 0,
     bearing: 0,
 };
+
+// Basemap per site theme. v10, not v11: the v11 styles use fog/globe
+// properties that mapbox-gl 2.8.2 rejects (console errors, and the switch to
+// dark silently failed in the Conductor's check with a token, 2026-11-17).
+// Moving to v11 needs a mapbox-gl upgrade. Pinned to Web Mercator below,
+// because deck.gl's MapView draws in Web Mercator.
+export const MAP_STYLES = {
+    light: 'mapbox://styles/mapbox/light-v10',
+    dark: 'mapbox://styles/mapbox/dark-v10',
+};
+
+// On the light basemap the green ridge and orange transform lines are below
+// 3:1 against the land and water, so they get a thin dark casing underneath
+// (same hue on top). The other two categories already clear 3:1.
+const CASED_CATEGORIES = new Set(['ridge', 'transform']);
+const BOUNDARY_WIDTH = 2.5;
+const BOUNDARY_MIN_WIDTH = 1.5;
+const CASING_EXTRA = 2; // 1px either side
 
 // Draw the deck.gl layers on every world copy the basemap shows. The default
 // view is centred on the Pacific (longitude 150), so the Americas and the
@@ -100,6 +120,8 @@ function Tectonics() {
     const [legendOpen, setLegendOpen] = useState(true);
     const [controlsDrawerOpen, setControlsDrawerOpen] = useState(false);
     const { isMobile } = useViewport();
+    const {theme, tokens} = useThemeTokens(['--map-ink']);
+    const ink = tokens['--map-ink'];
 
     useEffect(() => {
         let cancelled = false;
@@ -139,6 +161,16 @@ function Tectonics() {
             }),
         };
     }, [data, visibility]);
+
+    const casedBoundaries = useMemo(() => {
+        if (!visibleBoundaries || theme !== 'light') return null;
+        return {
+            type: 'FeatureCollection',
+            features: visibleBoundaries.features.filter((f) =>
+                CASED_CATEGORIES.has(categoryForStepClass(f.properties.stepClass))
+            ),
+        };
+    }, [visibleBoundaries, theme]);
 
     const velocityArrows = useMemo(
         () => (data ? buildVelocityArrows(data.velocity) : []),
@@ -197,9 +229,26 @@ function Tectonics() {
                     data: velocityArrows,
                     getSourcePosition: (d) => d.from,
                     getTargetPosition: (d) => d.to,
-                    getColor: [40, 40, 40, 200],
+                    getColor: cssColorToRgba(ink, 200, [40, 40, 40, 200]),
                     getWidth: 1.2,
                     widthUnits: 'pixels',
+                    wrapLongitude: true,
+                    pickable: false,
+                })
+            );
+        }
+
+        if (casedBoundaries) {
+            out.push(
+                new GeoJsonLayer({
+                    id: 'boundaries-casing',
+                    data: casedBoundaries,
+                    stroked: true,
+                    filled: false,
+                    getLineColor: cssColorToRgba(ink, 230, [40, 40, 40, 230]),
+                    getLineWidth: BOUNDARY_WIDTH + CASING_EXTRA,
+                    lineWidthUnits: 'pixels',
+                    lineWidthMinPixels: BOUNDARY_MIN_WIDTH + CASING_EXTRA,
                     wrapLongitude: true,
                     pickable: false,
                 })
@@ -213,18 +262,19 @@ function Tectonics() {
                 stroked: true,
                 filled: false,
                 getLineColor: (f) => colorForStepClass(f.properties.stepClass),
-                getLineWidth: 2.5,
+                getLineWidth: BOUNDARY_WIDTH,
                 lineWidthUnits: 'pixels',
-                lineWidthMinPixels: 1.5,
+                lineWidthMinPixels: BOUNDARY_MIN_WIDTH,
                 wrapLongitude: true,
                 pickable: true,
                 autoHighlight: true,
-                highlightColor: [255, 255, 255, 200],
+                // Hover highlight: dark on the light map, light on the dark one.
+                highlightColor: cssColorToRgba(ink, 200, [255, 255, 255, 200]),
             })
         );
 
         return out;
-    }, [data, visibility, visibleBoundaries, velocityArrows, selectedPlate]);
+    }, [data, visibility, visibleBoundaries, casedBoundaries, velocityArrows, selectedPlate, ink]);
 
     // deck.gl applies this inline to its tooltip <div>, so var() works.
     const TOOLTIP_STYLE = {
@@ -270,8 +320,10 @@ function Tectonics() {
                 <Map
                     reuseMaps
                     mapboxAccessToken={import.meta.env.VITE_MAPBOX_TOKEN}
-                    mapStyle="mapbox://styles/mapbox/light-v10"
+                    mapStyle={MAP_STYLES[theme]}
+                    projection="mercator"
                     attributionControl={false}
+                    onLoad={isolateMapControls}
                 >
                     {/* On phones the Controls button covers the bottom-right
                         corner, so the attribution moves beside the logo. */}

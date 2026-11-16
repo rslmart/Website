@@ -81,7 +81,8 @@ function LegendPanel(props) {
                     Plates (click to identify)
                 </Checkbox>
                 <Checkbox name="velocity" checked={visibility.velocity} onToggle={onToggle}>
-                    <span style={{...swatch([40, 40, 40]), height: '2px'}} />
+                    {/* Same ink as the arrows (useThemeTokens), so it shows in dark too. */}
+                    <span style={{...swatch([40, 40, 40]), backgroundColor: 'var(--map-ink)', height: '2px'}} />
                     Velocity vectors
                 </Checkbox>
             </div>

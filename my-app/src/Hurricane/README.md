@@ -135,6 +135,15 @@ the next candidate on image load error.
 
 The map requires `VITE_MAPBOX_TOKEN` (see the root README).
 
+### Map style
+
+The basemap is `mapbox://styles/mapbox/dark-v9` (`MAP_STYLE` in `Hurricane.jsx`)
+in both site themes; only the panels, drawers and tooltips follow the theme
+(user ruling, 2026-11-17). It stays on v9: the Saffir–Simpson colours were
+chosen against it, and the v11 styles need a newer mapbox-gl than the 2.8.2 the
+site uses (v11's fog/globe properties are rejected; see `MAP_STYLES` in
+`src/Tectonics/Tectonics.jsx`).
+
 ## Regenerating the data
 
 ```bash
