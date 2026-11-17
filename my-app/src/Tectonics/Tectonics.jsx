@@ -186,15 +186,16 @@ function Tectonics() {
                 new GeoJsonLayer({
                     id: 'plates',
                     data: data.plates,
-                    stroked: true,
+                    // No outline: the plate rings include artificial edges on
+                    // lon ±180 and along the poles (a visible seam), and the
+                    // boundaries layer already draws every real plate edge.
+                    // The selected plate shows by fill.
+                    stroked: false,
                     filled: true,
                     getFillColor: (f) =>
                         selectedPlate && f.properties.Code === selectedPlate.Code
                             ? [52, 120, 219, 60]
                             : [255, 255, 255, 8],
-                    getLineColor: [120, 120, 140, 120],
-                    getLineWidth: 1,
-                    lineWidthUnits: 'pixels',
                     pickable: true,
                     autoHighlight: true,
                     highlightColor: [52, 120, 219, 40],
