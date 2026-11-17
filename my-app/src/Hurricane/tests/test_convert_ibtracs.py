@@ -124,10 +124,11 @@ def pressure_when_reported(point: dict):
 
 
 def stable_record(point: dict):
-    """Record type for points the landfall bug does not touch.
+    """Record type, skipping already-inland landfall==0 points.
 
-    Returns None for an already-inland landfall==0 point. Those are the
-    over-marking xfail, not part of the value check.
+    Those points are asserted in
+    test_landfall_is_not_marked_for_points_already_over_land. Returns None
+    so this value check does not repeat that case.
     """
     record = point["usa_record"] or ""
     if record:
@@ -290,11 +291,6 @@ def test_gzip_is_deterministic(tmp_path):
     assert first_bytes[8:] == second_bytes[8:]
 
 
-@pytest.mark.xfail(
-    reason="website-prop-pipeline-hurricane-track-semantics",
-    strict=True,
-    raises=AssertionError,
-)
 def test_landfall_is_not_marked_for_points_already_over_land(converted, source):
     """record_type L only for a real coastline crossing.
 
@@ -314,11 +310,6 @@ def test_landfall_is_not_marked_for_points_already_over_land(converted, source):
     assert not mismatches
 
 
-@pytest.mark.xfail(
-    reason="website-prop-pipeline-hurricane-track-semantics",
-    strict=True,
-    raises=AssertionError,
-)
 def test_spur_tracks_are_flagged_or_excluded(converted, source):
     """A spur is left out of the main set, or it carries a track_type flag."""
     for storm_source in source["storms"]:
@@ -331,11 +322,6 @@ def test_spur_tracks_are_flagged_or_excluded(converted, source):
         assert "spur" in track_type.lower()
 
 
-@pytest.mark.xfail(
-    reason="website-prop-pipeline-hurricane-track-semantics",
-    strict=True,
-    raises=AssertionError,
-)
 def test_missing_wind_is_null_not_zero(converted, source):
     """A point with neither USA nor WMO wind is null, not 0."""
     mismatches = []
@@ -348,6 +334,34 @@ def test_missing_wind_is_null_not_zero(converted, source):
                         f"{storm_source['sid']} {point_source['iso']}: wind={point['wind']!r}"
                     )
     assert not mismatches
+
+
+def test_provisional_storms_are_flagged(converted, source):
+    """PROVISIONAL in track_type sets provisional true. Other storms omit it."""
+    seen = False
+    for storm_source in source["storms"]:
+        storm = converted[storm_source["sid"]]
+        assert storm["track_type"] == storm_source["track_type"]
+        if "PROVISIONAL" in storm_source["track_type"]:
+            seen = True
+            assert storm.get("provisional") is True
+        else:
+            assert "provisional" not in storm
+    assert seen
+
+
+def test_wind_source_follows_usa_then_wmo(converted, source):
+    """USA wind is 1-minute. A WMO fallback is named. Missing wind has no source."""
+    for storm_source in source["storms"]:
+        storm = converted[storm_source["sid"]]
+        for point_source, point in zip(storm_source["points"], storm["track_points"]):
+            if point_source["usa_wind"] is not None:
+                assert point["wind_source"] == "usa"
+            elif point_source["wmo_wind"] is not None:
+                assert point["wind_source"] == "wmo"
+            else:
+                assert point["wind"] is None
+                assert "wind_source" not in point
 
 
 @pytest.mark.xfail(

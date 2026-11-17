@@ -7,13 +7,20 @@ Output: ../../../public/hurricane/storms.json.gz  (fetched at runtime by Hurrica
 
 Field mapping notes:
 - Position/time come from the always-present `lat`/`lon`/`iso_time`.
-- Wind/pressure coalesce the US agency value (1-min knots / mb) and fall
-  back to the WMO value so non-US basins still get data.
+- Wind coalesces the US agency value (1-minute knots) and falls back to the
+  WMO value. A point with neither is `wind: null`, not 0, and carries no
+  `wind_source`. `wind_source` is "usa" (1-minute) or "wmo" (the reporting
+  agency's period, often 10 minutes). Pressure coalesces the same way and is
+  omitted when missing.
+- `record_type` "L" is a coastline crossing: `usa_record` "L", or `landfall`
+  == 0 while `dist2land` > 0. `landfall` == 0 on a point already over land
+  (`dist2land` == 0) is not a crossing.
+- `track_type` is copied from IBTrACS. `provisional` is true when that string
+  contains PROVISIONAL. Spur tracks stay in the file and are flagged so the
+  page can keep them out of the aggregate views.
 - Wind radii (usa_r34/r50/r64, quadrants NE/SE/SW/NW) and radius-of-max-wind
   (usa_rmw) are only reported for US-agency storms; polygons are added only
   where present.
-- IBTrACS has no IR satellite imagery, so there is no ir_image_url (the
-  frontend already renders that field conditionally).
 """
 import gzip
 import json
@@ -35,6 +42,37 @@ BEARING = {"ne": 45, "se": 135, "sw": 225, "nw": 315}
 # usa_status already uses HURDAT-style codes; map the coarse `nature` codes
 # (used when no US status exists) onto the frontend's status vocabulary.
 NATURE_TO_STATUS = {"TS": "TS", "ET": "EX", "SS": "SS", "DS": "DB", "NR": "", "MX": ""}
+
+
+def coastline_record(usa_record, landfall_km, dist2land_km):
+    """Record type. "L" only for a real sea-to-land crossing.
+
+    A USA record is kept as-is, including "L". Otherwise IBTrACS `landfall`
+    == 0 means the track reaches land before the next fix. That is a crossing
+    only while this point is still offshore (`dist2land` > 0). A fix that is
+    already inland (`dist2land` == 0) is not a landfall.
+    """
+    record = (usa_record or "").strip()
+    if record:
+        return record
+    if landfall_km == 0 and dist2land_km is not None and dist2land_km > 0:
+        return "L"
+    return ""
+
+
+def reported_wind(usa_wind, wmo_wind):
+    """USA 1-minute wind, else the WMO value, else missing.
+
+    A reported 0 stays 0. Missing on both sources is None, not 0.
+    Returns (knots or None, "usa" or "wmo" or None).
+    """
+    if usa_wind is not None:
+        knots = int(usa_wind) if usa_wind > 0 else 0
+        return knots, "usa"
+    if wmo_wind is not None:
+        knots = int(wmo_wind) if wmo_wind > 0 else 0
+        return knots, "wmo"
+    return None, None
 
 
 def new_coordinates(lon, lat, bearing, distance_nm):
@@ -96,6 +134,7 @@ def main(nc_path=None, out_path=None):
     usa_r50 = ds.variables["usa_r50"][:]
     usa_r64 = ds.variables["usa_r64"][:]
     landfall = ds.variables["landfall"][:]
+    dist2land = ds.variables["dist2land"][:]
 
     sid = nc.chartostring(ds.variables["sid"][:])
     name = nc.chartostring(ds.variables["name"][:])
@@ -105,6 +144,7 @@ def main(nc_path=None, out_path=None):
     usa_status = nc.chartostring(ds.variables["usa_status"][:])
     usa_record = nc.chartostring(ds.variables["usa_record"][:])
     usa_atcf_id = nc.chartostring(ds.variables["usa_atcf_id"][:])
+    track_type = nc.chartostring(ds.variables["track_type"][:])
 
     storms = {}
     min_season, max_season = 10_000, 0
@@ -121,8 +161,9 @@ def main(nc_path=None, out_path=None):
         track_points = []
         status_list = set()
         record_list = set()
-        max_wind = 0
+        max_wind = None
         min_pressure = None
+        storm_track_type = str(track_type[s]).strip()
 
         for t in range(obs):
             iso = str(iso_time[s, t]).strip()
@@ -143,10 +184,7 @@ def main(nc_path=None, out_path=None):
                 if aid:
                     atcf_id = aid
 
-            wind = cell(usa_wind[s, t])
-            if wind is None:
-                wind = cell(wmo_wind[s, t])
-            wind = int(wind) if wind is not None and wind > 0 else 0
+            wind, wind_source = reported_wind(cell(usa_wind[s, t]), cell(wmo_wind[s, t]))
 
             pressure = cell(usa_pres[s, t])
             if pressure is None:
@@ -156,9 +194,11 @@ def main(nc_path=None, out_path=None):
             if not status:
                 status = NATURE_TO_STATUS.get(str(nature[s, t]).strip(), "")
 
-            record = str(usa_record[s, t]).strip()
-            if not record and cell(landfall[s, t]) == 0:
-                record = "L"
+            record = coastline_record(
+                str(usa_record[s, t]),
+                cell(landfall[s, t]),
+                cell(dist2land[s, t]),
+            )
 
             date, time = iso.split(" ")
             year, month, day = (int(x) for x in date.split("-"))
@@ -177,6 +217,8 @@ def main(nc_path=None, out_path=None):
                 "longitude": round(plon, 2),
                 "wind": wind,
             }
+            if wind_source:
+                track_point["wind_source"] = wind_source
             if pressure is not None and pressure > 0:
                 track_point["pressure"] = int(pressure)
 
@@ -198,7 +240,7 @@ def main(nc_path=None, out_path=None):
                 status_list.add(status)
             if record:
                 record_list.add(record)
-            if wind > max_wind:
+            if wind is not None and (max_wind is None or wind > max_wind):
                 max_wind = wind
             if "pressure" in track_point and (min_pressure is None or track_point["pressure"] < min_pressure):
                 min_pressure = track_point["pressure"]
@@ -213,10 +255,13 @@ def main(nc_path=None, out_path=None):
             "season": storm_season,
             "id": storm_id,
             "max_wind": max_wind,
+            "track_type": storm_track_type,
             "status_list": sorted(status_list),
             "record_type_list": sorted(record_list),
             "track_points": track_points,
         }
+        if "PROVISIONAL" in storm_track_type:
+            storm["provisional"] = True
         if min_pressure is not None:
             storm["min_pressure"] = min_pressure
         # ATCF id (e.g. "AL052019") lets the frontend build RAMMB/CIRA IR image URLs.

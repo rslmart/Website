@@ -111,7 +111,9 @@ def qualifies(storm):
     season = storm.get("season", 0)
     if season < MIN_YEAR or season > MAX_YEAR:
         return False
-    if storm.get("max_wind", 0) >= MAJOR_WIND_KT:
+    # max_wind is null when the storm never reported a wind. None >= 96 throws.
+    peak = storm.get("max_wind")
+    if peak is not None and peak >= MAJOR_WIND_KT:
         return True
     return "L" in storm.get("record_type_list", [])
 

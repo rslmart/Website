@@ -3,7 +3,7 @@ import * as React from 'react';
 function FilterPanel(props) {
     const {filterPanelOpen, plotType, plotTypeOptions, basin, basinOptions, name, systemStatus, systemStatusOptions,
         minYear, maxYear, minMonth, maxMonth, minWind, maxWind,
-        filterByPressure, minPressure, maxPressure, landfall, showMaxWindPoly, showWindPoly,
+        filterByPressure, minPressure, maxPressure, landfall, showSpurs, showMaxWindPoly, showWindPoly,
         only6Hour, onChange, toggleFilterPanel, embedded} = props;
 
     const PLOT_TYPE_DESCRIPTIONS = {
@@ -195,6 +195,16 @@ function FilterPanel(props) {
                         {/*</div>*/}
 
                         {plotType === "Storm" && <div>
+                            <div key={'showSpurs'} className="input">
+                                <label>Show spur tracks:</label>
+                                <input
+                                    type="checkbox"
+                                    name="showSpurs"
+                                    checked={!!showSpurs}
+                                    onChange={evt => onChange(evt)}
+                                />
+                            </div>
+
                             <div key={'showMaxWindPoly'} className="input">
                                 <label>Show Max Wind Radii:</label>
                                 <input
