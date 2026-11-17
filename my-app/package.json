@@ -40,7 +40,8 @@
     "deploy": "bash deploy.sh",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:pipelines": "bash test-pipelines.sh && uv run --directory src/Royalty/Data --frozen pytest"
   },
   "browserslist": {
     "production": [
