@@ -28,10 +28,23 @@ const linkStyle = {
     textDecoration: "none",
 };
 
-function SourcesPanel({ open, toggle, embedded }) {
+function DataThrough({ dataThrough }) {
+    if (!dataThrough) {
+        return null;
+    }
+    return (
+        <div style={{ marginBottom: 6 }}>
+            <div style={{ color: "var(--color-text-faint)" }}>Data through</div>
+            <div>{dataThrough}</div>
+        </div>
+    );
+}
+
+function SourcesPanel({ open, toggle, embedded, dataThrough }) {
     if (embedded) {
         return (
             <div style={{ fontSize: 12, lineHeight: 1.5, color: "var(--color-text-muted)" }}>
+                <DataThrough dataThrough={dataThrough} />
                 {SOURCES.map((source) => (
                     <div key={source.name} style={{ marginBottom: 6 }}>
                         <div style={{ color: "var(--color-text-faint)" }}>{source.label}</div>
@@ -88,6 +101,7 @@ function SourcesPanel({ open, toggle, embedded }) {
                     &times;
                 </button>
             </div>
+            <DataThrough dataThrough={dataThrough} />
             {SOURCES.map((source) => (
                 <div key={source.name} style={{ marginBottom: 4 }}>
                     <div style={{ color: "var(--color-text-faint)" }}>{source.label}</div>

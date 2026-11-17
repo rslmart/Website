@@ -1,12 +1,13 @@
 # Hurricane Explorer (`/Hurricane`)
 
-An interactive map of global tropical-cyclone tracks (1842–present) with
+An interactive map of global tropical-cyclone tracks with
 per-storm satellite infrared imagery. Built on deck.gl over a Mapbox dark
 basemap.
 
 - Page component: [`Hurricane.jsx`](Hurricane.jsx)
 - Storm detail + IR imagery: [`storm-info.jsx`](storm-info.jsx)
 - Processed dataset: [`../../public/hurricane/storms.json.gz`](../../public/hurricane/storms.json.gz)
+- Dataset metadata: [`../../public/hurricane/meta.json`](../../public/hurricane/meta.json) (`source`, `version`, `generatedAt`, `dataThrough`, `minSeason`, `maxSeason`, `latestTrackPoint`)
 
 ## Data sources
 
@@ -35,7 +36,8 @@ gzipped JSON the site serves:
 ```bash
 cd src/Hurricane/data
 uv run --with netCDF4 --with numpy --with geopy python convertIbtracsToJson.py
-# → ../../../public/hurricane/storms.json.gz  (~13,500 storms, 1842–2026)
+# → ../../../public/hurricane/storms.json.gz
+# → ../../../public/hurricane/meta.json  (season range and data-through date)
 ```
 
 What the converter does:
@@ -50,6 +52,10 @@ What the converter does:
 4. Aggregates per-storm peak wind, minimum pressure, status list, track type,
    and the US ATCF id (used later to build RAMMB image URLs).
 5. Writes a compact JSON object keyed by IBTrACS storm id, gzipped at level 9.
+6. Writes `meta.json` beside it. `dataThrough` is the date of the latest
+   track point. `minSeason` and `maxSeason` are the seasons in the file.
+   The page uses those for the default year filter and the year-input maximum,
+   and the Sources panel shows `dataThrough`.
 
 ### Output schema (`storms.json.gz`)
 
@@ -139,8 +145,10 @@ the next candidate on image load error.
 
 ## How the frontend uses it
 
-- On mount, `Hurricane.jsx` fetches `storms.json.gz`, decompresses it in-browser,
-  and keeps it out of the JS bundle.
+- On mount, `Hurricane.jsx` fetches `storms.json.gz` and `meta.json`. It
+  decompresses the storm file in-browser and keeps it out of the JS bundle.
+  The default year range and the year-input maximum come from `minSeason` and
+  `maxSeason`. The Sources panel shows `dataThrough`, the latest track-point date.
 - Five plot modes render via deck.gl: **Storm** (tracks + points + optional wind
   polygons), **Scatter**, **Heatmap**, **Grid** (point counts per cell), and
   **Max Wind Grid** (max wind per cell).
@@ -164,19 +172,32 @@ chosen against it, and the v11 styles need a newer mapbox-gl than the 2.8.2 the
 site uses (v11's fog/globe properties are rejected; see `MAP_STYLES` in
 `src/Tectonics/Tectonics.jsx`).
 
-## Regenerating the data
+## Refreshing the track data
 
-```bash
-# 1. Download IBTrACS.ALL.v04r01.nc into src/Hurricane/
-# 2. Rebuild the served dataset:
-cd src/Hurricane/data
-uv run --with netCDF4 --with numpy --with geopy python convertIbtracsToJson.py
-# 3. (optional) Rebuild HURSAT imagery (needs AWS profile "makoa"):
-uv run --with boto3 --with netCDF4 --with numpy --with pillow --with matplotlib \
-    python buildHursatImages.py
-# 4. Deploy the site (uploads storms.json.gz; leaves hurricane-ir/ untouched):
-cd ../../.. && npm run deploy
-```
+This refresh is manual. There is no script and no schedule.
+
+1. Download `IBTrACS.ALL.v04r01.nc` from NCEI into `src/Hurricane/` (the file is gitignored):
+
+   https://www.ncei.noaa.gov/data/international-best-track-archive-for-climate-stewardship-ibtracs/v04r01/access/netcdf/IBTrACS.ALL.v04r01.nc
+
+2. Run the converter:
+
+   ```bash
+   cd src/Hurricane/data
+   uv run --with netCDF4 --with numpy --with geopy python convertIbtracsToJson.py
+   ```
+
+   That rewrites `public/hurricane/storms.json.gz` and `public/hurricane/meta.json`.
+
+3. Run the checks from `my-app/`:
+
+   ```bash
+   bash test-pipelines.sh
+   ```
+
+4. Hand `public/hurricane/` (`storms.json.gz` and `meta.json`) to the Conductor. Publishing it is a separate, user-approved deploy. This procedure does not deploy.
+
+HURSAT imagery is a different batch job (`data/buildHursatImages.py`, above). It is not part of this track refresh.
 
 ## Tests
 

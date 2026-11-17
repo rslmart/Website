@@ -101,6 +101,7 @@ export const BASINS = {
 // src/Hurricane/data/convertIbtracsToJson.py and served gzipped from public/.
 // Fetched and gunzipped at runtime so the ~185MB dataset never enters the JS bundle.
 const STORMS_URL = process.env.PUBLIC_URL + "/hurricane/storms.json.gz";
+const META_URL = process.env.PUBLIC_URL + "/hurricane/meta.json";
 
 const loadStorms = async () => {
     const response = await fetch(STORMS_URL);
@@ -120,6 +121,15 @@ const loadStorms = async () => {
         text = new TextDecoder().decode(bytes);
     }
     return JSON.parse(text);
+};
+
+// Season bounds and the data-through date. The page does not hard-code a year.
+const loadMeta = async () => {
+    const response = await fetch(META_URL);
+    if (!response.ok) {
+        throw new Error(`Failed to load storm metadata (${response.status})`);
+    }
+    return response.json();
 };
 
 const SYSTEM_STATUSES = {
@@ -355,8 +365,13 @@ class Hurricane extends Component {
         loading: true,
         loadError: null,
         name: "",
-        minYear: 1842,
-        maxYear: 2026,
+        // Filled from meta.json once it loads. Empty until then so the
+        // season range is not a literal year in this file.
+        minYear: "",
+        maxYear: "",
+        seasonMin: "",
+        seasonMax: "",
+        dataThrough: "",
         minMonth: 1,
         maxMonth: 12,
         minWind: 0,
@@ -650,10 +665,20 @@ class Hurricane extends Component {
         window.addEventListener('keydown', this.handleKeyDown);
         this.updateDimensions();
         try {
-            const storms = await loadStorms();
-            // Run the initial filter/layer build only after `storms` is committed;
-            // setState is not actually awaitable, so use its callback.
-            this.setState({ storms, dataSource: storms, data: storms, loading: false }, () => {
+            const [storms, meta] = await Promise.all([loadStorms(), loadMeta()]);
+            // Default and maximum season come from the storm file. Run the
+            // initial filter only after that state is committed.
+            this.setState({
+                storms,
+                dataSource: storms,
+                data: storms,
+                minYear: meta.minSeason,
+                maxYear: meta.maxSeason,
+                seasonMin: meta.minSeason,
+                seasonMax: meta.maxSeason,
+                dataThrough: meta.dataThrough,
+                loading: false,
+            }, () => {
                 this.onChange({target: {name: PLOT_TYPES.STORM}});
             });
         } catch (error) {
@@ -824,6 +849,8 @@ class Hurricane extends Component {
                         systemStatusOptions={SYSTEM_STATUSES}
                         minYear={this.state.minYear}
                         maxYear={this.state.maxYear}
+                        seasonMin={this.state.seasonMin}
+                        seasonMax={this.state.seasonMax}
                         minMonth={this.state.minMonth}
                         maxMonth={this.state.maxMonth}
                         minWind={this.state.minWind}
@@ -867,6 +894,7 @@ class Hurricane extends Component {
                         />
                         <SourcesPanel
                             open={this.state.sourcesOpen}
+                            dataThrough={this.state.dataThrough}
                             toggle={() => this.setState(prevState => ({ sourcesOpen: !prevState.sourcesOpen }))}
                         />
                     </div>
@@ -893,6 +921,8 @@ class Hurricane extends Component {
                             systemStatusOptions={SYSTEM_STATUSES}
                             minYear={this.state.minYear}
                             maxYear={this.state.maxYear}
+                            seasonMin={this.state.seasonMin}
+                            seasonMax={this.state.seasonMax}
                             minMonth={this.state.minMonth}
                             maxMonth={this.state.maxMonth}
                             minWind={this.state.minWind}
@@ -918,7 +948,7 @@ class Hurricane extends Component {
                             plotType={this.state.plotType}
                         />
                         <div className="mobile-drawer-section">Data &amp; imagery sources</div>
-                        <SourcesPanel embedded />
+                        <SourcesPanel embedded dataThrough={this.state.dataThrough} />
                     </MobileDrawer>
                 )}
                 <HelpPanel

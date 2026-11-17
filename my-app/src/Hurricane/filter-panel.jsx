@@ -2,7 +2,7 @@ import * as React from 'react';
 
 function FilterPanel(props) {
     const {filterPanelOpen, plotType, plotTypeOptions, basin, basinOptions, name, systemStatus, systemStatusOptions,
-        minYear, maxYear, minMonth, maxMonth, minWind, maxWind,
+        minYear, maxYear, seasonMin, seasonMax, minMonth, maxMonth, minWind, maxWind,
         filterByPressure, minPressure, maxPressure, landfall, showSpurs, showMaxWindPoly, showWindPoly,
         only6Hour, onChange, toggleFilterPanel, embedded} = props;
 
@@ -69,8 +69,8 @@ function FilterPanel(props) {
                                 name="minYear"
                                 type="number"
                                 value={minYear}
-                                min={1842}
-                                max={2026}
+                                min={seasonMin}
+                                max={seasonMax}
                                 onChange={evt => onChange(evt)}
                             />
                         </div>
@@ -81,8 +81,8 @@ function FilterPanel(props) {
                                 name="maxYear"
                                 type="number"
                                 value={maxYear}
-                                min={1842}
-                                max={2026}
+                                min={seasonMin}
+                                max={seasonMax}
                                 onChange={evt => onChange(evt)}
                             />
                         </div>

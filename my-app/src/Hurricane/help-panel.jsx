@@ -22,7 +22,7 @@ function HelpPanel({ open, onOpen, onClose, fabPosition = { top: 20, left: 70 } 
             fabTitle="How to use this map"
         >
             <p style={{ marginTop: 8, color: "var(--color-text-muted)" }}>
-                Explore every tropical cyclone on record (IBTrACS, 1842–present) with track data and
+                Explore every tropical cyclone in the IBTrACS record with track data and
                 infrared satellite imagery. Pan and zoom the map like any web map; scroll or pinch to zoom.
             </p>
 

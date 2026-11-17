@@ -3,7 +3,10 @@
 Run with uv (no persistent venv needed):
     uv run --with netCDF4 --with numpy --with geopy python convertIbtracsToJson.py
 
-Output: ../../../public/hurricane/storms.json.gz  (fetched at runtime by Hurricane.jsx)
+Output, both fetched at runtime by Hurricane.jsx:
+    ../../../public/hurricane/storms.json.gz
+    ../../../public/hurricane/meta.json  (source, version, generatedAt,
+    dataThrough, minSeason, maxSeason, latestTrackPoint)
 
 Field mapping notes:
 - Position/time come from the always-present `lat`/`lon`/`iso_time`.
@@ -25,6 +28,7 @@ Field mapping notes:
 import gzip
 import json
 import os
+from datetime import datetime, timezone
 
 import numpy as np
 import netCDF4 as nc
@@ -34,6 +38,12 @@ NC_PATH = "../IBTrACS.ALL.v04r01.nc"
 # Gzipped because the raw JSON is ~185 MB; the frontend decompresses it in the
 # browser via DecompressionStream. Keeps the repo and the transfer small.
 OUT_PATH = "../../../public/hurricane/storms.json.gz"
+META_NAME = "meta.json"
+# The file the converter reads. meta.json records this URL as `source`.
+SOURCE_URL = (
+    "https://www.ncei.noaa.gov/data/international-best-track-archive-for-climate-stewardship-ibtracs/"
+    "v04r01/access/netcdf/IBTrACS.ALL.v04r01.nc"
+)
 
 # IBTrACS quadrant dimension order is NE, SE, SW, NW.
 QUADRANTS = ["ne", "se", "sw", "nw"]
@@ -103,6 +113,25 @@ def add_max_wind_polygon(track_point, rmw_nm):
     track_point["max_wind_poly"] = [north, east, south, west, north]
 
 
+def upstream_version(ds):
+    """Product version from the NetCDF header, else the v04r01 filename."""
+    if "product_version" in ds.ncattrs():
+        value = str(ds.getncattr("product_version")).strip()
+        if value:
+            return value
+    return "v04r01"
+
+
+def write_meta(out_path, meta):
+    """Write meta.json beside the storm file. Key order matches the conventions."""
+    directory = os.path.dirname(out_path)
+    path = os.path.join(directory, META_NAME) if directory else META_NAME
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(meta, handle, indent=2)
+        handle.write("\n")
+    return path
+
+
 def cell(value):
     """Return a masked/NaN cell as None, otherwise a plain python scalar."""
     if value is np.ma.masked or (np.ma.is_masked(value)):
@@ -148,6 +177,7 @@ def main(nc_path=None, out_path=None):
 
     storms = {}
     min_season, max_season = 10_000, 0
+    latest_time = ""
 
     for s in range(n_storms):
         obs = int(numobs[s])
@@ -236,6 +266,8 @@ def main(nc_path=None, out_path=None):
                 add_wind_polygons(track_point, radii)
 
             track_points.append(track_point)
+            if iso > latest_time:
+                latest_time = iso
             if status:
                 status_list.add(status)
             if record:
@@ -274,7 +306,10 @@ def main(nc_path=None, out_path=None):
         min_season = min(min_season, storm_season)
         max_season = max(max_season, storm_season)
 
+    version = upstream_version(ds)
     ds.close()
+    if not latest_time:
+        raise RuntimeError(f"No track points written from {nc_path}")
 
     out_dir = os.path.dirname(out_path)
     if out_dir:
@@ -283,10 +318,24 @@ def main(nc_path=None, out_path=None):
     with gzip.open(out_path, "wb", compresslevel=9) as fp:
         fp.write(payload)
 
+    # dataThrough is the latest track-point date. latestTrackPoint keeps the time.
+    meta = {
+        "source": SOURCE_URL,
+        "version": version,
+        "generatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "dataThrough": latest_time.split(" ")[0],
+        "minSeason": min_season,
+        "maxSeason": max_season,
+        "latestTrackPoint": latest_time,
+    }
+    meta_path = write_meta(out_path, meta)
+
     size_mb = os.path.getsize(out_path) / (1024 * 1024)
     raw_mb = len(payload) / (1024 * 1024)
     print(f"Wrote {len(storms)} storms to {out_path} ({size_mb:.1f} MB gzipped, {raw_mb:.1f} MB raw)")
     print(f"Seasons: {min_season}-{max_season}")
+    print(f"Data through {meta['dataThrough']} ({meta['latestTrackPoint']})")
+    print(f"Wrote {meta_path}")
 
 
 if __name__ == "__main__":

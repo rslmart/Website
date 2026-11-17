@@ -1,0 +1,9 @@
+{
+  "source": "https://www.ncei.noaa.gov/data/international-best-track-archive-for-climate-stewardship-ibtracs/v04r01/access/netcdf/IBTrACS.ALL.v04r01.nc",
+  "version": "v04r01",
+  "generatedAt": "2026-11-17T22:23:54Z",
+  "dataThrough": "2026-11-17",
+  "minSeason": 1842,
+  "maxSeason": 2027,
+  "latestTrackPoint": "2026-11-17 00:00:00"
+}

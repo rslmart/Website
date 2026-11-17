@@ -14,6 +14,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -162,11 +163,20 @@ def source():
 
 
 @pytest.fixture(scope="module")
-def converted(tmp_path_factory):
-    out_path = tmp_path_factory.mktemp("ibtracs") / "storms.json.gz"
+def conversion(tmp_path_factory):
+    out_dir = tmp_path_factory.mktemp("ibtracs")
+    out_path = out_dir / "storms.json.gz"
     run_converter(FIXTURE_NC, out_path)
     with gzip.open(out_path, "rb") as handle:
-        return json.loads(handle.read().decode("utf-8"))
+        storms = json.loads(handle.read().decode("utf-8"))
+    meta = json.loads((out_dir / "meta.json").read_text(encoding="utf-8"))
+    return storms, meta
+
+
+@pytest.fixture(scope="module")
+def converted(conversion):
+    storms, _meta = conversion
+    return storms
 
 
 def test_fixture_is_the_checked_in_subset(source):
@@ -364,25 +374,56 @@ def test_wind_source_follows_usa_then_wmo(converted, source):
                 assert "wind_source" not in point
 
 
-@pytest.mark.xfail(
-    reason="website-prop-pipeline-hurricane-data-driven-years",
-    strict=True,
-    raises=AssertionError,
-)
-def test_year_cap_is_not_frozen_at_the_injected_calendar_year(converted, source):
-    """The season filter follows the dataset, not a frozen calendar year.
+def test_year_cap_follows_dataset_metadata(conversion, source):
+    """The season filter follows meta.json, not a frozen calendar year.
 
-    INJECTED_YEAR is fixed in this file. The July 2026 IBTrACS source has no
-    season after 2026, so the test does not read the clock to decide the cap.
+    INJECTED_YEAR is fixed in this file. The fixture still contains that
+    season, so the assertion is not waiting on a later IBTrACS release.
+    The page cap is meta.maxSeason, whatever season the file actually holds.
     """
-    seasons = {storm["season"] for storm in source["storms"]}
+    storms, meta = conversion
+    seasons = {storm["season"] for storm in storms.values()}
+    assert seasons == {storm["season"] for storm in source["storms"]}
     assert INJECTED_YEAR in seasons
-    assert any(storm["season"] == INJECTED_YEAR for storm in converted.values())
+    assert meta["minSeason"] == min(seasons)
+    assert meta["maxSeason"] == max(seasons)
+    latest = max(
+        point["date_time"]
+        for storm in storms.values()
+        for point in storm["track_points"]
+    )
+    assert meta["latestTrackPoint"] == latest
+    assert meta["dataThrough"] == latest.split(" ")[0]
+    assert meta["source"].startswith("https://www.ncei.noaa.gov/")
+    assert meta["version"]
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", meta["generatedAt"])
+    assert set(meta) == {
+        "source",
+        "version",
+        "generatedAt",
+        "dataThrough",
+        "minSeason",
+        "maxSeason",
+        "latestTrackPoint",
+    }
+
     page = (HURRICANE_DIR / "Hurricane.jsx").read_text(encoding="utf-8")
     panel = (HURRICANE_DIR / "filter-panel.jsx").read_text(encoding="utf-8")
-    frozen = []
-    if f"maxYear: {INJECTED_YEAR}" in page:
-        frozen.append("Hurricane.jsx maxYear")
-    if f"max={{{INJECTED_YEAR}}}" in panel:
-        frozen.append("filter-panel.jsx max")
+    sources = (HURRICANE_DIR / "sources-panel.jsx").read_text(encoding="utf-8")
+    assert "minSeason" in page and "maxSeason" in page
+    assert "seasonMin" in panel and "seasonMax" in panel
+    assert "dataThrough" in sources
+    # A season bound on the year state or the year inputs. Pressure uses
+    # max={1024}; that is not a season. Imagery eras are not this pattern.
+    cap = re.compile(
+        r"maxYear:\s*\d{4}|minYear:\s*\d{4}|"
+        r"maxYear=\{\d{4}\}|minYear=\{\d{4}\}|"
+        r'name="(?:min|max)Year"(?:(?!name=).){0,240}?(?:min|max)=\{\d{4}\}',
+        re.DOTALL,
+    )
+    frozen = [
+        path.name
+        for path in sorted(HURRICANE_DIR.glob("*.jsx"))
+        if cap.search(path.read_text(encoding="utf-8"))
+    ]
     assert not frozen
