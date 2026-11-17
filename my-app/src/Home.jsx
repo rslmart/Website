@@ -33,6 +33,7 @@ const PROJECTS = [
 function Home() {
     return (
         <div className="home">
+            <a className="home-skip" href="#home-projects">Skip to content</a>
             <header className="home-hero">
                 <span className="home-eyebrow">Personal Projects</span>
                 <h1 className="home-title">Makoa Martin</h1>
@@ -42,7 +43,7 @@ function Home() {
                 </p>
             </header>
 
-            <main className="home-grid">
+            <main id="home-projects" className="home-grid" tabIndex={-1}>
                 {PROJECTS.map((project) => (
                     <Link
                         key={project.to}
@@ -58,7 +59,7 @@ function Home() {
 
             <footer className="home-footer">
                 <a href="https://github.com/rslmart" target="_blank" rel="noopener noreferrer">GitHub</a>
-                {" · "}
+                <span className="home-footer-sep" aria-hidden="true">·</span>
                 <a href="https://www.linkedin.com/in/russell-makoa-martin/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
             </footer>
         </div>
