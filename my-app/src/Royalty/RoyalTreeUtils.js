@@ -79,9 +79,11 @@ export function convertToChart(
     const isBridge = memberFlag ? !memberFlag.has(person.id) : false;
     const sex = person["sex or gender"];
     const palette = monarchyColors(nodeMonarchyIndex[person.id] || 0);
-    // Create person node
+    // Create person node. `band` is the layout column: the first selected
+    // monarchy that contains this person. Shared people keep that one band.
     const node = {
       ...person,
+      band: nodeMonarchyIndex[person.id] ?? 0,
       type: 'circle',
       size: 80,
       isBridge,

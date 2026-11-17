@@ -10,7 +10,7 @@ import ControlsFab from "../components/ControlsFab";
 import MobileDrawer from "../components/MobileDrawer";
 import { withViewport } from "../hooks/useViewport";
 import { convertToChart, mergeMonarchies, DEFAULT_BRIDGE_OPTIONS, DEFAULT_VISIBLE_RANKS } from './RoyalTreeUtils';
-import { PERSON_SIZE_STYLE, MARRIAGE_SIZE_STYLE, toLayoutElements, packComponents, positionsById } from './royalTreeLayout';
+import { PERSON_SIZE_STYLE, MARRIAGE_SIZE_STYLE, toLayoutElements, packComponents, positionsById, assignLayoutBands, bandWidths, visibleSuccession } from './royalTreeLayout';
 import { requestLayout, terminateLayoutWorker } from './layoutClient';
 import './RoyalTreeStyle.css';
 
@@ -347,6 +347,13 @@ class RoyalTree extends Component {
           }
         },
         {
+          // Genealogy edges that join two monarchy bands stay on the graph so
+          // the shared-person highlight can walk them, but they are not drawn
+          // until that path is selected.
+          selector: 'edge.cross-band',
+          style: { 'display': 'none' }
+        },
+        {
           // Dim everything except the lineage highlighted when a shared node is
           // clicked (see highlightSharedLineage).
           selector: '.faded',
@@ -359,6 +366,19 @@ class RoyalTree extends Component {
         {
           selector: 'edge.lineage',
           style: {
+            'opacity': 1,
+            'width': 4,
+            'line-color': '#00b894',
+            'target-arrow-color': '#00b894',
+            'z-index': 4,
+          }
+        },
+        {
+          // The cross-band rule hides the edge; the highlight draws only the
+          // path dijkstra already returned.
+          selector: 'edge.cross-band.lineage',
+          style: {
+            'display': 'element',
             'opacity': 1,
             'width': 4,
             'line-color': '#00b894',
@@ -407,6 +427,7 @@ class RoyalTree extends Component {
       const positions = positionsById(layout);
       elements.forEach(el => {
         if (el.group === 'nodes') el.position = positions.get(el.data.id);
+        if (el.data.crossBand) el.classes = 'cross-band';
       });
 
       mark('cy-add');
@@ -432,7 +453,11 @@ class RoyalTree extends Component {
         cy.endBatch();
       }
       if (!done) return;
-      if (this.state.showSuccession) cy.add(successionElements);
+      const widths = bandWidths(cy);
+      this.bandWidths = widths;
+      const successionDrawn = visibleSuccession(cy, successionElements, widths);
+      this.successionElements = successionDrawn;
+      if (this.state.showSuccession) cy.add(successionDrawn);
       complete = true;
     } catch (error) {
       console.error('Graph rendering error:', error);
@@ -645,6 +670,7 @@ class RoyalTree extends Component {
         merged.successionEdges, true, merged.memberFlag,
     );
     const all = this.convertToCytoscapeFormat(chart);
+    assignLayoutBands(all);
     const elements = all.filter(el => el.data.relation !== 'succession');
     const successionElements = all.filter(el => el.data.relation === 'succession');
     mark('setState-layingOut');

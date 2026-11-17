@@ -3,7 +3,7 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 import cytoscape from 'cytoscape';
 import {
   layoutGraph, toLayoutElements, packComponents, positionsById, clearLayoutCache, parseYear,
-  PERSON_SIZE_STYLE, MARRIAGE_SIZE_STYLE,
+  PERSON_SIZE_STYLE, MARRIAGE_SIZE_STYLE, bandWidths, visibleSuccession,
 } from './royalTreeLayout';
 import { convertToChart } from './RoyalTreeUtils';
 
@@ -84,12 +84,13 @@ describe('royalTreeLayout', () => {
     expect(els.filter(e => e.group === 'edges')).toHaveLength(
         pageElements().filter(e => e.group === 'edges' && e.data.relation !== 'succession').length);
     const a = els.find(e => e.data.id === 'A');
-    expect(a.data).toEqual({ id: 'A', type: 'circle', dob: '+1500-01-01T00:00:00Z' });
+    expect(a.data).toMatchObject({ id: 'A', type: 'circle', dob: '+1500-01-01T00:00:00Z', band: 0 });
+    expect(a.data.label).toContain('A');
   });
 
   it('matches the in-place dagre layout exactly', () => {
     const elements = pageElements();
-    const result = layoutGraph(toLayoutElements(elements));
+    const result = layoutGraph(toLayoutElements(elements), { couple: 'off' });
     expect(result.components).toHaveLength(2);
     expect(result.components.every(c => c.ranker === 'network-simplex')).toBe(true);
     expect(positionsOf(result)).toEqual(referencePositions(elements));
@@ -120,6 +121,31 @@ describe('royalTreeLayout', () => {
     const pos = positionsOf(result);
     expect(pos.A.y).toBeLessThan(pos.C.y);
     expect(pos.C.y).toBeLessThan(pos.E.y);
+  });
+
+  it('omits succession edges that cross bands or exceed half the band width', () => {
+    const cy = cytoscape({
+      headless: true,
+      styleEnabled: true,
+      style: [{ selector: 'node', style: { width: 80, height: 100 } }],
+      layout: { name: 'preset' },
+      elements: [
+        { data: { id: 'a', band: 0 }, position: { x: 0, y: 0 } },
+        { data: { id: 'b', band: 0 }, position: { x: 1000, y: 0 } },
+        { data: { id: 'c', band: 0 }, position: { x: 200, y: 0 } },
+        { data: { id: 'd', band: 1 }, position: { x: 3000, y: 0 } },
+      ],
+    });
+    const widths = bandWidths(cy);
+    const edges = [
+      { data: { source: 'a', target: 'c', monarchyIndex: 0 } },
+      { data: { source: 'a', target: 'b', monarchyIndex: 0 } },
+      { data: { source: 'c', target: 'd', monarchyIndex: 1 } },
+    ];
+    const kept = visibleSuccession(cy, edges, widths);
+    expect(widths.get(0)).toBeGreaterThan(1000);
+    expect(kept.map(e => e.data.target)).toEqual(['c']);
+    cy.destroy();
   });
 
   it('packs components left to right in chronological order', () => {
