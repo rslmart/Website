@@ -163,8 +163,21 @@ hex values in page and component styles.
 | `--color-tooltip-bg` / `-tooltip-text` | `#111111` / white | `#262A26` / white | tooltips |
 | `--color-overlay` / `-overlay-soft` | black 55% / 45% | black 70% / 60% | modal and drawer scrims |
 | `--shadow-sm` / `-panel` / `-raised` / `-modal` | black .12/.14/.22/.35 | black .5/.6/.65/.7 | elevation |
+| `--chart-text` / `--chart-axis` | muted text / border-strong | muted text / border-strong | Recharts tick and axis labels, axis lines |
+| `--chart-grid` | `#D5D9D2` | `#363B36` | Recharts grid lines |
+| `--chart-reference` | `#555555` | `#8F958E` | reference marks (Snow "Average") |
+| `--map-ink` | `#282828` | `#DADDD8` | map chrome drawn by deck.gl (Tectonics velocity arrows, line casing) |
 
 Every text pair is ≥4.5:1 and every UI pair ≥3:1 in both themes.
+
+**Charts and maps.** Recharts chrome (axes, grid, legend text, the default
+tooltip) is themed by CSS rules at the end of `global.css`. Canvas and JS
+consumers (deck.gl, Cytoscape, Recharts series props) read resolved tokens
+with [`useThemeTokens`](my-app/src/hooks/useThemeTokens.js), which re-renders
+on a theme change. Series, category and tree colours are data and stay with
+the pages. Tectonics switches between Mapbox `light-v10` and `dark-v10` (v11
+needs a newer mapbox-gl than 2.8.2); Hurricane's map stays `dark-v9` in both
+themes, and only its panels follow the theme.
 
 **Choosing the theme.** An inline script in
 [`my-app/index.html`](my-app/index.html) sets `<html data-theme>` before
@@ -172,15 +185,17 @@ first paint, so there's no flash of the wrong theme: the saved choice
 (`localStorage` key `theme`), else `prefers-color-scheme`. In React,
 [`useTheme`](my-app/src/hooks/useTheme.js) (used by `RootLayout` in
 `src/index.jsx`) follows system changes live and saves the choice made with
-the toggle ([`ThemeToggle`](my-app/src/components/ThemeToggle.jsx), top-right
-of Home and the 404 page). If storage is blocked, the theme follows the system
-and the toggle still works for the visit. The script and the hook must agree:
+the theme menu ([`ThemeToggle`](my-app/src/components/ThemeToggle.jsx):
+Light, Dark or System, where System removes the saved choice). The menu sits
+top-right on Home and the 404 page, and beside the Home button, top-left, on
+the data pages. If storage is blocked, the theme follows the system and the
+menu still works for the visit. The script and the hook must agree:
 `src/hooks/useTheme.test.jsx` checks the storage key and the light-only list.
 
-**Light-only pages.** `LIGHT_ONLY_PATHS` (Bio, Hurricane, RoyalTree, Snow,
-Tectonics) stay light and hide the toggle until their own styles move onto
-the tokens. `<meta name="theme-color">` is `#166534`, with `#0B0B0B` for
-`prefers-color-scheme: dark`.
+**Light-only pages.** `LIGHT_ONLY_PATHS` (only Bio) stay light and hide the
+menu until their own styles move onto the tokens. `<meta name="theme-color">`
+is `#166534`, with `#0B0B0B` for `prefers-color-scheme: dark`; it follows the
+OS, not the menu.
 
 ## Data & hosting model
 
