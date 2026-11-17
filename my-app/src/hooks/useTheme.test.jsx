@@ -147,23 +147,47 @@ describe("useTheme", () => {
         expect(htmlTheme()).toBe("dark");
     });
 
-    it("keeps light-only pages light and hides the toggle there", () => {
-        mockSystemTheme("dark");
-        window.localStorage.setItem(THEME_STORAGE_KEY, "dark");
-        const { rerender } = render(<Shell pathname="/Bio" />);
-        expect(htmlTheme()).toBe("light");
-        expect(screen.queryByRole("button")).toBeNull();
+    /* No page is light-only now; add a temporary entry to exercise the
+       mechanism. */
+    function withLightOnly(path, fn) {
+        LIGHT_ONLY_PATHS.push(path);
+        try {
+            fn();
+        } finally {
+            LIGHT_ONLY_PATHS.splice(LIGHT_ONLY_PATHS.indexOf(path), 1);
+        }
+    }
 
-        rerender(<Shell pathname="/" />);
+    it("has no light-only pages: Bio follows the theme and shows the toggle", () => {
+        expect(LIGHT_ONLY_PATHS).toEqual([]);
+        mockSystemTheme("dark");
+        render(<Shell pathname="/Bio" />);
         expect(htmlTheme()).toBe("dark");
+        expect(screen.getByRole("button", { name: "Theme: System (dark)" })).toBeInTheDocument();
+    });
+
+    it("keeps light-only pages light and hides the toggle there", () => {
+        withLightOnly("/light-test", () => {
+            mockSystemTheme("dark");
+            window.localStorage.setItem(THEME_STORAGE_KEY, "dark");
+            const { rerender } = render(<Shell pathname="/Light-Test" />);
+            expect(htmlTheme()).toBe("light");
+            expect(screen.queryByRole("button")).toBeNull();
+
+            rerender(<Shell pathname="/" />);
+            expect(htmlTheme()).toBe("dark");
+        });
     });
 
     it("matches light-only paths case-insensitively, with or without a trailing slash", () => {
-        expect(isLightOnlyPath("/Bio")).toBe(true);
-        expect(isLightOnlyPath("/bio/")).toBe(true);
-        expect(isLightOnlyPath("/Snow")).toBe(false);
-        expect(isLightOnlyPath("/")).toBe(false);
-        expect(isLightOnlyPath("/Biology")).toBe(false);
+        withLightOnly("/light-test", () => {
+            expect(isLightOnlyPath("/Light-Test")).toBe(true);
+            expect(isLightOnlyPath("/light-test/")).toBe(true);
+            expect(isLightOnlyPath("/Snow")).toBe(false);
+            expect(isLightOnlyPath("/")).toBe(false);
+            expect(isLightOnlyPath("/light-testing")).toBe(false);
+        });
+        expect(isLightOnlyPath("/Bio")).toBe(false);
     });
 });
 
@@ -181,7 +205,7 @@ describe("index.html no-flash script", () => {
         ["/", null, true, "dark"],
         ["/", "light", true, "light"],
         ["/", null, false, "light"],
-        ["/Bio/", "dark", true, "light"],
+        ["/Bio/", null, true, "dark"],
     ])("on %s with saved %s and system dark=%s sets %s", (path, saved, systemDark, expected) => {
         mockSystemTheme(systemDark ? "dark" : "light");
         if (saved) window.localStorage.setItem(THEME_STORAGE_KEY, saved);

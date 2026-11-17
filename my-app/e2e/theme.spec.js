@@ -38,8 +38,9 @@ test("the theme menu switches the theme and the choice survives a reload", async
     expect(await page.evaluate(() => localStorage.getItem("theme"))).toBeNull();
 });
 
-/* website-site-theme-page-chrome: the data pages follow the theme. */
-for (const path of ["/Hurricane", "/RoyalTree", "/Snow", "/Tectonics"]) {
+/* website-site-theme-page-chrome: the data pages follow the theme; Bio does
+   too since website-prop-bio-readability-a11y. */
+for (const path of ["/Bio", "/Hurricane", "/RoyalTree", "/Snow", "/Tectonics"]) {
     test(`${path} renders in dark with the theme menu visible`, async ({ page }) => {
         const errors = [];
         page.on("pageerror", (error) => errors.push(error.message));
@@ -59,9 +60,14 @@ for (const path of ["/Hurricane", "/RoyalTree", "/Snow", "/Tectonics"]) {
     });
 }
 
-test("Bio stays light and hides the theme menu", async ({ page }) => {
-    await page.emulateMedia({ colorScheme: "dark" });
-    await page.goto("/Bio");
-    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-    await expect(page.getByRole("button", { name: /^Theme:/ })).toHaveCount(0);
+test("Bio: the Home and theme buttons don't cover the header", async ({ page }) => {
+    for (const width of [390, 768, 1440]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto("/Bio");
+        const header = await page.locator("header").boundingBox();
+        for (const control of [page.getByRole("link", { name: /home/i }), page.getByRole("button", { name: /^Theme:/ })]) {
+            const box = await control.boundingBox();
+            expect(box.y + box.height, `width ${width}`).toBeLessThanOrEqual(header.y);
+        }
+    }
 });

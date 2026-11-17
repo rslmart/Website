@@ -13,19 +13,17 @@ function Bio() {
                 <div className={styles.contactInfo}>
                     <a href="https://github.com/rslmart"
                        target="_blank"
-                       rel="noopener noreferrer"
-                       className={styles.link}>GitHub</a> |
+                       rel="noopener noreferrer">GitHub</a> |
                     <a href="https://www.linkedin.com/in/russell-makoa-martin/"
                        target="_blank"
-                       rel="noopener noreferrer"
-                       className={styles.link}>LinkedIn</a>
+                       rel="noopener noreferrer">LinkedIn</a>
                 </div>
             </header>
 
+            <main>
+
             <section className={styles.section}>
                 <h2 className={styles.sectionTitle}>Work Experience</h2>
-                {/* Job items structure same as before, converted to use styles */}
-                {/* Example for one job item: */}
                 <div className={styles.jobItem}>
                     <div className={styles.jobHeader}>
                         <h3>Software Engineer</h3>
@@ -34,10 +32,10 @@ function Bio() {
                         <div className={styles.date}>Oct 2025 - Present</div>
                     </div>
                     <ul>
-                        <li>Build new features and add support for 10+ STT, TTS, LLM, and realtime providers to the Inference Gateway (Go, WebSockets) (<a href="https://livekit.com/blog/introducing-livekit-inference" target="_blank" rel="noopener noreferrer" className={styles.link}>LiveKit Inference launch post</a>)</li>
-                        <li>Created and own the voice cloning service, from first commit to production (<a href="https://www.linkedin.com/posts/voice-agents-are-everywhere-now-taking-reservations-ugcPost-7458183168945463296-fNon/" target="_blank" rel="noopener noreferrer" className={styles.link}>voice cloning launch post</a>)</li>
-                        <li>Designed and launched realtime speech-to-speech support end to end, including failover and usage tracking (<a href="https://www.linkedin.com/posts/voice-agents-get-built-in-three-different-ugcPost-7516561022988468224-4sWy/" target="_blank" rel="noopener noreferrer" className={styles.link}>speech-to-speech launch post</a>)</li>
-                        <li>Created a continuous LLM latency benchmarking system (Go) that powers LiveKit's public latency benchmarks (<a href="https://livekit.com/benchmarks/latency" target="_blank" rel="noopener noreferrer" className={styles.link}>view benchmarks</a>)</li>
+                        <li>Build new features and add support for 10+ STT, TTS, LLM, and realtime providers to the Inference Gateway (Go, WebSockets) (<a href="https://livekit.com/blog/introducing-livekit-inference" target="_blank" rel="noopener noreferrer">LiveKit Inference launch post</a>)</li>
+                        <li>Created and own the voice cloning service, from first commit to production (<a href="https://www.linkedin.com/posts/voice-agents-are-everywhere-now-taking-reservations-ugcPost-7458183168945463296-fNon/" target="_blank" rel="noopener noreferrer">voice cloning launch post</a>)</li>
+                        <li>Designed and launched realtime speech-to-speech support end to end, including failover and usage tracking (<a href="https://www.linkedin.com/posts/voice-agents-get-built-in-three-different-ugcPost-7516561022988468224-4sWy/" target="_blank" rel="noopener noreferrer">speech-to-speech launch post</a>)</li>
+                        <li>Created a continuous LLM latency benchmarking system (Go) that powers LiveKit's public latency benchmarks (<a href="https://livekit.com/benchmarks/latency" target="_blank" rel="noopener noreferrer">view benchmarks</a>)</li>
                         <li>Improved reliability with provider failover and fallbacks; own monitoring, alerting, and incident response for my services</li>
                     </ul>
                 </div>
@@ -131,7 +129,7 @@ function Bio() {
         </section>
 
         <section className={styles.section}>
-            <h2>Education</h2>
+            <h2 className={styles.sectionTitle}>Education</h2>
             <div className={styles.educationItem}>
                 <div className={styles.jobHeader}>
                     <h3>College of William and Mary</h3>
@@ -144,7 +142,7 @@ function Bio() {
         </section>
 
         <section className={styles.section}>
-            <h2>Projects</h2>
+            <h2 className={styles.sectionTitle}>Projects</h2>
             <div className={styles.projectItem}>
                 <h3>RoyalTree Webpage</h3>
                 <div className={styles.techStack}>JavaScript / Python (2023 - WIP)</div>
@@ -172,10 +170,10 @@ function Bio() {
             </div>
         </section>
 
-        <div className={styles.cvSection}>
+        <section className={styles.section}>
             <h2 className={styles.sectionTitle}>Cover Letter</h2>
             <div className={styles.cvSubSection}>
-                <h3 className={styles.sectionTitle}>LiveKit</h3>
+                <h3 className={styles.subTitle}>LiveKit</h3>
                 <p className={styles.cvParagraph}>
                     Since October 2025, I have worked on LiveKit Inference, a hosted gateway that gives voice AI
                     agents a single API for speech-to-text, text-to-speech, LLM, and realtime speech-to-speech
@@ -193,7 +191,7 @@ function Bio() {
             </div>
 
             <div className={styles.cvSubSection}>
-                <h3 className={styles.sectionTitle}>Stealth Startup</h3>
+                <h3 className={styles.subTitle}>Stealth Startup</h3>
                 <p className={styles.cvParagraph}>
                     From November 2023 to October 2025, I was part of the networking team at an AI Datacenter startup,
                     supporting a critical server component that serves as a foundational platform for internal teams.
@@ -206,7 +204,7 @@ function Bio() {
             </div>
 
             <div className={styles.cvSubSection}>
-                <h3 className={styles.sectionTitle}>DevOps Guru</h3>
+                <h3 className={styles.subTitle}>DevOps Guru</h3>
                 <p className={styles.cvParagraph}>
                     From December 2022 to October 2023, I worked as a backend developer on DevOps Guru,
                     an AWS service that is currently available in 16 regions. This machine learning-powered
@@ -225,7 +223,7 @@ function Bio() {
             </div>
 
             <div className={styles.cvSubSection}>
-                <h3 className={styles.sectionTitle}>AWS Networking</h3>
+                <h3 className={styles.subTitle}>AWS Networking</h3>
                 <p className={styles.cvParagraph}>
                     Upon completing my Master's degree in May 2019, I joined AWS as a member of a newly
                     established AWS Networking team in July 2019. AWS Networking is responsible for building
@@ -242,7 +240,7 @@ function Bio() {
             </div>
 
             <div className={styles.cvSubSection}>
-                <h3 className={styles.sectionTitle}>Professional Experience Prior to Graduation</h3>
+                <h3 className={styles.subTitle}>Professional Experience Prior to Graduation</h3>
                 <p className={styles.cvParagraph}>
                     During the final year of my Masters program, I was hired as an Assistant System Administrator to
                     assist in managing the growing infrastructure of the Computer Science department. This involved
@@ -260,7 +258,7 @@ function Bio() {
             </div>
 
             <div className={styles.cvSubSection}>
-                <h3 className={styles.sectionTitle}>Personal Projects</h3>
+                <h3 className={styles.subTitle}>Personal Projects</h3>
                 <p className={styles.cvParagraph}>
                     <strong>RoyalTrees:</strong> After moving to Europe I became fascinated with the intricate and
                     long history of the monarchies there. The drama was sometimes hard to track however so I wanted
@@ -283,7 +281,7 @@ function Bio() {
                 </p>
             </div>
             <div className={styles.cvSubSection}>
-                <h3 className={styles.sectionTitle}>Beginnings</h3>
+                <h3 className={styles.subTitle}>Beginnings</h3>
                 <p className={styles.cvParagraph}>
                     My journey in programming began by creating simple computers within the video game Minecraft when
                     I was 12 years old. In high school, I further honed my skills using Java to design bots that played
@@ -292,7 +290,8 @@ function Bio() {
                     attracted over 10,000 users.
                 </p>
             </div>
-        </div>
+        </section>
+        </main>
     </div>
     );
 

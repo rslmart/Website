@@ -10,10 +10,13 @@ pipeline and no external data source** — all content is hardcoded in the JSX.
 
 - Content (summary, experience, skills, education) lives directly in `Bio.jsx`;
   edit that file to update the resume.
-- This page uses its own CSS Module rather than the app-wide design tokens, and
-  intentionally keeps a distinct font stack from the rest of the site.
-- The only shared dependency is the `HomeButton` component for navigation back to
-  the landing page.
+- Styles use the `global.css` design tokens and the site font, so the page
+  follows the light/dark theme like the rest of the site (moved in
+  `website-prop-bio-readability-a11y`). Links use `--color-primary` and are
+  underlined; the cover letter is capped at ~75 characters per line; job headers
+  stack into two lines below 768px.
+- Shared dependencies: the `HomeButton` component and the theme menu (from the
+  root layout). The page's top padding keeps both buttons clear of the header.
 
 To change the resume, edit the markup in [`Bio.jsx`](Bio.jsx) and redeploy with
 `npm run deploy`.
