@@ -97,8 +97,11 @@ very strong) by magnitude at 0.5 / 1.0 / 1.5 / 2.0.
   Average plus separate La Niña and El Niño averages — and auto-selects the
   highest- and lowest-snowfall seasons for comparison lines. The data logic
   lives in `snowStats.js`:
+  - The chart runs September through June, so early and late readings are drawn.
   - Baseline days backed by fewer than 3 seasons are omitted, and Feb 29 is
-    left out of the baselines (it only exists in leap winters).
+    left out of the baselines (it only exists in leap winters). Accumulated
+    baselines are the running sum of each day's mean new snow. Days with 3–6
+    seasons are shaded; on those days the average moves by at most 12 inches.
   - "Lowest season" only considers seasons that are over and have data in
     each of Dec–Mar, so empty (`[]`), gappy or in-progress seasons can't win.
   - Switching to a pass that lacks the chosen season falls back to that

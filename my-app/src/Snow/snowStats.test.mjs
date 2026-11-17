@@ -5,10 +5,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
     AVERAGE_SEASON,
+    EL_NINO_AVG,
+    LA_NINA_AVG,
+    MAX_LOW_SAMPLE_STEP_INCHES,
     MIN_SEASONS_PER_AVERAGE_DAY,
     buildChartRows,
     convertData,
     isSeasonComplete,
+    months,
     pickExtremeSeasons,
     resolveSeason,
 } from './snowStats.js';
@@ -107,12 +111,66 @@ test('real data: every pass/season switch works and averages have no spikes', ()
         const at = name => rows.find(r => r.name === name)[`${AVERAGE_SEASON}accumulatedSnowFall`];
         // Before the fix Stevens jumped +68.8in into 29-Feb and back.
         assert.ok(Math.abs(at('1-Mar') - at('28-Feb')) < 10, `${pass} 28-Feb -> 1-Mar`);
-        // Before the fix single-season tail days swung by up to 220in (White
-        // Pass, May). Late-season days averaged over 3-6 seasons still move
-        // by up to ~50in as seasons drop out; that survivorship effect is a
-        // known follow-up, so this only guards against regressions.
-        const values = rows.map(r => r[`${AVERAGE_SEASON}accumulatedSnowFall`]).filter(v => v !== undefined);
-        const maxStep = Math.max(...values.slice(1).map((v, i) => Math.abs(v - values[i])));
-        assert.ok(maxStep < 60, `${pass} average accumulated jumps ${maxStep.toFixed(1)}in in one day`);
+        for (const key of [AVERAGE_SEASON, LA_NINA_AVG, EL_NINO_AVG]) {
+            for (const field of ['accumulatedSnowFall', 'totalSnowFall']) {
+                const step = maxThinSampleStep(chartData[key], field);
+                assert.ok(
+                    step <= MAX_LOW_SAMPLE_STEP_INCHES,
+                    `${pass} ${key} ${field} moves ${step.toFixed(1)}in where n is 3–6`,
+                );
+            }
+        }
+        assert.ok(avg.some(d => d.lowConfidence), `${pass} has a thin-sample day`);
+        assert.ok(avg.some(d => !d.lowConfidence), `${pass} has a well-sampled day`);
+        assert.equal(MAX_LOW_SAMPLE_STEP_INCHES, 12);
     }
+});
+
+// Largest step between consecutive baseline points where either day has
+// only 3–6 seasons. That is the step the dashed line actually draws.
+const maxThinSampleStep = (series, field) => {
+    let max = 0;
+    for (let i = 1; i < series.length; i++) {
+        const prev = series[i - 1];
+        const cur = series[i];
+        if (prev.seasonsUsed > 6 && cur.seasonsUsed > 6) continue;
+        max = Math.max(max, Math.abs(cur[field] - prev[field]));
+    }
+    return max;
+};
+
+test('a thin late-season sample cannot cliff the accumulated average', () => {
+    const light = [...fullSeason(1), month('Apr', 30, 1, 200)];
+    const heavy = [...fullSeason(10), month('Apr', 30, 1, 2000), month('May', 10, 1, 2030)];
+    const passData = {
+        2010: light, 2011: light, 2012: light,
+        2013: heavy, 2014: heavy, 2015: heavy,
+    };
+    const [chartData] = convertData('P', { P: passData });
+    const avg = chartData[AVERAGE_SEASON];
+    const apr30 = avg.find(d => d.name === '30-Apr');
+    const may1 = avg.find(d => d.name === '1-May');
+    assert.equal(apr30.seasonsUsed, 6);
+    assert.equal(may1.seasonsUsed, 3);
+    assert.ok(may1.lowConfidence);
+    // The three heavy seasons are still near 2030in; the old mean of
+    // season-to-date totals jumped by hundreds of inches on 1 May.
+    assert.ok(Math.abs(may1.accumulatedSnowFall - apr30.accumulatedSnowFall) <= MAX_LOW_SAMPLE_STEP_INCHES);
+    assert.ok(Math.abs(may1.totalSnowFall - apr30.totalSnowFall) <= MAX_LOW_SAMPLE_STEP_INCHES);
+});
+
+test('September and June readings are charted', () => {
+    assert.equal(months[0], 'Sep');
+    assert.equal(months.at(-1), 'Jun');
+    const data = JSON.parse(readFileSync(new URL('../../public/snow/pass_snowfall_data.json', import.meta.url)));
+    const [stevens] = convertData('Stevens_Pass_US-2', data);
+    const [snoqualmie] = convertData('Snoqualmie_Pass_I-90', data);
+    const hasMonth = (chartData, month) => Object.entries(chartData)
+        .filter(([season]) => season !== AVERAGE_SEASON && season !== LA_NINA_AVG && season !== EL_NINO_AVG)
+        .some(([, rows]) => rows.some(d => d.name.endsWith(`-${month}`)));
+    assert.ok(hasMonth(stevens, 'Sep'), 'Stevens September readings');
+    assert.ok(hasMonth(snoqualmie, 'Jun'), 'Snoqualmie June readings');
+    const rows = buildChartRows(snoqualmie, ['2011', AVERAGE_SEASON]);
+    assert.ok(rows.some(r => r.name === '1-Jun' && r['2011accumulatedSnowFall'] !== undefined));
+    assert.ok(rows.some(r => r.lowConfidence), 'thin June days are flagged for the shade');
 });

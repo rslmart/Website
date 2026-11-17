@@ -6,12 +6,25 @@ export const AVERAGE_SEASON = 'Average';
 export const LA_NINA_AVG = 'La Nina avg';
 export const EL_NINO_AVG = 'El Nino avg';
 
-export const months = ['Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May'];
-export const days_in_a_month = [31, 30, 31, 31, 28, 31, 30, 31];
+// September and June stay on the chart so early and late readings are not
+// dropped. Many passes recorded only a few of those days.
+export const months = ['Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+export const days_in_a_month = [30, 31, 30, 31, 31, 28, 31, 30, 31, 30];
 
 // A baseline day needs at least this many seasons behind it; with fewer the
 // "average" is one or two winters and swings wildly at the season edges.
 export const MIN_SEASONS_PER_AVERAGE_DAY = 3;
+
+// Days backed by this many seasons or fewer are a thin sample. The chart
+// shades them, and the average line may not move more than
+// MAX_LOW_SAMPLE_STEP_INCHES from the previous plotted day.
+export const LOW_CONFIDENCE_MAX_SEASONS = 6;
+
+// Day-to-day cap (inches) when either day has only 3–6 seasons. It sits above
+// the largest one-day change in this record where at least 7 seasons reported
+// (about 10 inches of snow depth, about 5 inches of new snow) and below the
+// old thin-sample cliffs of about 50 inches.
+export const MAX_LOW_SAMPLE_STEP_INCHES = 12;
 
 // The heart of the winter: a complete season has data in each of these.
 const CORE_MONTHS = ['Dec', 'Jan', 'Feb', 'Mar'];
@@ -69,6 +82,13 @@ export function customDateSort(a, b) {
     return aDayNum - bDayNum;
 }
 
+// Pull `value` to within MAX_LOW_SAMPLE_STEP_INCHES of the previous point.
+const clampStep = (value, previous) => {
+    const delta = value - previous
+    if (Math.abs(delta) <= MAX_LOW_SAMPLE_STEP_INCHES) return value
+    return previous + Math.sign(delta) * MAX_LOW_SAMPLE_STEP_INCHES
+}
+
 // Builds per-season chart series plus the baseline averages for one pass.
 // `phaseOf(season)` returns 'La Nina', 'El Nino', 'Neutral' or null.
 export const convertData = (passName, data, phaseOf = () => null) => {
@@ -79,7 +99,9 @@ export const convertData = (passName, data, phaseOf = () => null) => {
 
     // Per-calendar-day (`${day}-${month}`) accumulators for the baseline
     // averages: one bucket across every season, plus ONI-classified La Nina
-    // and El Nino buckets. Each is summed here and divided into a mean below.
+    // and El Nino buckets. New snow and snow depth are averaged per day.
+    // Accumulated snowfall is the running sum of those daily new-snow means,
+    // so a winter dropping out of the sample cannot yank the line.
     const buckets = {
         [AVERAGE_SEASON]: { sum: {}, count: {} },
         [LA_NINA_AVG]: { sum: {}, count: {} },
@@ -145,19 +167,49 @@ export const convertData = (passName, data, phaseOf = () => null) => {
         highestPerYear_totalSnowFall[season] = highest_totalSnowFall
     })
 
-    // Build each baseline pseudo-season from its per-day accumulators,
-    // dropping days backed by too few seasons.
-    const bucketToSeries = (bucket) => Object.keys(bucket.sum)
-        .filter(name => bucket.count[name] >= MIN_SEASONS_PER_AVERAGE_DAY)
-        .map(name => ({
-            name,
-            newDailySnowFall: bucket.sum[name].newDailySnowFall / bucket.count[name],
-            totalSnowFall: bucket.sum[name].totalSnowFall / bucket.count[name],
-            accumulatedSnowFall: bucket.sum[name].accumulatedSnowFall / bucket.count[name],
-        }))
-    chartData[AVERAGE_SEASON] = bucketToSeries(buckets[AVERAGE_SEASON])
-    chartData[LA_NINA_AVG] = bucketToSeries(buckets[LA_NINA_AVG])
-    chartData[EL_NINO_AVG] = bucketToSeries(buckets[EL_NINO_AVG])
+    // Days backed by fewer than MIN_SEASONS_PER_AVERAGE_DAY seasons are
+    // dropped, as is Feb 29 (already skipped above).
+    const baselineSeries = (bucket) => {
+        const names = Object.keys(bucket.sum)
+            .filter(name => bucket.count[name] >= MIN_SEASONS_PER_AVERAGE_DAY)
+            .sort((a, b) => customDateSort({ name: a }, { name: b }))
+        let accumulated = 0
+        let prev = null
+        // Snow depth is a level, not a sum. After a thin-sample cliff, walk
+        // back toward the raw mean instead of snapping on the next well
+        // sampled day.
+        let depthHeld = false
+        return names.map(name => {
+            const seasonsUsed = bucket.count[name]
+            const sum = bucket.sum[name]
+            const newDailySnowFall = sum.newDailySnowFall / seasonsUsed
+            accumulated += newDailySnowFall
+            const thinSample = seasonsUsed <= LOW_CONFIDENCE_MAX_SEASONS
+                || (prev && prev.seasonsUsed <= LOW_CONFIDENCE_MAX_SEASONS)
+            if (prev && thinSample) accumulated = clampStep(accumulated, prev.accumulatedSnowFall)
+            let totalSnowFall = sum.totalSnowFall / seasonsUsed
+            if (prev && (thinSample || depthHeld)) {
+                const stepped = clampStep(totalSnowFall, prev.totalSnowFall)
+                depthHeld = stepped !== totalSnowFall
+                totalSnowFall = stepped
+            } else {
+                depthHeld = false
+            }
+            const point = {
+                name,
+                newDailySnowFall,
+                totalSnowFall,
+                accumulatedSnowFall: accumulated,
+                seasonsUsed,
+                lowConfidence: seasonsUsed <= LOW_CONFIDENCE_MAX_SEASONS,
+            }
+            prev = point
+            return point
+        })
+    }
+    chartData[AVERAGE_SEASON] = baselineSeries(buckets[AVERAGE_SEASON])
+    chartData[LA_NINA_AVG] = baselineSeries(buckets[LA_NINA_AVG])
+    chartData[EL_NINO_AVG] = baselineSeries(buckets[EL_NINO_AVG])
 
     return [chartData, highestPerYear_accumulatedSnowFall, highestPerYear_totalSnowFall]
 }
@@ -210,6 +262,9 @@ export const buildChartRows = (chartData, seasons) => {
             row[season + 'newDailySnowFall'] = dailySnow['newDailySnowFall']
             row[season + 'totalSnowFall'] = dailySnow['totalSnowFall']
             row[season + 'accumulatedSnowFall'] = dailySnow['accumulatedSnowFall']
+            // Shade only the all-season average. The ENSO averages are thin
+            // across most of the winter, and shading those would cover the chart.
+            if (season === AVERAGE_SEASON && dailySnow.lowConfidence) row.lowConfidence = true
         })
     })
     finalData.sort(customDateSort)

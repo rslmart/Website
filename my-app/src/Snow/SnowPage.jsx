@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import { ResponsiveContainer, LineChart, CartesianGrid, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, Line } from 'recharts';
+import { ResponsiveContainer, LineChart, CartesianGrid, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, Line, ReferenceArea } from 'recharts';
 // NOAA Oceanic Nino Index (ONI) DJF anomaly per season start-year. Small and
 // only changes once a year, so it is imported at build time. Source:
 // https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt (the DJF value
@@ -14,6 +14,7 @@ import {
     AVERAGE_SEASON,
     LA_NINA_AVG,
     EL_NINO_AVG,
+    MAX_LOW_SAMPLE_STEP_INCHES,
     buildChartRows,
     convertData,
     pickExtremeSeasons,
@@ -212,6 +213,17 @@ class Snow extends Component {
                         margin={{ top: 5, right: 30, left: 20, bottom: 50 }}
                     >
                         <CartesianGrid strokeDasharray="3 3" vertical={!isMobile} />
+                        {!this.state.hiddenSeries[AVERAGE_SEASON] && lowConfidenceSpans(this.state.data).map(([x1, x2]) => (
+                            <ReferenceArea
+                                key={`${x1}-${x2}`}
+                                x1={x1}
+                                x2={x2}
+                                fill={this.props.bandColor}
+                                fillOpacity={1}
+                                strokeOpacity={0}
+                                ifOverflow="hidden"
+                            />
+                        ))}
                         <XAxis
                             dataKey="name"
                             tick={{ dy: 5, dx: -10, fontSize: 12 }}
@@ -473,8 +485,16 @@ class Snow extends Component {
                         `Accumulated Snowfall`,
                         `accumulatedSnowFall`
                     )}
+                    <p data-testid="season-tail-note" style={{
+                        textAlign: 'center',
+                        fontSize: '0.9rem',
+                        color: 'var(--color-text-muted)',
+                        margin: '0 16px 12px',
+                    }}>
+                        September and June readings are charted. Shading marks days averaged from only 3–6 seasons; on those days each average stays within {MAX_LOW_SAMPLE_STEP_INCHES} inches of the previous day.
+                    </p>
 
-                        <div style={isMobile ? { height: 300, minHeight: 260 } : { height: '33vh' }}>
+                    <div style={isMobile ? { height: 300, minHeight: 260 } : { height: '33vh' }}>
                             <h4 style={{ textAlign: 'center', margin: '10px 0' }}>New Daily Snowfall</h4>
                             <ResponsiveContainer width="100%" height="80%">
                                 <BarChart
@@ -575,9 +595,33 @@ class Snow extends Component {
    light page, and the lighter --chart-reference grey in dark, where #555555
    was 2.6:1 against the chart background. Recharts needs a real colour (it
    also paints the legend icon), so read the token here. */
+// Consecutive thin-sample days, as [first, last] calendar-day names.
+function lowConfidenceSpans(rows) {
+    const spans = [];
+    let start = null;
+    let end = null;
+    for (const row of rows) {
+        if (row.lowConfidence) {
+            if (!start) start = row.name;
+            end = row.name;
+        } else if (start) {
+            spans.push([start, end]);
+            start = null;
+        }
+    }
+    if (start) spans.push([start, end]);
+    return spans;
+}
+
 function SnowWithChartTokens(props) {
-    const { tokens } = useThemeTokens(['--chart-reference']);
-    return <Snow {...props} referenceColor={tokens['--chart-reference'] || '#555555'} />;
+    const { tokens } = useThemeTokens(['--chart-reference', '--color-primary-soft']);
+    return (
+        <Snow
+            {...props}
+            referenceColor={tokens['--chart-reference'] || '#555555'}
+            bandColor={tokens['--color-primary-soft'] || 'rgba(22, 101, 52, 0.12)'}
+        />
+    );
 }
 
 export default withViewport(SnowWithChartTokens);
