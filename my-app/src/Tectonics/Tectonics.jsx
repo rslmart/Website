@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import DeckGL from '@deck.gl/react';
 import {MapView} from '@deck.gl/core';
 import {GeoJsonLayer, LineLayer} from '@deck.gl/layers';
@@ -41,13 +41,80 @@ const loadGz = async (name) => {
     return JSON.parse(text);
 };
 
-const INITIAL_VIEW_STATE = {
-    longitude: 150,
-    latitude: 5,
-    zoom: 1.6,
-    pitch: 0,
-    bearing: 0,
-};
+// Desktop and landscape keep this zoom. A 390px-wide phone at zoom 1.6 shows
+// about 90° of longitude (360 × width / (512 × 2^zoom)).
+export const DESKTOP_ZOOM = 1.6;
+// Acceptance is 300°. 330° still clears 300° if the canvas is a few pixels
+// narrower than the window (scrollbar, safe area).
+export const PHONE_PORTRAIT_LONGITUDE_SPAN = 330;
+// deck.gl / mapbox Web Mercator world size at zoom 0.
+export const MERCATOR_TILE_SIZE = 512;
+// MapController defaults minZoom to 0 and, with normalize, raises zoom to
+// log2(height/512) so the map fills a tall screen. Either clamp pulls a
+// portrait phone back under 300°. Relax both; the wide view is the point.
+export const MAP_CONTROLLER = {minZoom: -2, maxZoom: 20, normalize: false};
+
+// .controls-fab is 48×48 and 16px from the right (global.css). This inset
+// leaves that column, plus a 12px gap, clear of the plate sheet.
+export const PLATE_SHEET_RIGHT_INSET =
+    'calc(16px + 48px + 12px + env(safe-area-inset-right, 0px))';
+
+export const MAPBOX_TOKEN_MESSAGE =
+    'Map tiles are unavailable. The Mapbox access token is missing or invalid.';
+
+// The shared landscape rule sets the drawer to 96dvh, so it covers the map.
+// Keep this page's drawer in the bottom 46% and let taps pass through to the
+// map above it. MobileDrawer.jsx itself is unchanged.
+export const TECTONICS_LAYOUT_CSS = `
+@media (max-width: 900px) and (max-height: 480px) {
+  .tectonics-page .mobile-drawer-overlay {
+    top: 54dvh;
+    background: transparent;
+    pointer-events: none;
+  }
+  .tectonics-page .mobile-drawer {
+    max-height: 100%;
+    pointer-events: auto;
+  }
+}
+`;
+
+export function isPhonePortrait(width, height) {
+    return width > 0 && width <= 768 && height > width;
+}
+
+/** Degrees of longitude across `width` CSS pixels at `zoom`. Pitch and bearing are 0. */
+export function longitudeSpanDegrees(width, zoom) {
+    if (!(width > 0) || !Number.isFinite(zoom)) return 0;
+    return (360 * width) / (MERCATOR_TILE_SIZE * 2 ** zoom);
+}
+
+export function zoomForLongitudeSpan(width, spanDegrees) {
+    return Math.log2((360 * width) / (spanDegrees * MERCATOR_TILE_SIZE));
+}
+
+export function defaultViewState(width, height) {
+    const zoom = isPhonePortrait(width, height)
+        ? zoomForLongitudeSpan(width, PHONE_PORTRAIT_LONGITUDE_SPAN)
+        : DESKTOP_ZOOM;
+    return {longitude: 150, latitude: 5, zoom, pitch: 0, bearing: 0};
+}
+
+// Missing token, or a Mapbox error that is the token being rejected.
+export function mapboxTokenFailed(token, error) {
+    if (token == null || String(token).trim() === '') return true;
+    if (!error) return false;
+    const status = error.status ?? error.error?.status;
+    const message = `${error.message || ''} ${error.error?.message || ''}`;
+    return status === 401 || status === 403
+        || /access token|unauthorized|not authorized|invalid token/i.test(message);
+}
+
+const readWindowSize = () => (
+    typeof window === 'undefined'
+        ? {width: 0, height: 0}
+        : {width: window.innerWidth, height: window.innerHeight}
+);
 
 // Basemap per site theme. v10, not v11: the v11 styles use fog/globe
 // properties that mapbox-gl 2.8.2 rejects (console errors, and the switch to
@@ -110,18 +177,69 @@ const buildVelocityArrows = (points) => {
     return segments;
 };
 
+function tooltipModel(info) {
+    const object = info?.object;
+    const layer = info?.layer;
+    if (!object || !layer) return null;
+    if (layer.id === 'boundaries') {
+        const p = object.properties;
+        return {
+            title: STEP_CLASS_LABEL[p.stepClass] || p.stepClass,
+            lines: [`Plates: ${p.plateBound}`, `Relative velocity: ${p.velocity} mm/yr`],
+        };
+    }
+    if (layer.id === 'plates') {
+        const p = object.properties;
+        return {title: p.PlateName, lines: [p.Code]};
+    }
+    return null;
+}
+
 function Tectonics() {
-    const [viewState, setViewState] = useState(INITIAL_VIEW_STATE);
+    const rootRef = useRef(null);
+    const userMovedRef = useRef(false);
+    const [measured, setMeasured] = useState(readWindowSize);
+    const [viewState, setViewState] = useState(() => {
+        const {width, height} = readWindowSize();
+        return defaultViewState(width, height);
+    });
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState(null);
+    const [mapError, setMapError] = useState(null);
     const [visibility, setVisibility] = useState(DEFAULT_VISIBILITY);
     const [selectedPlate, setSelectedPlate] = useState(null);
+    const [tapTip, setTapTip] = useState(null);
     const [legendOpen, setLegendOpen] = useState(true);
     const [controlsDrawerOpen, setControlsDrawerOpen] = useState(false);
     const { isMobile } = useViewport();
+    const tokenFailed = mapboxTokenFailed(import.meta.env.VITE_MAPBOX_TOKEN, mapError);
     const {theme, tokens} = useThemeTokens(['--map-ink']);
     const ink = tokens['--map-ink'];
+
+    // Refit until the user pans or zooms, so a resize into phone portrait
+    // (and the preview viewport) lands on the wide view.
+    useEffect(() => {
+        const root = rootRef.current;
+        if (!root) return undefined;
+        const fit = () => {
+            if (userMovedRef.current) return;
+            const width = root.clientWidth;
+            const height = root.clientHeight;
+            if (width < 1 || height < 1) return;
+            const next = defaultViewState(width, height);
+            setMeasured({width, height});
+            setViewState((prev) => (
+                prev.zoom === next.zoom && prev.longitude === next.longitude && prev.latitude === next.latitude
+                    ? prev
+                    : next
+            ));
+        };
+        fit();
+        const observer = new ResizeObserver(fit);
+        observer.observe(root);
+        return () => observer.disconnect();
+    }, []);
 
     useEffect(() => {
         let cancelled = false;
@@ -287,34 +405,69 @@ function Tectonics() {
         boxShadow: 'var(--shadow-panel)',
     };
 
-    const getTooltip = ({object, layer}) => {
-        if (!object || !layer) return null;
-        if (layer.id === 'boundaries') {
-            const p = object.properties;
+    // Hover tooltips stick after a tap (no pointer leave). Phones use a
+    // click tooltip with an explicit dismiss instead.
+    const getTooltip = (info) => {
+        if (isMobile) return null;
+        const model = tooltipModel(info);
+        if (!model) return null;
+        if (info.layer.id === 'plates') {
             return {
-                html: `<div><b>${STEP_CLASS_LABEL[p.stepClass] || p.stepClass}</b><br/>`
-                    + `Plates: ${p.plateBound}<br/>`
-                    + `Relative velocity: ${p.velocity} mm/yr</div>`,
+                html: `<div><b>${model.title}</b> (${model.lines[0]})</div>`,
                 style: TOOLTIP_STYLE,
             };
         }
-        if (layer.id === 'plates') {
-            return {
-                html: `<div><b>${object.properties.PlateName}</b> (${object.properties.Code})</div>`,
-                style: TOOLTIP_STYLE,
-            };
-        }
-        return null;
+        return {
+            html: `<div><b>${model.title}</b><br/>${model.lines.join('<br/>')}</div>`,
+            style: TOOLTIP_STYLE,
+        };
     };
 
+    const onMapClick = (info) => {
+        if (!isMobile) return;
+        const model = tooltipModel(info);
+        setTapTip((current) => {
+            if (!model) return null;
+            if (current && current.object === info.object && current.layerId === info.layer.id) return null;
+            return {...model, object: info.object, layerId: info.layer.id, x: info.x, y: info.y};
+        });
+    };
+
+    const onViewStateChange = ({viewState: vs, interactionState}) => {
+        const interacting = Boolean(
+            interactionState?.isDragging || interactionState?.isPanning
+            || interactionState?.isZooming || interactionState?.isRotating
+        );
+        if (interacting) {
+            userMovedRef.current = true;
+            setTapTip(null);
+        }
+        setViewState(vs);
+    };
+
+    const onMapError = (event) => {
+        const error = event?.error || event;
+        if (mapboxTokenFailed(import.meta.env.VITE_MAPBOX_TOKEN, error)) setMapError(error);
+    };
+
+    const longitudeSpan = longitudeSpanDegrees(measured.width, viewState.zoom);
+
     return (
-        <div className="mobile-dvh" style={{width: '100vw', height: '100vh'}}>
+        <div
+            ref={rootRef}
+            className="tectonics-page mobile-dvh"
+            data-view-zoom={viewState.zoom}
+            data-longitude-span={longitudeSpan.toFixed(2)}
+            style={{width: '100vw', height: '100vh'}}
+        >
+            <style>{TECTONICS_LAYOUT_CSS}</style>
             <HomeButton />
             <DeckGL
                 views={MAP_VIEW}
                 viewState={viewState}
-                controller={true}
-                onViewStateChange={({viewState: vs}) => setViewState(vs)}
+                controller={MAP_CONTROLLER}
+                onViewStateChange={onViewStateChange}
+                onClick={onMapClick}
                 layers={layers}
                 getTooltip={getTooltip}
             >
@@ -325,6 +478,7 @@ function Tectonics() {
                     projection="mercator"
                     attributionControl={false}
                     onLoad={isolateMapControls}
+                    onError={onMapError}
                 >
                     {/* On phones the Controls button covers the bottom-right
                         corner, so the attribution moves beside the logo. */}
@@ -335,6 +489,72 @@ function Tectonics() {
                     />
                 </Map>
             </DeckGL>
+
+            {tokenFailed && (
+                <div
+                    role="status"
+                    style={{
+                        position: 'absolute',
+                        top: 68,
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        maxWidth: 'calc(100% - 32px)',
+                        backgroundColor: 'var(--color-surface)',
+                        color: 'var(--color-text)',
+                        border: '1px solid var(--color-border-strong)',
+                        boxShadow: 'var(--shadow-panel)',
+                        borderRadius: 'var(--radius-sm)',
+                        padding: '10px 14px',
+                        fontSize: '14px',
+                        lineHeight: 1.4,
+                        textAlign: 'center',
+                        zIndex: 10002,
+                    }}
+                >
+                    {MAPBOX_TOKEN_MESSAGE}
+                </div>
+            )}
+
+            {isMobile && tapTip && (
+                <div
+                    role="tooltip"
+                    style={{
+                        position: 'absolute',
+                        left: tapTip.x ?? 0,
+                        top: tapTip.y ?? 0,
+                        transform: 'translate(-50%, calc(-100% - 12px))',
+                        zIndex: 10002,
+                        pointerEvents: 'auto',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 8,
+                        ...TOOLTIP_STYLE,
+                    }}
+                >
+                    <div>
+                        <b>{tapTip.title}</b>
+                        {tapTip.layerId === 'plates'
+                            ? ` (${tapTip.lines[0]})`
+                            : tapTip.lines.map((line) => <div key={line}>{line}</div>)}
+                    </div>
+                    <button
+                        type="button"
+                        aria-label="Dismiss tooltip"
+                        onClick={() => setTapTip(null)}
+                        style={{
+                            border: 'none',
+                            background: 'none',
+                            color: 'inherit',
+                            fontSize: 20,
+                            lineHeight: 1,
+                            cursor: 'pointer',
+                            padding: '0 2px',
+                        }}
+                    >
+                        ×
+                    </button>
+                </div>
+            )}
 
             {(loading || loadError) && (
                 <div
@@ -360,7 +580,7 @@ function Tectonics() {
 
             {selectedPlate && (
                 isMobile ? (
-                    <div className="mobile-sheet">
+                    <div className="mobile-sheet" style={{right: PLATE_SHEET_RIGHT_INSET}}>
                         <div className="mobile-sheet-header">
                             <button
                                 type="button"
