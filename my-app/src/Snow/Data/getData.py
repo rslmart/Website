@@ -50,14 +50,19 @@ def download_data():
         json.dump(data, json_file)
 
 
-if __name__ == '__main__':
-    download_data()
+def write_pretty():
+    """Re-emit the raw WSDOT response pretty-printed.
 
-    # Re-emit the raw WSDOT response pretty-printed. The heavy per-day
-    # transformation is done at render time in SnowPage.jsx, so this step is
-    # intentionally just a formatting pass.
+    The heavy per-day transformation is done at render time in SnowPage.jsx,
+    so this step is intentionally just a formatting pass.
+    """
     with open(RAW_PATH, 'r') as json_file:
         data = json.load(json_file)
 
     with open(PRETTY_PATH, 'w') as json_file:
         json.dump(data, json_file, indent=4)
+
+
+if __name__ == '__main__':
+    download_data()
+    write_pretty()
