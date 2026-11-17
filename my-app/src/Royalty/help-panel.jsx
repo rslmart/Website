@@ -49,6 +49,7 @@ function HelpPanel({ open, onOpen, onClose, fabPosition = { bottom: 20, left: 20
             <h3 style={sectionTitle}>Clicking &amp; hovering</h3>
             <ul style={list}>
                 <li style={li}><strong>Tap or click a person</strong> for their details. On a phone the sheet uses at most the bottom 45% of the screen, and the person stays in view. Hover a person on a desktop for the same box.</li>
+                <li style={li}><strong>Focus</strong>, in that details box, draws their hourglass: ancestors above, descendants below, spouses beside them. The steppers change the depth, +k adds the hidden relatives it counts, and Back returns to the full tree at the zoom you left.</li>
                 <li style={li}><strong>Click a shared person</strong> to light up the shortest bloodline paths showing exactly how the dynasties link through them; click the background to clear.</li>
                 <li style={li}><strong>Monarchs</strong> are larger ellipses marked with ♔ and their reign years. Zoom in for portraits, full dates and relatives. House names on the lines appear when zoomed in, or when you hover a line, and they stay in the person's details.</li>
             </ul>

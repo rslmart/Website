@@ -10,6 +10,20 @@ import ControlsFab from "../components/ControlsFab";
 import MobileDrawer from "../components/MobileDrawer";
 import { withViewport } from "../hooks/useViewport";
 import { convertToChart, mergeMonarchies, DEFAULT_BRIDGE_OPTIONS, DEFAULT_VISIBLE_RANKS } from './RoyalTreeUtils';
+import {
+  DEFAULT_FOCUS_DOWN,
+  DEFAULT_FOCUS_UP,
+  applyFocusFields,
+  buildHourglass,
+  fitHourglassViewport,
+  focusNodeStyle,
+  layoutHourglass,
+  personPool,
+  placeMarriageNodes,
+  rememberView,
+  restoreView,
+  usableFocusViewport,
+} from './focusHourglass';
 import { PERSON_SIZE_STYLE, MARRIAGE_SIZE_STYLE, MONARCH_SIZE_STYLE, toLayoutElements, packComponents, positionsById, assignLayoutBands, bandWidths, visibleSuccession } from './royalTreeLayout';
 import { requestLayout, terminateLayoutWorker } from './layoutClient';
 import {
@@ -130,6 +144,11 @@ class RoyalTree extends Component {
     // Current zoom tier. applyZoomTier is the only place that changes it.
     this.zoomTierName = 'overview';
     this.tierSwitches = [];
+    // Zoom and pan to restore when Back leaves focus. The focused person
+    // itself lives in state.focusedPersonId, not in the URL.
+    this.focusBackStack = [];
+    this.treeSnapshot = null;
+    this.badgeLayerRef = React.createRef();
 
     this.state = {
       selectedMonarchs: [DEFAULT_MONARCHY],
@@ -153,6 +172,13 @@ class RoyalTree extends Component {
       rootId: '',
       selectedNode: EMPTY_NODE,
       showNodeToolTip: false,
+      tooltipPinned: false,
+      focusedPersonId: null,
+      focusUp: DEFAULT_FOCUS_UP,
+      focusDown: DEFAULT_FOCUS_DOWN,
+      focusExpandedUp: {},
+      focusExpandedDown: {},
+      focusBadges: [],
       controlsDrawerOpen: false,
       helpOpen: (() => {
         try {
@@ -172,9 +198,12 @@ class RoyalTree extends Component {
     cyInstance.on('mouseover', 'node', (evt) => {
       const node = evt.target;
       if (node.data('type') === 'marriage') return;
+      // A click pins the details so the Focus button can be reached. Hover
+      // still previews, and does not replace a pinned person.
+      if (this.state.tooltipPinned) return;
       this.setState({
         showNodeToolTip: true,
-        tooltipData: node.data()
+        tooltipData: node.data(),
       });
     });
 
@@ -182,15 +211,16 @@ class RoyalTree extends Component {
       // A tap on a phone also emits mouseout as the finger lifts. Keep the
       // sheet up; desktop hover still dismisses when the pointer leaves.
       if (this.props.viewport && this.props.viewport.isMobile) return;
+      if (this.state.tooltipPinned) return;
       this.setState({showNodeToolTip: false});
     });
 
-    // Tap (and click) opens the person's details. A shared person also
-    // highlights the bloodline, which is what a tap did before.
+    // Tap (and click) opens the person's details. It does not focus them.
+    // A shared person also highlights the bloodline, which is what a tap did before.
     cyInstance.on('tap', 'node', (evt) => {
       const node = evt.target;
       if (node.data('type') !== 'marriage') {
-        this.setState({ showNodeToolTip: true, tooltipData: node.data() });
+        this.setState({ showNodeToolTip: true, tooltipData: node.data(), tooltipPinned: true });
         this.panNodeAboveSheet(node);
       }
       this.highlightSharedLineage(node);
@@ -209,13 +239,13 @@ class RoyalTree extends Component {
     // Tapping the background clears zoom/pan tooltip and any lineage highlight.
     cyInstance.on('tapstart', (evt) => {
       if (evt.target === cyInstance) {
-        this.setState({ showNodeToolTip: false });
+        this.setState({ showNodeToolTip: false, tooltipPinned: false });
         this.clearLineage();
       }
     });
 
     cyInstance.on('drag', 'node', () => {
-      this.setState({ showNodeToolTip: false });
+      this.setState({ showNodeToolTip: false, tooltipPinned: false });
     });
   };
 
@@ -454,6 +484,7 @@ class RoyalTree extends Component {
             'z-index': 4,
           }
         },
+        focusNodeStyle(),
       ],
       textureOnViewport: false,
       hideEdgesOnViewport: false,
@@ -592,6 +623,7 @@ class RoyalTree extends Component {
     const tier = zoomTier(cy.zoom());
     if (tier === this.zoomTierName && this.zoomTierReady) {
       if (tier !== 'overview') this.scheduleViewportSync();
+      this.scheduleBadgeSync();
       return;
     }
     const from = this.zoomTierName;
@@ -600,6 +632,7 @@ class RoyalTree extends Component {
     this.syncVisibleClasses();
     const ms = performance.now() - started;
     this.zoomTierReady = true;
+    this.scheduleBadgeSync();
     if (from !== tier) {
       this.tierSwitches.push({ from, to: tier, ms: Math.round(ms * 10) / 10 });
       try {
@@ -665,6 +698,154 @@ class RoyalTree extends Component {
 
   onPan = () => {
     this.scheduleViewportSync();
+    this.scheduleBadgeSync();
+  };
+
+  scheduleBadgeSync = () => {
+    if (!this.state.focusedPersonId || this.badgeSync) return;
+    this.badgeSync = requestAnimationFrame(() => {
+      this.badgeSync = 0;
+      this.positionFocusBadges();
+    });
+  };
+
+  positionFocusBadges = () => {
+    const root = this.badgeLayerRef.current;
+    const cy = this.cy;
+    if (!root || !cy) return;
+    root.querySelectorAll('[data-badge-id]').forEach((button) => {
+      const id = button.getAttribute('data-badge-id');
+      const node = cy.getElementById(id);
+      if (!node || node.empty()) {
+        button.style.display = 'none';
+        return;
+      }
+      const point = node.renderedPosition();
+      const stack = button.getAttribute('data-direction') === 'down' ? 28 : 0;
+      button.style.display = '';
+      button.style.left = `${point.x}px`;
+      button.style.top = `${point.y - node.renderedHeight() / 2 - 6 - stack}px`;
+    });
+  };
+
+  handleFocus = (personId) => {
+    if (!personId || !this.cy || this.applying) return;
+    if (!this.state.focusedPersonId) {
+      const view = { zoom: this.cy.zoom(), pan: { ...this.cy.pan() } };
+      this.treeSnapshot = { elements: this.cy.elements().jsons(), ...view };
+      this.focusBackStack = rememberView([], view);
+    }
+    this.setState({
+      focusedPersonId: personId,
+      focusUp: DEFAULT_FOCUS_UP,
+      focusDown: DEFAULT_FOCUS_DOWN,
+      focusExpandedUp: {},
+      focusExpandedDown: {},
+      showNodeToolTip: false,
+      tooltipPinned: false,
+    }, () => this.drawFocus());
+  };
+
+  stepFocus = (dir, delta) => {
+    const key = dir === 'up' ? 'focusUp' : 'focusDown';
+    const max = dir === 'up' ? 8 : 6;
+    const next = Math.max(0, Math.min(max, this.state[key] + delta));
+    if (next === this.state[key]) return;
+    this.setState({
+      [key]: next,
+      focusExpandedUp: {},
+      focusExpandedDown: {},
+    }, () => this.drawFocus());
+  };
+
+  expandFocus = (badge) => {
+    const key = badge.direction === 'up' ? 'focusExpandedUp' : 'focusExpandedDown';
+    if (this.state[key][badge.id]) return;
+    this.setState({
+      [key]: { ...this.state[key], [badge.id]: true },
+    }, () => this.drawFocus());
+  };
+
+  backFocus = () => {
+    const restored = restoreView(this.focusBackStack);
+    this.focusBackStack = restored.stack;
+    const snap = this.treeSnapshot;
+    this.treeSnapshot = null;
+    const cy = this.cy;
+    this.setState({
+      focusedPersonId: null,
+      focusBadges: [],
+      focusExpandedUp: {},
+      focusExpandedDown: {},
+    });
+    if (!cy || !snap) return;
+    cy.elements().remove();
+    if (snap.elements?.length) cy.add(snap.elements);
+    const zoom = restored.view ? restored.view.zoom : snap.zoom;
+    const pan = restored.view ? restored.view.pan : snap.pan;
+    cy.viewport({ zoom, pan });
+    this.zoomTierReady = false;
+    this.applyZoomTier();
+  };
+
+  drawFocus = () => {
+    const cy = this.cy;
+    const focusId = this.state.focusedPersonId;
+    if (!cy || !focusId) return;
+    const pool = personPool(this.loadedPayloads);
+    const model = buildHourglass(pool, focusId, {
+      up: this.state.focusUp,
+      down: this.state.focusDown,
+      expandedUp: this.state.focusExpandedUp,
+      expandedDown: this.state.focusExpandedDown,
+    });
+    const mobile = !!(this.props.viewport && this.props.viewport.isMobile);
+    const usable = usableFocusViewport(cy.width() || 390, cy.height() || 844, { mobile });
+    const layout = layoutHourglass(pool, model, usable);
+    const data = {};
+    model.people.forEach((id) => { data[id] = pool[id]; });
+    const chart = convertToChart(
+      data,
+      this.state.highlightedNodes,
+      this.state.sharedNodes,
+      this.state.nodeMonarchyIndex || {},
+      [],
+      false,
+      this.state.memberFlag,
+    );
+    placeMarriageNodes(layout.positions, chart.nodes, chart.edges);
+    const elements = this.convertToCytoscapeFormat(chart);
+    const placed = [];
+    elements.forEach((el) => {
+      if (el.group !== 'nodes') {
+        placed.push(el);
+        return;
+      }
+      const point = layout.positions.get(el.data.id);
+      if (!point) return;
+      el.position = { x: point.x, y: point.y };
+      if (el.data.type !== 'marriage') {
+        el.classes = 'focus-on';
+        applyFocusFields(el.data, pool[el.data.id] || el.data, layout, !!el.data.monarch);
+      }
+      placed.push(el);
+    });
+    cy.elements().remove();
+    cy.add(placed);
+    cy.layout({ name: 'preset', fit: false, animate: false }).run();
+    const bounds = cy.elements().boundingBox({ includeLabels: true });
+    const fit = fitHourglassViewport(bounds, usable);
+    cy.viewport(fit);
+    this.zoomTierReady = false;
+    this.applyZoomTier();
+    this.setState({
+      focusBadges: model.badges.map((badge) => ({
+        id: badge.id,
+        direction: badge.direction,
+        count: badge.count,
+        label: pool[badge.id]?.label || badge.id,
+      })),
+    }, () => this.positionFocusBadges());
   };
 
   // Keep the selected person in the band above the phone sheet.
@@ -684,7 +865,7 @@ class RoyalTree extends Component {
     if (event.key === 'Escape') {
       if (this.state.helpOpen || this.state.capWarning) return;
       if (this.state.showNodeToolTip) {
-        this.setState({ showNodeToolTip: false });
+        this.setState({ showNodeToolTip: false, tooltipPinned: false });
         event.preventDefault();
       }
       return;
@@ -813,7 +994,7 @@ class RoyalTree extends Component {
     );
 
     // Surface the person's details so the zoom target is confirmed.
-    this.setState({ showNodeToolTip: true, tooltipData: node.data() });
+    this.setState({ showNodeToolTip: true, tooltipPinned: true, tooltipData: node.data() });
   };
 
   convertToCytoscapeFormat = (chartData) => {
@@ -891,6 +1072,10 @@ class RoyalTree extends Component {
     const zoom = cy.zoom();
     const pan = { ...cy.pan() };
     cy.resize();
+    if (this.state.focusedPersonId) {
+      this.drawFocus();
+      return;
+    }
     cy.viewport({ zoom, pan });
     if (this.state.showNodeToolTip && this.state.tooltipData?.id) {
       const node = cy.getElementById(this.state.tooltipData.id);
@@ -1007,6 +1192,8 @@ class RoyalTree extends Component {
     // A newer selection or knob change superseded this one.
     if (token !== this.renderToken || this.unmounted) return;
 
+    this.treeSnapshot = null;
+    this.focusBackStack = [];
     const config = { payloads, selected, bridgeOptions, rankOptions };
     this.setState(
         {
@@ -1025,6 +1212,10 @@ class RoyalTree extends Component {
           sharedList: merged.sharedList,
           rootId: merged.highlightedNodes[0] || '',
           error: null,
+          focusedPersonId: null,
+          focusBadges: [],
+          focusExpandedUp: {},
+          focusExpandedDown: {},
         },
         () => this.applyGraph(elements, successionElements, layout, token, config)
     );
@@ -1133,6 +1324,34 @@ class RoyalTree extends Component {
               className="cytoscape-container"
           >
           </div>
+          <div className="royal-tree-focus-layer" ref={this.badgeLayerRef}>
+            {this.state.focusedPersonId && (
+              <div className="royal-tree-focus-bar" role="group" aria-label="Focus depth">
+                <span>Up</span>
+                <button type="button" aria-label="Fewer ancestor generations" onClick={() => this.stepFocus('up', -1)} disabled={this.state.focusUp <= 0}>−</button>
+                <span>{this.state.focusUp}</span>
+                <button type="button" aria-label="More ancestor generations" onClick={() => this.stepFocus('up', 1)} disabled={this.state.focusUp >= 8}>+</button>
+                <span>Down</span>
+                <button type="button" aria-label="Fewer descendant generations" onClick={() => this.stepFocus('down', -1)} disabled={this.state.focusDown <= 0}>−</button>
+                <span>{this.state.focusDown}</span>
+                <button type="button" aria-label="More descendant generations" onClick={() => this.stepFocus('down', 1)} disabled={this.state.focusDown >= 6}>+</button>
+                <button type="button" onClick={this.backFocus}>Back</button>
+              </div>
+            )}
+            {this.state.focusBadges.map((badge) => (
+              <button
+                key={`${badge.id}-${badge.direction}`}
+                type="button"
+                className="royal-tree-focus-badge"
+                data-badge-id={badge.id}
+                data-direction={badge.direction}
+                aria-label={`Show ${badge.count} hidden ${badge.direction === 'up' ? 'ancestors' : 'descendants'} of ${badge.label}`}
+                onClick={() => this.expandFocus(badge)}
+              >
+                +{badge.count}
+              </button>
+            ))}
+          </div>
           <div className="royal-tree-title">{this.treeTitle()}</div>
           <div className="royal-tree-zoom" role="group" aria-label="Zoom">
             <button type="button" onClick={() => this.zoomBy(ZOOM_STEP)} aria-label="Zoom in" title="Zoom in (+)">+</button>
@@ -1169,18 +1388,19 @@ class RoyalTree extends Component {
                       <button
                           type="button"
                           className="mobile-sheet-close"
-                          onClick={() => this.setState({ showNodeToolTip: false })}
+                          onClick={() => this.setState({ showNodeToolTip: false, tooltipPinned: false })}
                           aria-label="Close"
                       >
                         &times;
                       </button>
                     </div>
-                    <NodeToolTip data={this.state.tooltipData} />
+                    <NodeToolTip data={this.state.tooltipData} onFocus={this.handleFocus} />
                   </div>
               ) : (
                   <div className="node-tooltips">
                     <NodeToolTip
                       data={this.state.tooltipData}
+                      onFocus={this.handleFocus}
                     />
                   </div>
               )
