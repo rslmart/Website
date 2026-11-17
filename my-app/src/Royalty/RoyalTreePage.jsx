@@ -1,6 +1,5 @@
 import React, { Component } from 'react';
 import cytoscape from 'cytoscape';
-import dagre from 'cytoscape-dagre';
 import FilterPanel from "./filter-panel";
 import SearchPanel from "./SearchPanel";
 import NodeToolTip from "./NodeToolTip";
@@ -10,14 +9,53 @@ import ControlsFab from "../components/ControlsFab";
 import MobileDrawer from "../components/MobileDrawer";
 import { withViewport } from "../hooks/useViewport";
 import { convertToChart, mergeMonarchies, DEFAULT_BRIDGE_OPTIONS, DEFAULT_VISIBLE_RANKS } from './RoyalTreeUtils';
+import { PERSON_SIZE_STYLE, MARRIAGE_SIZE_STYLE, toLayoutElements, packComponents, positionsById } from './royalTreeLayout';
+import { requestLayout, terminateLayoutWorker } from './layoutClient';
 import './RoyalTreeStyle.css';
-
-cytoscape.use(dagre);
 
 // Constants
 const EMPTY_NODE = { id: '' };
 const DEFAULT_MONARCHY = "England";
 const HELP_SEEN_KEY = "royaltyHelpSeen";
+// Views with more people than this ask before laying out: the layout takes a
+// few seconds and panning gets heavier. 9 monarchies at the default look-back
+// (2 generations) are 1,627 people; at 5 generations 2,709.
+export const NODE_CAP = 2000;
+// Performance marks (royaltree:<phase>) for profiling in DevTools/Playwright.
+let lastMark = null;
+function mark(phase) {
+  if (typeof performance === 'undefined' || !performance.mark) return;
+  const now = performance.now();
+  if (lastMark) performance.measure('royaltree:' + lastMark.phase, { start: lastMark.t, end: now });
+  lastMark = phase ? { phase, t: now } : null;
+}
+// Run fn over consecutive slices of items (an array or Cytoscape collection),
+// yielding to the event loop whenever a task has run for SLICE_BUDGET_MS.
+// Renderer notifications are off inside each slice, so nothing is drawn until
+// the caller notifies. Resolves false if stale() turned true (superseded).
+const SLICE_SIZE = 150;
+const SLICE_BUDGET_MS = 40;
+const nextTask = () => new Promise(resolve => setTimeout(resolve, 0));
+async function inSlices(items, fn, cy, stale) {
+  let taskStart = performance.now();
+  for (let i = 0; i < items.length; i += SLICE_SIZE) {
+    const slice = items.slice(i, i + SLICE_SIZE);
+    cy.notifications(false);
+    try {
+      fn(slice);
+    } finally {
+      cy.notifications(true);
+    }
+    if (performance.now() - taskStart > SLICE_BUDGET_MS) {
+      await nextTask();
+      if (stale()) return false;
+      taskStart = performance.now();
+    }
+  }
+  return true;
+}
+
+const SUCCESSION_SELECTOR = 'edge[relation = "succession"]';
 
 // Per-monarchy data is baked into gzipped JSON under public/royalty/ by
 // src/Royalty/Data/SplitDataForFrontend.py and fetched on demand, so the
@@ -55,6 +93,14 @@ class RoyalTree extends Component {
     // without re-downloading anything.
     this.loadedPayloads = [];
     this.loadedSelected = [];
+    // What the graph currently shows, so a declined node-cap warning can put
+    // the controls back. capAccepted: largest view the user agreed to show.
+    this.rendered = null;
+    this.capAccepted = 0;
+    this.renderToken = 0;
+    // Succession overlay edges for the current view, added or removed on toggle
+    // without touching the layout.
+    this.successionElements = [];
 
     this.state = {
       selectedMonarchs: [DEFAULT_MONARCHY],
@@ -87,6 +133,8 @@ class RoyalTree extends Component {
         }
       })(),
       loading: true,
+      layingOut: 0,
+      capWarning: null,
       error: null,
     };
   }
@@ -185,13 +233,18 @@ class RoyalTree extends Component {
         {
           selector: 'node',
           style: {
+            // Size properties are shared with the layout worker (dagre lays out
+            // each node's outer box), so keep them in royalTreeLayout.js.
+            ...PERSON_SIZE_STYLE,
             'shape': 'rectangle',
-            'width': 80,
-            'height': 100,
             'label': 'data(label)',
             'text-valign': 'bottom',
             'text-wrap': 'wrap',
             'text-max-width': 120,
+            // Skip labels smaller than ~6px on screen (unreadable anyway): at
+            // overview zoom they are thousands of sub-pixel smudges that cost
+            // most of a frame on large views.
+            'min-zoomed-font-size': 6,
             'text-margin-y': 5,
             'background-color': 'data(color)',
             'border-color': 'data(borderColor)',
@@ -211,7 +264,6 @@ class RoyalTree extends Component {
             // is tainted, but we never read its pixels back).
             'background-image-crossorigin': 'null',
             'opacity': 'data(opacity)',
-            'padding': '10px'
           }
         },
         {
@@ -226,7 +278,8 @@ class RoyalTree extends Component {
             'text-rotation': 'autorotate',
             'text-max-width': '5',
             'text-wrap': 'wrap',
-            'font-size': '14'
+            'font-size': '14',
+            'min-zoomed-font-size': 6,
           }
         },
         {
@@ -244,12 +297,10 @@ class RoyalTree extends Component {
         {
           selector: 'node[type = "marriage"]',
           style: {
-            'width': 5,
-            'height': 5,
+            ...MARRIAGE_SIZE_STYLE,
             'shape': 'circle',
             'background-color': '#888',
             'border-color': '#666',
-            'border-width': 2,
             'label': ''  // Ensure no label
           }
         },
@@ -308,102 +359,61 @@ class RoyalTree extends Component {
 
     this.bindGraphEvents(cy);
 
-    // Force initial resize
-    setTimeout(() => {
-      cy.resize();
-      cy.fit();
-    }, 0);
-
     return cy;
   };
 
-  updateGraph = (data, highlightedNodes, sharedNodes = new Set(), nodeMonarchyIndex = {}) => {
+  // Put a laid-out view on the canvas: replace the elements, place them from
+  // the layout result, pack components and fit. Succession edges go on top
+  // last, only when shown.
+  //
+  // Cytoscape computes style, label sizes and edge geometry lazily, which for
+  // a few thousand elements is most of a second of main-thread work. It is
+  // forced here in time slices (with renderer notifications off, so no partial
+  // frames are drawn) so no single task blocks input for long.
+  applyGraph = async (elements, successionElements, layout, token) => {
+    if (!this.cy) {
+      this.cy = this.initializeGraph(this.containerRef.current);
+    }
+    const cy = this.cy;
+    this.successionElements = successionElements;
+    const stale = () => token !== this.renderToken || this.unmounted;
+    this.applying = true;
     try {
-      const successionEdges = this.state.showSuccession ? this.state.successionEdges : [];
-      const convertedData = this.convertToCytoscapeFormat(
-          convertToChart(
-              data, highlightedNodes, sharedNodes, nodeMonarchyIndex,
-              successionEdges, this.state.showSuccession, this.state.memberFlag,
-          )
-      );
+      cy.elements().remove();
+      if (elements.length === 0) return; // Blank selection: nothing to fit.
 
-      if (!this.cy) {
-        this.cy = this.initializeGraph(this.containerRef.current);
+      const positions = positionsById(layout);
+      elements.forEach(el => {
+        if (el.group === 'nodes') el.position = positions.get(el.data.id);
+      });
+
+      mark('cy-add');
+      if (!(await inSlices(elements, slice => cy.add(slice).boundingBox(), cy, stale))) return;
+      mark('pack');
+      packComponents(cy, layout);
+      // Packing moved everything: recompute label and edge geometry, again in slices.
+      mark('geometry');
+      if (!(await inSlices(cy.elements(), slice => slice.boundingBox(), cy, stale))) return;
+      mark('fit');
+      if (this.state.showSuccession) cy.add(successionElements);
+      cy.notify('add', cy.elements()); // renderer: refresh its element list and draw
+      if (this.firstFitDone) {
+        cy.fit(undefined, 40);
+      } else {
+        // The first view has always been sized to the container and fitted
+        // without padding (formerly a setTimeout in initializeGraph).
+        this.firstFitDone = true;
+        cy.resize();
+        cy.fit();
       }
-
-      this.cy.elements().remove();
-      if (convertedData.length === 0) {
-        // Blank selection: nothing to lay out or fit.
-        return;
-      }
-      this.cy.add(convertedData);
-      this.layoutByComponents();
-
+      mark(null);
     } catch (error) {
       console.error('Graph rendering error:', error);
-    }
-  };
-
-  // Parse a Wikidata date string ("+1650-...", "-0069-...") to a signed year.
-  parseYear = (dateStr) => {
-    if (!dateStr) return null;
-    const digits = String(dateStr).replace(/^[+-]/, '').split('-')[0];
-    const year = parseInt(digits, 10);
-    if (Number.isNaN(year)) return null;
-    return String(dateStr).startsWith('-') ? -year : year;
-  };
-
-  // dagre ranks the y-axis by generation depth, not time, and interleaves
-  // disconnected components so unrelated dynasties overlap. Instead we lay out
-  // each connected component on its own, tile them left-to-right so they can't
-  // collide, and shift each onto a shared birth-year axis so people from
-  // different eras don't end up sharing a row.
-  layoutByComponents = () => {
-    const cy = this.cy;
-    // Lay out on the bloodline graph only. Succession edges connect monarchs
-    // across dynasties/eras and would otherwise merge unrelated components and
-    // distort dagre's generational ranking; they just ride on top afterward.
-    const layoutEles = cy.elements().filter(el => el.isNode() || el.data('relation') !== 'succession');
-    const components = layoutEles.components();
-    if (!components.length) return;
-
-    // ~ dagre's rank spacing (200px/generation) over a ~25yr generation.
-    const PX_PER_YEAR = 8;
-    const COMPONENT_GAP = 140;
-
-    try {
-      const infos = components.map(comp => {
-        comp.layout({ name: 'dagre', nodeSep: 50, rankSep: 100, animate: false }).run();
-        const years = comp.nodes()
-            .map(n => this.parseYear(n.data('date of birth')))
-            .filter(y => y != null)
-            .sort((a, b) => a - b);
-        const medianYear = years.length ? years[Math.floor(years.length / 2)] : null;
-        return { comp, bb: comp.boundingBox(), medianYear };
-      });
-
-      const knownYears = infos.map(i => i.medianYear).filter(y => y != null);
-      const refYear = knownYears.length ? Math.min(...knownYears) : 0;
-
-      // Read left-to-right in chronological order, like a timeline.
-      infos.sort((a, b) => (a.medianYear ?? Infinity) - (b.medianYear ?? Infinity));
-
-      let xOffset = 0;
-      infos.forEach(({ comp, bb, medianYear }) => {
-        const dx = xOffset - bb.x1;
-        const dy = medianYear != null
-            ? (medianYear - refYear) * PX_PER_YEAR - (bb.y1 + bb.y2) / 2
-            : -bb.y1;
-        comp.shift({ x: dx, y: dy });
-        xOffset += bb.w + COMPONENT_GAP;
-      });
-
-      cy.fit(undefined, 40);
-    } catch (error) {
-      // Fall back to a single whole-graph layout if component packing fails.
-      console.error('Component layout failed, falling back to dagre:', error);
-      cy.layout({ name: 'dagre', nodeSep: 50, rankSep: 100, animate: false }).run();
-      cy.fit(undefined, 40);
+    } finally {
+      if (!stale()) {
+        this.applying = false;
+        this.setState({ layingOut: 0 });
+      }
     }
   };
 
@@ -479,7 +489,9 @@ class RoyalTree extends Component {
   }
 
   componentWillUnmount() {
+    this.unmounted = true;
     window.removeEventListener('resize', this.handleResize);
+    terminateLayoutWorker();
     if (this.cy) {
       this.cy.destroy();
     }
@@ -520,10 +532,14 @@ class RoyalTree extends Component {
             rootId: '',
             showNodeToolTip: false,
             loading: false,
+            layingOut: 0,
+            capWarning: null,
             error: null,
           },
-          () => this.updateGraph({}, [])
+          () => this.applyGraph([], [], { components: [] }, this.renderToken)
       );
+      this.renderToken++; // drop any layout still in flight
+      this.rendered = { payloads: [], selected: [], bridgeOptions: this.state.bridgeOptions, rankOptions: this.state.rankOptions };
       return;
     }
 
@@ -550,42 +566,96 @@ class RoyalTree extends Component {
   // keyed by Wikidata ID, so shared royals collapse to one node; multi-monarchy
   // views also splice in the chains connecting dynasties up to their most-recent
   // common ancestors (see mergeMonarchies).
-  renderMerged = (payloads, selected, bridgeOptions, rankOptions) => {
-    const {
-      data,
-      highlightedNodes,
-      sharedNodes,
-      nodeMonarchyIndex,
-      memberCounts,
-      sharedCount,
-      monarchOrder,
-      successionEdges,
-      membership,
-      memberFlag,
-      peopleList,
-      sharedList,
-    } = mergeMonarchies(payloads, selected, bridgeOptions, rankOptions);
+  renderMerged = async (payloads, selected, bridgeOptions, rankOptions, force = false) => {
+    mark('merge');
+    const merged = mergeMonarchies(payloads, selected, bridgeOptions, rankOptions);
+    const peopleCount = Object.keys(merged.data).length;
 
+    // Large views ask first (see NODE_CAP). Anything already in flight
+    // finishes, and the current graph stays up behind the dialog.
+    if (peopleCount > NODE_CAP && peopleCount > this.capAccepted && !force) {
+      this.setState({
+        loading: false,
+        layingOut: 0,
+        capWarning: { count: peopleCount, payloads, selected, bridgeOptions, rankOptions },
+      });
+      return;
+    }
+    if (force) this.capAccepted = Math.max(this.capAccepted, peopleCount);
+    const token = ++this.renderToken;
+    mark('convert');
+
+    const chart = convertToChart(
+        merged.data, merged.highlightedNodes, merged.sharedNodes, merged.nodeMonarchyIndex,
+        merged.successionEdges, true, merged.memberFlag,
+    );
+    const all = this.convertToCytoscapeFormat(chart);
+    const elements = all.filter(el => el.data.relation !== 'succession');
+    const successionElements = all.filter(el => el.data.relation === 'succession');
+    mark('setState-layingOut');
+
+    // Lay out off the main thread; the previous view stays interactive meanwhile.
+    this.setState({ loading: false, layingOut: peopleCount, capWarning: null });
+    let layout;
+    try {
+      const layoutInput = toLayoutElements(elements);
+      mark('worker');
+      layout = await requestLayout(layoutInput);
+      mark('setState-merged');
+    } catch (error) {
+      if (token !== this.renderToken || this.unmounted) return;
+      console.error('Layout failed:', error);
+      this.setState({ layingOut: 0, error: error.message });
+      return;
+    }
+    // A newer selection or knob change superseded this one.
+    if (token !== this.renderToken || this.unmounted) return;
+
+    this.rendered = { payloads, selected, bridgeOptions, rankOptions };
     this.setState(
         {
-          data,
-          highlightedNodes,
-          sharedNodes,
-          nodeMonarchyIndex,
-          memberCounts,
-          sharedCount,
-          monarchOrder,
-          successionEdges,
-          membership,
-          memberFlag,
+          data: merged.data,
+          highlightedNodes: merged.highlightedNodes,
+          sharedNodes: merged.sharedNodes,
+          nodeMonarchyIndex: merged.nodeMonarchyIndex,
+          memberCounts: merged.memberCounts,
+          sharedCount: merged.sharedCount,
+          monarchOrder: merged.monarchOrder,
+          successionEdges: merged.successionEdges,
+          membership: merged.membership,
+          memberFlag: merged.memberFlag,
           sharedInfo: null,
-          peopleList,
-          sharedList,
-          rootId: highlightedNodes[0] || '',
-          loading: false,
+          peopleList: merged.peopleList,
+          sharedList: merged.sharedList,
+          rootId: merged.highlightedNodes[0] || '',
+          error: null,
         },
-        () => this.updateGraph(data, highlightedNodes, sharedNodes, nodeMonarchyIndex)
+        () => this.applyGraph(elements, successionElements, layout, token)
     );
+  };
+
+  // Node-cap warning: show the large view anyway, or put the controls back to
+  // what the graph still shows.
+  acceptCapWarning = () => {
+    const pending = this.state.capWarning;
+    if (!pending) return;
+    this.renderMerged(pending.payloads, pending.selected, pending.bridgeOptions, pending.rankOptions, true);
+  };
+
+  declineCapWarning = () => {
+    const rendered = this.rendered;
+    if (!rendered) {
+      this.setState({ capWarning: null });
+      return;
+    }
+    this.loadedPayloads = rendered.payloads;
+    this.loadedSelected = rendered.selected;
+    this.setState({
+      capWarning: null,
+      selectedMonarchs: rendered.selected,
+      bridgeOptions: rendered.bridgeOptions,
+      rankOptions: rendered.rankOptions,
+    });
   };
 
   // Re-run the merge with new bridging knobs against the already-fetched
@@ -606,15 +676,21 @@ class RoyalTree extends Component {
     }
   };
 
+  // Succession edges don't take part in layout, so toggling them just adds or
+  // removes the overlay; positions and the viewport stay put.
   handleToggleSuccession = (showSuccession) => {
-    this.setState({ showSuccession }, () => {
-      this.updateGraph(
-          this.state.data,
-          this.state.highlightedNodes,
-          this.state.sharedNodes,
-          this.state.nodeMonarchyIndex,
-      );
-    });
+    this.setState({ showSuccession });
+    const cy = this.cy;
+    // Mid-apply, applyGraph adds the overlay at the end if it's still wanted.
+    if (!cy || this.applying) return;
+    if (showSuccession) {
+      if (cy.$(SUCCESSION_SELECTOR).empty() && this.successionElements.length) {
+        const added = cy.add(this.successionElements);
+        if (this.state.sharedInfo) added.addClass('faded');
+      }
+    } else {
+      cy.remove(SUCCESSION_SELECTOR);
+    }
   };
 
   handleFilterChange = (name, value) => {
@@ -645,6 +721,36 @@ class RoyalTree extends Component {
 
           {this.state.loading && (
               <div className="royal-tree-status">Loading…</div>
+          )}
+          {!this.state.loading && this.state.layingOut > 0 && (
+              <div className="royal-tree-status" role="status">
+                Laying out {this.state.layingOut.toLocaleString()} people…
+              </div>
+          )}
+          {this.state.capWarning && (
+              <div
+                  className="royal-tree-cap-warning"
+                  role="alertdialog"
+                  aria-labelledby="royal-tree-cap-title"
+                  aria-describedby="royal-tree-cap-body"
+              >
+                <strong id="royal-tree-cap-title">
+                  Show {this.state.capWarning.count.toLocaleString()} people?
+                </strong>
+                <p id="royal-tree-cap-body">
+                  This view is larger than {NODE_CAP.toLocaleString()} people. It can take a few
+                  seconds to lay out and pans more slowly. Fewer monarchies or a shorter
+                  look-back keeps it light.
+                </p>
+                <div className="royal-tree-cap-actions">
+                  <button type="button" className="royal-tree-cap-cancel" onClick={this.declineCapWarning}>
+                    Cancel
+                  </button>
+                  <button type="button" className="royal-tree-cap-continue" onClick={this.acceptCapWarning} autoFocus>
+                    Show all
+                  </button>
+                </div>
+              </div>
           )}
           {this.state.error && !this.state.loading && (
               <div className="royal-tree-status royal-tree-error">

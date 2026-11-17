@@ -73,6 +73,65 @@
     color: var(--color-danger);
 }
 
+/* Node-cap warning: asks before laying out a very large view. */
+.royal-tree-cap-warning {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1003;
+    width: min(380px, calc(100vw - 32px));
+    box-sizing: border-box;
+    background: var(--color-surface);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-modal);
+    padding: 16px 18px;
+    font-size: 14px;
+}
+
+.royal-tree-cap-warning strong {
+    display: block;
+    font-size: 16px;
+}
+
+.royal-tree-cap-warning p {
+    margin: 8px 0 14px;
+    color: var(--color-text-muted);
+    line-height: 1.4;
+}
+
+.royal-tree-cap-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.royal-tree-cap-actions button {
+    min-height: 36px;
+    padding: 6px 14px;
+    border-radius: var(--radius-sm);
+    font: inherit;
+    cursor: pointer;
+}
+
+.royal-tree-cap-cancel {
+    background: transparent;
+    color: var(--color-text);
+    border: 1px solid var(--color-border-strong);
+}
+
+.royal-tree-cap-continue {
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+    border: 1px solid var(--color-primary);
+}
+
+.royal-tree-cap-continue:hover {
+    background: var(--color-primary-hover);
+}
+
 .royal-tree-attribution {
     position: absolute;
     right: 12px;
