@@ -8,8 +8,13 @@ import {join, resolve} from "node:path";
 import {fileURLToPath, pathToFileURL} from "node:url";
 import {gunzipSync} from "node:zlib";
 import {afterAll, beforeAll, describe, expect, it} from "vitest";
+import {fromColumnar, longitudeSpans, toColumnar} from "../boundaries.mjs";
 import {
+    DATA_THROUGH,
+    PB2002_COMMIT,
+    SOURCES,
     buildBoundaries,
+    buildMeta,
     buildOrogens,
     buildPlates,
     buildVelocity,
@@ -23,7 +28,11 @@ const appRoot = resolve(dataDir, "../../..");
 const publishedDir = resolve(appRoot, "public/tectonics");
 const fixture = JSON.parse(readFileSync(fixturePath, "utf8"));
 
-const SOURCE_NAMES = ["PB2002_plates.json", "PB2002_steps.json", "PB2002_orogens.json"];
+const SOURCE_NAMES = ["PB2002_plates.json", "PB2002_steps.csv", "PB2002_orogens.json"];
+
+function spansOf(boundaries) {
+    return boundaries.features.flatMap((feature) => longitudeSpans(feature));
+}
 
 function publishedFingerprint() {
     return readdirSync(publishedDir)
@@ -114,24 +123,55 @@ describe("build output", () => {
         expect(boundaries.features[0]).toEqual({
             type: "Feature",
             properties: {
+                seq: 1,
                 stepClass: "SUB",
                 plateBound: "PA-NA",
                 velocity: 25.457,
                 azimuth: 12.345,
+                divergence: 1.25,
+                rightLateral: -3.5,
             },
             geometry: {
                 type: "LineString",
                 coordinates: [[10.112, -20.222], [10.555, -20.333]],
             },
         });
+        const crossing = boundaries.features[3];
+        expect(crossing.properties.seq).toBe(4);
+        expect(crossing.geometry).toEqual({
+            type: "MultiLineString",
+            coordinates: [
+                [[179.6, 5.25], [180, 5.45]],
+                [[-180, 5.45], [-179.9, 5.5]],
+            ],
+        });
         for (const feature of boundaries.features) {
             expect(feature.type).toBe("Feature");
             expect(Object.keys(feature.properties)).toEqual([
-                "stepClass", "plateBound", "velocity", "azimuth",
+                "seq", "stepClass", "plateBound", "velocity", "azimuth", "divergence", "rightLateral",
             ]);
-            expect(feature.geometry.type).toBe("LineString");
-            expect(feature.geometry.coordinates).toHaveLength(2);
+            if (feature.properties.seq === 4) {
+                expect(feature.geometry.type).toBe("MultiLineString");
+            } else {
+                expect(feature.geometry.type).toBe("LineString");
+                expect(feature.geometry.coordinates).toHaveLength(2);
+            }
         }
+        const columnar = toColumnar(boundaries);
+        expect(columnar.seq0).toBe(1);
+        expect(columnar.seq).toBeUndefined();
+        expect(fromColumnar(columnar)).toEqual(boundaries);
+    });
+
+    it("stores a gapped SEQNUM list instead of a contiguous seq0", () => {
+        const gapped = buildBoundaries({
+            type: "FeatureCollection",
+            features: [fixture.steps.features[0], fixture.steps.features[2]],
+        });
+        const columnar = toColumnar(gapped);
+        expect(columnar.seq).toEqual([1, 3]);
+        expect(columnar.seq0).toBeUndefined();
+        expect(fromColumnar(columnar)).toEqual(gapped);
     });
 
     it("samples every 6th step and drops non-positive speeds", () => {
@@ -141,16 +181,26 @@ describe("build output", () => {
         ]);
     });
 
-    // The builder still copies START/FINAL, so the fixture's crossing step is
-    // emitted as one 359.5° segment. website-prop-pipeline-tectonics-boundary-fidelity
-    // (still todo) owns the split. When that lands, this expected failure
-    // starts passing and has to become a normal assertion.
-    it.fails("no segment spans more than 180°", () => {
-        const spans = boundaries.features.map((feature) => {
-            const [start, end] = feature.geometry.coordinates;
-            return Math.abs(end[0] - start[0]);
-        });
-        expect(Math.max(...spans)).toBeLessThanOrEqual(180);
+    it("keeps one feature when a SEQNUM is repeated", () => {
+        const first = fixture.steps.features[0];
+        const repeated = {
+            type: "FeatureCollection",
+            features: [
+                first,
+                {
+                    ...first,
+                    properties: {...first.properties, STARTLONG: 1, FINALLONG: 2},
+                },
+                fixture.steps.features[1],
+            ],
+        };
+        const built = buildBoundaries(repeated);
+        expect(built.features.map((feature) => feature.properties.seq)).toEqual([1, 2]);
+        expect(built.features[0].geometry.coordinates[0]).toEqual([10.112, -20.222]);
+    });
+
+    it("no segment spans more than 180°", () => {
+        expect(Math.max(...spansOf(boundaries))).toBeLessThanOrEqual(180);
     });
 });
 
@@ -226,8 +276,21 @@ describe("import guard", () => {
         ]);
         expect(readGzipJson(outDir, "plates.json.gz")).toEqual(buildPlates(fixture.plates));
         expect(readGzipJson(outDir, "orogens.json.gz")).toEqual(buildOrogens(fixture.orogens));
-        expect(readGzipJson(outDir, "boundaries.json.gz")).toEqual(buildBoundaries(fixture.steps));
+        const built = buildBoundaries(fixture.steps);
+        expect(readGzipJson(outDir, "boundaries.json.gz")).toEqual(toColumnar(built));
+        expect(fromColumnar(readGzipJson(outDir, "boundaries.json.gz"))).toEqual(built);
         expect(readGzipJson(outDir, "velocity.json.gz")).toEqual(buildVelocity(fixture.steps));
+        const meta = JSON.parse(readFileSync(join(outDir, "meta.json"), "utf8"));
+        expect(meta).toMatchObject({
+            version: PB2002_COMMIT,
+            dataThrough: DATA_THROUGH,
+            commit: PB2002_COMMIT,
+        });
+        expect(meta.source).toContain(PB2002_COMMIT);
+        expect(meta.source).toContain("PB2002_steps.csv");
+        expect(meta.licence).toContain("ODC-By");
+        expect(meta.generatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+        expect(meta).toEqual(buildMeta(meta.generatedAt));
         rmSync(outDir, {recursive: true, force: true});
         expect(publishedFingerprint()).toEqual(publishedBefore);
     });
@@ -259,7 +322,56 @@ describe("import guard", () => {
         for (const name of SOURCE_NAMES) {
             expect(result.stderr).toContain(name);
         }
-        expect(result.stderr).toContain("raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/");
+        expect(result.stderr).toContain(
+            `raw.githubusercontent.com/fraxen/tectonicplates/${PB2002_COMMIT}/`,
+        );
+        expect(result.stderr).not.toContain("/master/");
+        expect(result.stderr).not.toContain("PB2002_steps.json");
+        expect(SOURCES).toHaveLength(3);
+        for (const source of SOURCES) {
+            expect(source.url).toContain(PB2002_COMMIT);
+            expect(result.stderr).toContain(source.url);
+        }
         expect(publishedFingerprint()).toEqual(publishedBefore);
+    });
+});
+
+describe("published PB2002 boundaries", () => {
+    const columnar = readGzipJson(publishedDir, "boundaries.json.gz");
+    const boundaries = fromColumnar(columnar);
+    const gzipBytes = readFileSync(join(publishedDir, "boundaries.json.gz")).length;
+
+    it("has 5,819 steps, one per SEQNUM, and no segment over 180°", () => {
+        expect(columnar.seq0).toBe(1);
+        expect(columnar.seq).toBeUndefined();
+        expect(boundaries.features).toHaveLength(5819);
+        expect(boundaries.features.map((feature) => feature.properties.seq)).toEqual(
+            Array.from({length: 5819}, (_, i) => i + 1),
+        );
+        expect(Math.max(...spansOf(boundaries))).toBeLessThanOrEqual(180);
+        const split = boundaries.features.filter((feature) => feature.geometry.type === "MultiLineString");
+        expect(split.map((feature) => feature.properties.seq).sort((a, b) => a - b)).toEqual([
+            1152, 1465, 1547, 2795, 4924, 4946,
+        ]);
+        for (const feature of boundaries.features) {
+            if (feature.geometry.type === "LineString") {
+                expect(feature.geometry.coordinates).toHaveLength(2);
+            }
+            expect(feature.properties).toEqual(expect.objectContaining({
+                divergence: expect.any(Number),
+                rightLateral: expect.any(Number),
+            }));
+        }
+    });
+
+    it("stays at or under 90 KB and records provenance", () => {
+        expect(gzipBytes).toBeLessThanOrEqual(90_000);
+        const meta = JSON.parse(readFileSync(join(publishedDir, "meta.json"), "utf8"));
+        expect(meta.version).toBe(PB2002_COMMIT);
+        expect(meta.commit).toBe(PB2002_COMMIT);
+        expect(meta.dataThrough).toBe(DATA_THROUGH);
+        expect(meta.source).toContain("PB2002_steps.csv");
+        expect(meta.licence).toContain("ODC-By");
+        expect(meta.generatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
     });
 });
