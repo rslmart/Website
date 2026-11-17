@@ -7,9 +7,9 @@ import { expect, test, unexpectedConsoleErrors } from "./fixtures";
    the check there is the rendered page (map, graph or chart) plus a quiet
    console. */
 
-function expectQuiet(consoleErrors) {
+function expectQuiet(consoleErrors, options) {
     expect(consoleErrors.pageErrors, consoleErrors.pageErrors.join("\n")).toEqual([]);
-    const unexpected = unexpectedConsoleErrors(consoleErrors.messages);
+    const unexpected = unexpectedConsoleErrors(consoleErrors.messages, options);
     expect(unexpected.map((message) => message.text), unexpected.map((message) => message.text).join("\n")).toEqual([]);
 }
 
@@ -91,7 +91,8 @@ for (const route of ROUTES) {
             expect(tokenErrors.length).toBeGreaterThan(0);
         }
 
-        expectQuiet(consoleErrors);
+        // Ignore the missing-token console error only on Hurricane and Tectonics.
+        expectQuiet(consoleErrors, { allowMapboxToken: Boolean(route.map) });
     });
 }
 

@@ -37,14 +37,16 @@ function isStubbedImage(url) {
 
 /* Chromium reports the offline guard as a resource error. Mapbox GL throws
    "An API access token is required…" when the style URL is built with an
-   empty token; react-map-gl logs that error event. That is the map pages'
-   no-token state, not a crash. Anything else, including a local 404, fails. */
+   empty token; react-map-gl logs that error event. Hurricane and Tectonics
+   are the only routes that may show it: pass allowMapboxToken there. Home,
+   Bio, Snow, RoyalTree, and every other caller fail if it appears. A local
+   404 still fails. */
 const TOKEN_ERROR = /API access token is required to use Mapbox GL/;
 const BLOCKED_RESOURCE = /^Failed to load resource: net::ERR_BLOCKED_BY_CLIENT/;
 
-export function unexpectedConsoleErrors(messages) {
+export function unexpectedConsoleErrors(messages, { allowMapboxToken = false } = {}) {
     return messages.filter((message) => {
-        if (TOKEN_ERROR.test(message.text)) return false;
+        if (allowMapboxToken && TOKEN_ERROR.test(message.text)) return false;
         // Only the offline guard's aborted cross-origin loads. A local 404
         // is a different message and still fails the test.
         if (BLOCKED_RESOURCE.test(message.text) && message.url && !isLocal(message.url)) return false;
