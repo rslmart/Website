@@ -1,17 +1,31 @@
-// Downloads the Peter Bird PB2002 plate model (fraxen/tectonicplates) and
+// Downloads the Peter Bird PB2002 plate model (Bird 2003, G-Cubed 4(3) 1027,
+// doi:10.1029/2001GC000252) as converted by Hugo Ahlenius, Nordpil
+// (fraxen/tectonicplates, ODC-By 1.0; the app's legend carries the credit) and
 // produces trimmed, gzipped GeoJSON for the /Tectonics page.
 //
 //   node src/Tectonics/data/build.mjs
 //
-// Outputs (gzipped) into my-app/public/tectonics/:
-//   - plates.json.gz      polygons with { Code, PlateName }
-//   - boundaries.json.gz  line segments colored by STEPCLASS (+ velocity)
-//   - orogens.json.gz     orogeny polygons
-//   - velocity.json.gz    sampled arrow points { lon, lat, azimuthDeg, speed }
+// Source: the `master` branch, which has been frozen at commit
+// 339b0c56563c118307b1f4542703047f5f698fae (2014-10-06); the committed data was
+// built from it. See README.md for how to confirm that and check the output.
 //
-// The raw PB2002 files are Africa-fixed; STEPCLASS is Bird's boundary-type code
-// (SUB, OSR, OTF, CRB, CTF, CCB, OCB) and VELOCITYLE/VELOCITYAZ give the
-// relative motion across each boundary segment.
+// Outputs (gzipped) into my-app/public/tectonics/:
+//   - plates.json.gz      54 polygons with { Code, PlateName }
+//   - boundaries.json.gz  5,824 two-point step segments with
+//                         { stepClass, plateBound, velocity, azimuth }
+//   - orogens.json.gz     13 orogeny polygons
+//   - velocity.json.gz    971 sampled arrow points { lon, lat, azimuthDeg, speed }
+//
+// STEPCLASS is Bird's boundary-type code (SUB, OSR, OTF, CRB, CTF, CCB, OCB).
+// VELOCITYLE/VELOCITYAZ are the velocity of the left plate relative to the
+// right plate across each step (mm/yr, azimuth clockwise from north), not a
+// fixed-frame velocity.
+//
+// Antimeridian: this script does no handling of its own. Bird has 5,819 steps;
+// fraxen split the steps crossing ±180° by hand, giving 5,824 features. Each
+// feature is rebuilt from its step's full start and end points, so 5 steps are
+// written twice and 11 segments span about 359.5° of longitude. The page draws
+// them the short way with deck.gl's `wrapLongitude`.
 
 import {gzipSync} from 'node:zlib';
 import {mkdirSync, writeFileSync} from 'node:fs';
