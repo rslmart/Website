@@ -1,9 +1,11 @@
 # Royalty data pipeline
 
 Builds the datasets behind the royal tree charts (`/RoyalTree`). The ordered
-monarch lists are scraped from English Wikipedia. Person facts come from
-[Wikidata](https://www.wikidata.org/) through the Action API (`wbgetentities`,
-50 IDs per call), not SPARQL. Portraits come from Wikimedia Commons.
+monarch lists are scraped from English Wikipedia. Person facts used by `build`
+come from [Wikidata](https://www.wikidata.org/) through the Action API
+(`wbgetentities`, 50 IDs per call). Typed SPARQL records
+([`royaltree/wdqs.py`](royaltree/wdqs.py)) are fetched and stored separately
+and are not read by `build` yet. Portraits come from Wikimedia Commons.
 
 Everything except portraits runs through one command, `python -m royaltree`
 ([`royaltree/`](royaltree/)), over one local entity store
@@ -201,6 +203,20 @@ level-batched BFS over family edges from each monarch to the earliest of the
 next five in the list. It is capped by `MAX_BFS_DEPTH` (8) and `MAX_BFS_NODES`
 (4000) and records `[]` when no path is found.
 
+`royaltree/wdqs.py` is the typed fetcher for the next slice. It POSTs to
+`https://query.wikidata.org/sparql` (`Accept: application/sparql-results+json`)
+in sequential `VALUES` batches of 400, through the same HTTP session as the
+Action API. Single-valued facts (parents, sex, family, birth, death) use the
+best rank: preferred over normal, deprecated never, and a tie or an unknown
+value is stored explicitly. Positions, titles, spouses, children and siblings
+keep every non-deprecated statement and its rank, including a position with no
+end date. Dates are `{time, precision}`. `format_date` renders those for tests
+(a century is `c. 12th century`, a decade is `990s`, BCE years stay historical).
+Labels still come from `wbgetentities` when WDQS does not answer. Pinned
+responses live in [`tests/fixtures/wdqs_pinned.json`](tests/fixtures/wdqs_pinned.json);
+`uv run python -m royaltree.wdqs_drift` reports live drift and is not part of
+pytest.
+
 ### Ancestors
 
 `graph.gather_ancestors` follows `father`/`mother` out to 5 generations from
@@ -252,9 +268,9 @@ only cache. It has three tables:
 
 - `entities(qid, kind, data, source, lastrevid, fetched_at, checked_at)`: one
   row per QID and kind. `kind` is `person` (parsed record) or `label`. `source`
-  is `wbgetentities` or `legacy:<file>`. `lastrevid` is the Wikidata revision
-  the row reflects (NULL for imported rows). The table is source-agnostic:
-  `-wdqs-fetch` adds its own kind next to these.
+  is `wbgetentities`, `legacy:<file>`, or `wdqs`. `lastrevid` is the Wikidata
+  revision the row reflects (NULL for imported rows). Kind `wdqs` (source
+  `wdqs`) holds the typed SPARQL record; `build` still writes `person`.
 - `trees(monarchy, name, data)`: per-tree `family_tree` (succession paths),
   `ancestors` (closure) and `touched` (member set).
 - `runs`: one summary per run.
@@ -272,9 +288,10 @@ parents of monarchs in trees without an ancestor stage.
 
 **Request hygiene** (`royaltree/http.py`). Every request goes through one
 session with the User-Agent `RoyalTreeBot/1.0 (+https://makoa.link)` and a
-`(10 s, 60 s)` timeout. It is sent serially, with `maxlag=5` on Wikidata, and
-backs off on HTTP 429/5xx (honouring `Retry-After`; a request asking for more
-than 120 s fails instead of retrying early). maxlag waits have their own, more
+`(10 s, 60 s)` timeout. GET and POST share it. Requests are sent serially, with
+`maxlag=5` on the Action API, and back off on HTTP 429/5xx (honouring
+`Retry-After`; a request asking for more than 120 s fails instead of retrying
+early). maxlag waits have their own, more
 patient retry budget. Counters feed the summary.
 
 ## Data files
