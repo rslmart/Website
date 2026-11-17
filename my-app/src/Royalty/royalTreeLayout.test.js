@@ -3,7 +3,7 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 import cytoscape from 'cytoscape';
 import {
   layoutGraph, toLayoutElements, packComponents, positionsById, clearLayoutCache, parseYear,
-  PERSON_SIZE_STYLE, MARRIAGE_SIZE_STYLE, bandWidths, visibleSuccession,
+  PERSON_SIZE_STYLE, MARRIAGE_SIZE_STYLE, MONARCH_SIZE_STYLE, bandWidths, visibleSuccession,
 } from './royalTreeLayout';
 import { convertToChart } from './RoyalTreeUtils';
 
@@ -38,12 +38,15 @@ function pageElements() {
 
 const PAGE_STYLE = [
   { selector: 'node', style: { ...PERSON_SIZE_STYLE, label: 'data(label)' } },
+  { selector: 'node[?monarch]', style: { ...MONARCH_SIZE_STYLE } },
   { selector: 'node[type = "marriage"]', style: MARRIAGE_SIZE_STYLE },
 ];
-// The size properties the pre-worker page stylesheet had, written out so the
-// fidelity test doesn't just compare the module with itself.
+// In-place dagre with the same boxes layoutGraph uses, including the larger
+// monarch body. The fidelity test checks the worker matches that dagre, not
+// the pre-monarch 80×100 box.
 const OLD_PAGE_STYLE = [
   { selector: 'node', style: { shape: 'rectangle', width: 80, height: 100, 'border-width': 5, padding: '10px', label: 'data(label)' } },
+  { selector: 'node[?monarch]', style: { ...MONARCH_SIZE_STYLE, label: 'data(label)' } },
   { selector: 'node[type = "marriage"]', style: { width: 5, height: 5, 'border-width': 2 } },
 ];
 

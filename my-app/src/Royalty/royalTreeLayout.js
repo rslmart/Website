@@ -22,9 +22,18 @@ cytoscape.use(dagre);
 // its own style and the headless layout graph uses the same values.
 export const PERSON_SIZE_STYLE = { width: 80, height: 100, 'border-width': 5, padding: '10px' };
 export const MARRIAGE_SIZE_STYLE = { width: 5, height: 5, 'border-width': 2 };
+// Larger than a person, same border width. The page draws monarchs at this
+// size too, so dagre leaves room and bodies do not overlap. Shape and the
+// crown glyph are paint-only; they are not part of the layout box.
+// Wider than a person, same height. A taller body dropped the couple-layout
+// height saving under 35%, and a wider one overlaps the marriage mark: the
+// mark sits 75px from a spouse centre and padding makes the body wider than
+// the style width. The ellipse and the crown glyph carry the rest of the cue.
+export const MONARCH_SIZE_STYLE = { width: 90, height: 100, 'border-width': 5, padding: '10px' };
 
 const LAYOUT_STYLE = [
   { selector: 'node', style: PERSON_SIZE_STYLE },
+  { selector: 'node[?monarch]', style: MONARCH_SIZE_STYLE },
   { selector: 'node[type = "marriage"]', style: MARRIAGE_SIZE_STYLE },
 ];
 
@@ -65,6 +74,7 @@ export function toLayoutElements(elements) {
       const data = { id: d.id, type: d.type, dob: d['date of birth'] };
       if (d.label) data.label = d.label;
       if (d.band != null) data.band = d.band;
+      if (d.monarch) data.monarch = true;
       out.push({ group: 'nodes', data });
     } else if (d.relation !== 'succession' && !d.crossBand) {
       out.push({ group: 'edges', data: { source: d.source, target: d.target } });
@@ -157,6 +167,30 @@ export function coupleOffsets(hubId, orderedSpouseIds, marriageIdBySpouse) {
   const offsets = new Map();
   x.forEach((v, id) => offsets.set(id, v - center));
   return { offsets, width: max - min + PERSON_SIZE_STYLE.width };
+}
+
+function bodySizeOf(node) {
+  if (node.data('type') === 'marriage') return MARRIAGE_SIZE_STYLE;
+  if (node.data('monarch')) return MONARCH_SIZE_STYLE;
+  return PERSON_SIZE_STYLE;
+}
+
+// Body box of a couple row. Offsets stay on the centres coupleOffsets chose,
+// so the marriage marks stay on the line between the people they join.
+function boxFromOffsets(offsets, sizeOf) {
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let height = 0;
+  offsets.forEach((dx, id) => {
+    const size = sizeOf(id);
+    minX = Math.min(minX, dx - size.width / 2);
+    maxX = Math.max(maxX, dx + size.width / 2);
+    height = Math.max(height, size.height);
+  });
+  return {
+    width: Math.max(0, maxX - minX),
+    height: height || PERSON_SIZE_STYLE.height,
+  };
 }
 
 function rankerFor(nodeCount, options) {
@@ -262,7 +296,8 @@ function layoutSupernode(comp, ranker) {
       placed.offsets.forEach((v, id) => placed.offsets.set(id, v - center));
       placed.width = max - min + PERSON_SIZE_STYLE.width;
     }
-    clusters.push({ memberIds, offsets: placed.offsets, width: placed.width });
+    const box = boxFromOffsets(placed.offsets, (id) => bodySizeOf(cy.getElementById(id)));
+    clusters.push({ memberIds, offsets: placed.offsets, width: box.width, height: box.height });
   });
 
   if (!clusters.length) {
@@ -282,7 +317,7 @@ function layoutSupernode(comp, ranker) {
   clusters.forEach((c, i) => {
     elements.push({
       group: 'nodes',
-      data: { id: `cluster:${i}`, type: 'super', width: c.width, height: PERSON_SIZE_STYLE.height },
+      data: { id: `cluster:${i}`, type: 'super', width: c.width, height: c.height },
     });
   });
   const seen = new Set();
@@ -361,7 +396,9 @@ function componentBand(nodes) {
 
 function componentKey(comp, ranker, couple) {
   const parts = [couple, ranker];
-  comp.nodes().forEach(n => parts.push(n.id() + (n.data('type') === 'marriage' ? '*' : '')));
+  comp.nodes().forEach(n => parts.push(
+    n.id() + (n.data('type') === 'marriage' ? '*' : '') + (n.data('monarch') ? 'M' : ''),
+  ));
   parts.push('|');
   comp.edges().forEach(e => parts.push(e.data('source') + '>' + e.data('target')));
   return parts.join(',');

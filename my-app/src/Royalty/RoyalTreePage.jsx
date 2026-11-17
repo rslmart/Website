@@ -10,8 +10,19 @@ import ControlsFab from "../components/ControlsFab";
 import MobileDrawer from "../components/MobileDrawer";
 import { withViewport } from "../hooks/useViewport";
 import { convertToChart, mergeMonarchies, DEFAULT_BRIDGE_OPTIONS, DEFAULT_VISIBLE_RANKS } from './RoyalTreeUtils';
-import { PERSON_SIZE_STYLE, MARRIAGE_SIZE_STYLE, toLayoutElements, packComponents, positionsById, assignLayoutBands, bandWidths, visibleSuccession } from './royalTreeLayout';
+import { PERSON_SIZE_STYLE, MARRIAGE_SIZE_STYLE, MONARCH_SIZE_STYLE, toLayoutElements, packComponents, positionsById, assignLayoutBands, bandWidths, visibleSuccession } from './royalTreeLayout';
 import { requestLayout, terminateLayoutWorker } from './layoutClient';
+import {
+  DEFAULT_MIN_ZOOM,
+  EDGE_LABEL_FONT,
+  MONARCH_LABEL_FONT,
+  NON_MONARCH_FONT,
+  SHEET_FRACTION,
+  ZOOM_STEP,
+  defaultZoomLevel,
+  monarchShortLabel,
+  zoomTier,
+} from './zoomTier';
 import './RoyalTreeStyle.css';
 
 // Constants
@@ -116,6 +127,9 @@ class RoyalTree extends Component {
     // Succession overlay edges for the current view, added or removed on toggle
     // without touching the layout.
     this.successionElements = [];
+    // Current zoom tier. applyZoomTier is the only place that changes it.
+    this.zoomTierName = 'overview';
+    this.tierSwitches = [];
 
     this.state = {
       selectedMonarchs: [DEFAULT_MONARCHY],
@@ -157,6 +171,7 @@ class RoyalTree extends Component {
   bindGraphEvents = (cyInstance) => {
     cyInstance.on('mouseover', 'node', (evt) => {
       const node = evt.target;
+      if (node.data('type') === 'marriage') return;
       this.setState({
         showNodeToolTip: true,
         tooltipData: node.data()
@@ -164,14 +179,32 @@ class RoyalTree extends Component {
     });
 
     cyInstance.on('mouseout', 'node', () => {
+      // A tap on a phone also emits mouseout as the finger lifts. Keep the
+      // sheet up; desktop hover still dismisses when the pointer leaves.
+      if (this.props.viewport && this.props.viewport.isMobile) return;
       this.setState({showNodeToolTip: false});
     });
 
-    // Clicking a node: if it's shared between monarchies, reveal how the
-    // dynasties connect through it; otherwise clear any prior highlight.
+    // Tap (and click) opens the person's details. A shared person also
+    // highlights the bloodline, which is what a tap did before.
     cyInstance.on('tap', 'node', (evt) => {
-      this.highlightSharedLineage(evt.target);
+      const node = evt.target;
+      if (node.data('type') !== 'marriage') {
+        this.setState({ showNodeToolTip: true, tooltipData: node.data() });
+        this.panNodeAboveSheet(node);
+      }
+      this.highlightSharedLineage(node);
     });
+
+    cyInstance.on('mouseover', 'edge', (evt) => {
+      evt.target.addClass('hover');
+    });
+    cyInstance.on('mouseout', 'edge', (evt) => {
+      evt.target.removeClass('hover');
+    });
+
+    cyInstance.on('zoom', this.applyZoomTier);
+    cyInstance.on('pan', this.onPan);
 
     // Tapping the background clears zoom/pan tooltip and any lineage highlight.
     cyInstance.on('tapstart', (evt) => {
@@ -252,21 +285,49 @@ class RoyalTree extends Component {
             // each node's outer box), so keep them in royalTreeLayout.js.
             ...PERSON_SIZE_STYLE,
             'shape': 'rectangle',
-            'label': 'data(label)',
+            // Empty until the detail tier adds lod-detail. A zoom threshold
+            // would also see the device pixel ratio, so a retina phone could
+            // show relative names at the overview zoom.
+            'label': '',
+            'font-size': NON_MONARCH_FONT,
+            'min-zoomed-font-size': 0,
             'text-valign': 'bottom',
             'text-wrap': 'wrap',
             'text-max-width': 120,
-            // Skip labels smaller than ~6px on screen (unreadable anyway): at
-            // overview zoom they are thousands of sub-pixel smudges that cost
-            // most of a frame on large views.
-            'min-zoomed-font-size': 6,
             'text-margin-y': 5,
             'background-color': 'data(color)',
             'border-color': 'data(borderColor)',
             'border-width': 5,
+            'opacity': 'data(opacity)',
+          }
+        },
+        {
+          // Larger ellipse plus a short reign label. Fills, border colours
+          // and opacities are untouched; the crown glyph is part of the label.
+          selector: 'node[?monarch]',
+          style: {
+            ...MONARCH_SIZE_STYLE,
+            'shape': 'ellipse',
+            'label': 'data(shortLabel)',
+            'font-size': MONARCH_LABEL_FONT,
+            'min-zoomed-font-size': 1,
+            'text-max-width': 150,
+          }
+        },
+        {
+          // Mid: monarchs use the full birth-death label. Detail: every person does.
+          selector: 'node[?monarch].lod-mid, node.lod-detail',
+          style: {
+            'label': 'data(label)',
+          }
+        },
+        {
+          // Portraits appear at mid for monarchs and at detail for everyone
+          // who has one. The selector requires `image`, so nodes without a
+          // portrait are not given an empty image mapping.
+          selector: 'node[image].lod-mid, node[image].lod-detail',
+          style: {
             'background-image': 'data(image)',
-            // Draw the portrait smaller than the node and centered so the node's
-            // fill (gender/monarchy color) stays visible as a ring around it.
             'background-fit': 'none',
             'background-width': '85%',
             'background-height': '85%',
@@ -278,14 +339,13 @@ class RoyalTree extends Component {
             // Loading without the crossorigin attribute lets them draw (the canvas
             // is tainted, but we never read its pixels back).
             'background-image-crossorigin': 'null',
-            'opacity': 'data(opacity)',
           }
         },
         {
           selector: 'edge',
           style: {
             'width': 1.5,
-            'label': 'data(family)',
+            'label': '',
             'line-color': 'data(color)',
             'target-arrow-color': 'data(color)',
             'target-arrow-shape': 'triangle',
@@ -293,9 +353,14 @@ class RoyalTree extends Component {
             'text-rotation': 'autorotate',
             'text-max-width': '5',
             'text-wrap': 'wrap',
-            'font-size': '14',
-            'min-zoomed-font-size': 6,
+            'font-size': EDGE_LABEL_FONT,
+            'min-zoomed-font-size': 0,
           }
+        },
+        {
+          // House names: the detail tier, or the one edge under the pointer.
+          selector: 'edge.lod-detail, edge.hover',
+          style: { 'label': 'data(family)' }
         },
         {
           // Sibling links: dashed, no arrowhead, so they read as lateral ties
@@ -321,11 +386,14 @@ class RoyalTree extends Component {
         },
         {
           // Applied transiently when a person is found via search or the shared
-          // stepper, so the zoom target is unmistakable.
+          // stepper, so the zoom target is unmistakable. Opacity 1 wins over
+          // .faded (higher specificity), so a search result stays visible.
           selector: 'node.searched',
           style: {
             'border-color': '#00e5ff',
             'border-width': 12,
+            'opacity': 1,
+            'z-index': 9,
           }
         },
         {
@@ -484,17 +552,248 @@ class RoyalTree extends Component {
     this.containerRef.current?.classList.remove('is-swapping');
   };
 
+  // Fit, then clamp with defaultZoomLevel. That clamp is the default zoom
+  // criteria 5–7 measure at (DEFAULT_MIN_ZOOM in zoomTier.js).
   fitView = () => {
     const cy = this.cy;
-    if (this.firstFitDone) {
-      cy.fit(undefined, 40);
-    } else {
-      // The first view has always been sized to the container and fitted
-      // without padding (formerly a setTimeout in initializeGraph).
-      this.firstFitDone = true;
-      cy.resize();
-      cy.fit();
+    if (!cy) return;
+    cy.resize();
+    cy.fit(undefined, 40);
+    const level = defaultZoomLevel(cy.zoom());
+    if (cy.zoom() !== level) {
+      cy.zoom({
+        level,
+        renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 },
+      });
     }
+    this.applyZoomTier();
+    if (this.state.showNodeToolTip && this.state.tooltipData?.id) {
+      const node = cy.getElementById(this.state.tooltipData.id);
+      this.panNodeAboveSheet(node);
+    }
+  };
+
+  zoomBy = (factor) => {
+    const cy = this.cy;
+    if (!cy) return;
+    const level = Math.min(cy.maxZoom(), Math.max(cy.minZoom(), cy.zoom() * factor));
+    cy.zoom({
+      level,
+      renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 },
+    });
+  };
+
+  // One handler for overview / mid / detail. It toggles classes only. It does
+  // not run a layout. Detail and mid classes go on elements in the viewport,
+  // so a tier change does not restyle the whole 9-monarchy graph.
+  applyZoomTier = () => {
+    const cy = this.cy;
+    if (!cy) return;
+    const tier = zoomTier(cy.zoom());
+    if (tier === this.zoomTierName && this.zoomTierReady) {
+      if (tier !== 'overview') this.scheduleViewportSync();
+      return;
+    }
+    const from = this.zoomTierName;
+    const started = performance.now();
+    this.zoomTierName = tier;
+    this.syncVisibleClasses();
+    const ms = performance.now() - started;
+    this.zoomTierReady = true;
+    if (from !== tier) {
+      this.tierSwitches.push({ from, to: tier, ms: Math.round(ms * 10) / 10 });
+      try {
+        performance.measure('royaltree:zoom-tier', { start: started, duration: ms });
+      } catch (e) {
+        // Older browsers take mark names, not an options object.
+      }
+    }
+  };
+
+  setClass = (ele, name, on) => {
+    const has = ele.hasClass(name);
+    if (on && !has) ele.addClass(name);
+    else if (!on && has) ele.removeClass(name);
+  };
+
+  // Labels and portraits for the current tier, limited to the viewport so the
+  // switch does not restyle every element on a large graph.
+  syncVisibleClasses = () => {
+    const cy = this.cy;
+    if (!cy) return;
+    const tier = this.zoomTierName;
+    const ext = cy.extent();
+    const pad = 160;
+    const x1 = ext.x1 - pad;
+    const x2 = ext.x2 + pad;
+    const y1 = ext.y1 - pad;
+    const y2 = ext.y2 + pad;
+    const inside = (x, y) => x >= x1 && x <= x2 && y >= y1 && y <= y2;
+    const mid = tier === 'mid';
+    const detail = tier === 'detail';
+    cy.batch(() => {
+      if (!mid && !detail) {
+        const marked = cy.elements('.lod-mid, .lod-detail');
+        if (marked.nonempty()) marked.removeClass('lod-mid lod-detail');
+        return;
+      }
+      cy.nodes('[type != "marriage"]').forEach((node) => {
+        const p = node.position();
+        const show = inside(p.x, p.y);
+        this.setClass(node, 'lod-mid', mid && show && !!node.data('monarch'));
+        this.setClass(node, 'lod-detail', detail && show);
+      });
+      cy.edges().forEach((edge) => {
+        if (!detail) {
+          this.setClass(edge, 'lod-detail', false);
+          return;
+        }
+        const s = edge.source().position();
+        const t = edge.target().position();
+        this.setClass(edge, 'lod-detail', inside(s.x, s.y) || inside(t.x, t.y));
+      });
+    });
+  };
+
+  scheduleViewportSync = () => {
+    if (this.panSync || !this.cy || this.zoomTierName === 'overview') return;
+    this.panSync = requestAnimationFrame(() => {
+      this.panSync = 0;
+      this.syncVisibleClasses();
+    });
+  };
+
+  onPan = () => {
+    this.scheduleViewportSync();
+  };
+
+  // Keep the selected person in the band above the phone sheet.
+  panNodeAboveSheet = (node) => {
+    const cy = this.cy;
+    if (!cy || !node || node.empty()) return;
+    if (!(this.props.viewport && this.props.viewport.isMobile)) return;
+    const pos = node.renderedPosition();
+    const y = cy.height() * (1 - SHEET_FRACTION) / 2;
+    cy.panBy({ x: cy.width() / 2 - pos.x, y: y - pos.y });
+  };
+
+  onGraphKeyDown = (event) => {
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    const tag = event.target && event.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || event.target?.isContentEditable) return;
+    if (event.key === 'Escape') {
+      if (this.state.helpOpen || this.state.capWarning) return;
+      if (this.state.showNodeToolTip) {
+        this.setState({ showNodeToolTip: false });
+        event.preventDefault();
+      }
+      return;
+    }
+    if (event.key === '+' || event.key === '=') {
+      this.zoomBy(ZOOM_STEP);
+      event.preventDefault();
+    } else if (event.key === '-' || event.key === '_') {
+      this.zoomBy(1 / ZOOM_STEP);
+      event.preventDefault();
+    } else if (event.key === 'f' || event.key === 'F' || event.key === '0') {
+      this.fitView();
+      event.preventDefault();
+    }
+  };
+
+  installMeasureHook = () => {
+    try {
+      if (!new URLSearchParams(window.location.search).has('measure')) return;
+    } catch (e) {
+      return;
+    }
+    window.__royalTreeMeasure = {
+      switches: () => this.tierSwitches.slice(),
+      cy: () => this.cy,
+      zoom: () => this.cy && this.cy.zoom(),
+      tier: () => this.zoomTierName,
+      defaultMinZoom: DEFAULT_MIN_ZOOM,
+      fit: () => this.fitView(),
+      setZoom: (level) => {
+        if (!this.cy) return;
+        this.cy.zoom({
+          level,
+          renderedPosition: { x: this.cy.width() / 2, y: this.cy.height() / 2 },
+        });
+        this.applyZoomTier();
+      },
+      labelReport: () => this.labelReport(),
+      edgeReport: () => this.edgeReport(),
+      panelCoverage: () => this.panelCoverage(),
+    };
+  };
+
+  labelReport = () => {
+    const cy = this.cy;
+    if (!cy) return null;
+    const z = cy.zoom();
+    const w = cy.width();
+    const h = cy.height();
+    const monarchs = [];
+    let nonMonarchShown = 0;
+    cy.nodes('[type != "marriage"]').forEach((node) => {
+      const pos = node.renderedPosition();
+      const bw = node.renderedWidth();
+      const bh = node.renderedHeight();
+      const inView = pos.x + bw / 2 > 0 && pos.x - bw / 2 < w && pos.y + bh / 2 > 0 && pos.y - bh / 2 < h;
+      if (!inView) return;
+      const font = parseFloat(node.style('font-size'));
+      const min = parseFloat(node.style('min-zoomed-font-size'));
+      const shown = font * z >= min && String(node.style('label') || '') !== '';
+      if (node.data('monarch')) {
+        monarchs.push({ id: node.id(), px: font * z, shown, label: node.style('label') });
+      } else if (shown) {
+        nonMonarchShown += 1;
+      }
+    });
+    const px = monarchs.map((row) => row.px);
+    return {
+      zoom: z,
+      tier: this.zoomTierName,
+      viewport: { w, h },
+      monarchs: monarchs.length,
+      monarchMinPx: px.length ? Math.min(...px) : null,
+      hiddenMonarchLabels: monarchs.filter((row) => !row.shown).length,
+      nonMonarchLabelsShown: nonMonarchShown,
+      sample: monarchs.slice(0, 5),
+    };
+  };
+
+  edgeReport = () => {
+    const cy = this.cy;
+    if (!cy) return null;
+    const z = cy.zoom();
+    let familyEdges = 0;
+    let shown = 0;
+    cy.edges().forEach((edge) => {
+      if (edge.data('relation') === 'sibling' || edge.data('relation') === 'succession') return;
+      if (!edge.data('family')) return;
+      if (edge.style('display') === 'none') return;
+      familyEdges += 1;
+      const font = parseFloat(edge.style('font-size'));
+      const min = parseFloat(edge.style('min-zoomed-font-size'));
+      if (font * z >= min && edge.style('label')) shown += 1;
+    });
+    return { zoom: z, tier: this.zoomTierName, familyEdges, shown };
+  };
+
+  panelCoverage = () => {
+    const root = document.querySelector('.royal-tree-container');
+    if (!root) return null;
+    const panels = [...root.querySelectorAll('.control-panel, .royal-tree-zoom, .royal-tree-title')];
+    const boxes = panels.map((el) => {
+      const rect = el.getBoundingClientRect();
+      return { cls: el.className, w: rect.width, h: rect.height, area: rect.width * rect.height };
+    });
+    const area = boxes.reduce((sum, box) => sum + box.area, 0);
+    const rw = root.clientWidth;
+    const rh = root.clientHeight;
+    return { rw, rh, area, fraction: rw && rh ? area / (rw * rh) : null, boxes };
   };
 
   zoomToNode = (id) => {
@@ -503,11 +802,14 @@ class RoyalTree extends Component {
     if (!node || node.empty()) return;
 
     this.cy.nodes().removeClass('searched');
-    node.addClass('searched');
+    node.removeClass('faded').addClass('searched');
 
     this.cy.animate(
         { center: { eles: node }, zoom: 1.3 },
-        { duration: 500 }
+        {
+          duration: 500,
+          complete: () => this.panNodeAboveSheet(node),
+        }
     );
 
     // Surface the person's details so the zoom target is confirmed.
@@ -525,7 +827,8 @@ class RoyalTree extends Component {
           color: node.style?.fill,
           borderColor: node.style?.stroke,
           opacity: node.style?.opacity,
-          image: node.icon?.img
+          image: node.icon?.img,
+          ...(node.monarch ? { shortLabel: monarchShortLabel(node) } : {}),
         }
       });
     });
@@ -547,6 +850,8 @@ class RoyalTree extends Component {
 
   async componentDidMount() {
     window.addEventListener('resize', this.handleResize);
+    window.addEventListener('keydown', this.onGraphKeyDown);
+    this.installMeasureHook();
     try {
       const monarchyOptions = await loadGzipJson(royaltyUrl('index.json'));
       // Houses are optional (only present once BuildHouses has run).
@@ -571,16 +876,25 @@ class RoyalTree extends Component {
   componentWillUnmount() {
     this.unmounted = true;
     window.removeEventListener('resize', this.handleResize);
+    window.removeEventListener('keydown', this.onGraphKeyDown);
     terminateLayoutWorker();
     if (this.cy) {
       this.cy.destroy();
     }
   }
 
+  // Resize the canvas and keep the zoom. A phone rotation used to call
+  // cy.fit(), which threw away the visitor's zoom.
   handleResize = () => {
-    if (this.cy) {
-      this.cy.resize();
-      this.cy.fit();
+    const cy = this.cy;
+    if (!cy) return;
+    const zoom = cy.zoom();
+    const pan = { ...cy.pan() };
+    cy.resize();
+    cy.viewport({ zoom, pan });
+    if (this.state.showNodeToolTip && this.state.tooltipData?.id) {
+      const node = cy.getElementById(this.state.tooltipData.id);
+      this.panNodeAboveSheet(node);
     }
   };
 
@@ -804,6 +1118,11 @@ class RoyalTree extends Component {
     this.setState({ helpOpen: false });
   };
 
+  treeTitle() {
+    const names = this.state.selectedMonarchs.map((name) => name.replace(/_/g, ' '));
+    return names.length ? names.join(', ') : 'No tree selected';
+  }
+
   render() {
     const isMobile = this.props.viewport && this.props.viewport.isMobile;
     return (
@@ -813,6 +1132,12 @@ class RoyalTree extends Component {
               ref={this.containerRef}
               className="cytoscape-container"
           >
+          </div>
+          <div className="royal-tree-title">{this.treeTitle()}</div>
+          <div className="royal-tree-zoom" role="group" aria-label="Zoom">
+            <button type="button" onClick={() => this.zoomBy(ZOOM_STEP)} aria-label="Zoom in" title="Zoom in (+)">+</button>
+            <button type="button" onClick={() => this.zoomBy(1 / ZOOM_STEP)} aria-label="Zoom out" title="Zoom out (−)">−</button>
+            <button type="button" onClick={this.fitView} aria-label="Fit at the default zoom" title="Fit (F)">Fit</button>
           </div>
 
           {this.state.loading && (
@@ -839,7 +1164,7 @@ class RoyalTree extends Component {
 
           {this.state.showNodeToolTip && (
               isMobile ? (
-                  <div className="mobile-sheet">
+                  <div className="mobile-sheet royal-tree-sheet">
                     <div className="mobile-sheet-header">
                       <button
                           type="button"

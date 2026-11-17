@@ -88,6 +88,7 @@ export function convertToChart(
       size: 80,
       isBridge,
       label: createLabel(person),
+      ...(isHighlighted ? { monarch: true } : {}),
       labelCfg: { position: "bottom" },
       style: {
         fill: sex ? palette[sex] : undefined,

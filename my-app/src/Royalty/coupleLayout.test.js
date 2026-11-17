@@ -11,7 +11,7 @@ import cytoscape from 'cytoscape';
 import { convertToChart, mergeMonarchies, DEFAULT_BRIDGE_OPTIONS } from './RoyalTreeUtils';
 import {
   assignLayoutBands, bandWidths, clearLayoutCache, compareSpouses, coupleOffsets, layoutGraph,
-  packComponents, PERSON_SIZE_STYLE, MARRIAGE_SIZE_STYLE, positionsById,
+  packComponents, PERSON_SIZE_STYLE, MARRIAGE_SIZE_STYLE, MONARCH_SIZE_STYLE, positionsById,
   toLayoutElements, visibleSuccession,
 } from './royalTreeLayout';
 
@@ -34,6 +34,7 @@ const EDWARD_WIVES = [
 
 const PAGE_STYLE = [
   { selector: 'node', style: { ...PERSON_SIZE_STYLE, label: 'data(label)', 'text-valign': 'bottom', 'text-wrap': 'wrap', 'text-max-width': 120 } },
+  { selector: 'node[?monarch]', style: { ...MONARCH_SIZE_STYLE } },
   { selector: 'node[type = "marriage"]', style: { ...MARRIAGE_SIZE_STYLE, label: '' } },
 ];
 
@@ -246,6 +247,7 @@ describe('couple and band layout', () => {
     const baseBoth = place(['England', 'Scotland'], 'off', DEFAULT_BRIDGE_OPTIONS, { bands: false });
     const baseCrossings = crossingCount(baseBoth.cy);
     expect(crossings).toBeLessThan(baseCrossings);
+    expect(overlapCount(england.cy)).toBe(0);
     expect(overlapCount(both.cy)).toBe(0);
 
     writeFileSync('/tmp/couple-acceptance.json', JSON.stringify({
