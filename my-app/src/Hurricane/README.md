@@ -17,10 +17,7 @@ basemap.
 | Recent IR (2016+) | **RAMMB / CIRA TC Real-Time** | infrared frames pulled live |
 
 Attribution links shown in the UI live in [`sources-panel.jsx`](sources-panel.jsx).
-
-> Legacy HURDAT scrapers (`data/convertHurdatToJson.py`, `data/scraper/`, etc.)
-> remain in the repo from earlier iterations but are **not** used by the live
-> page. IBTrACS is the sole track source today.
+IBTrACS is the sole track source.
 
 ## How the track data is gathered and processed
 

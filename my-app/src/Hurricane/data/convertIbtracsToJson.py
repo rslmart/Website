@@ -1,10 +1,9 @@
-"""Convert the IBTrACS global best-track NetCDF into the JSON shape the
-Hurricane page expects (mirrors convertHurdatToJson.py, but global).
+"""Convert the IBTrACS global best-track NetCDF into the JSON the Hurricane page serves.
 
 Run with uv (no persistent venv needed):
     uv run --with netCDF4 --with numpy --with geopy python convertIbtracsToJson.py
 
-Output: ../../../public/hurricane/storms.json  (fetched at runtime by Hurricane.jsx)
+Output: ../../../public/hurricane/storms.json.gz  (fetched at runtime by Hurricane.jsx)
 
 Field mapping notes:
 - Position/time come from the always-present `lat`/`lon`/`iso_time`.
