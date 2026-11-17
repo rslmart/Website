@@ -38,7 +38,7 @@ describe("Tectonics basemap", () => {
     });
 });
 
-describe("Tectonics plates layer", () => {
+describe("Tectonics plates layer and credit", () => {
     const plates = {
         type: "FeatureCollection",
         features: [
@@ -72,5 +72,27 @@ describe("Tectonics plates layer", () => {
         expect(platesLayer.props.stroked).toBe(false);
         expect(platesLayer.props.filled).toBe(true);
         expect(platesLayer.props.pickable).toBe(true);
+    });
+
+    it("credits Bird (2003) and Ahlenius/Nordpil with the ODC-By 1.0 licence", async () => {
+        render(
+            <MemoryRouter>
+                <Tectonics />
+            </MemoryRouter>
+        );
+        await waitFor(() => expect(screen.getByTestId("mock-deckgl").dataset.layerIds).toContain("plates"));
+        const links = {
+            "Peter Bird (2003)": "https://doi.org/10.1029/2001GC000252",
+            "Hugo Ahlenius, Nordpil": "https://github.com/fraxen/tectonicplates",
+            "ODC-By 1.0": "https://opendatacommons.org/licenses/by/1-0/",
+        };
+        for (const [name, href] of Object.entries(links)) {
+            const link = screen.getByRole("link", { name });
+            expect(link).toHaveAttribute("href", href);
+            expect(link).toHaveAttribute("rel", "noopener noreferrer");
+        }
+        expect(screen.getByText(/GIS data/).textContent).toBe(
+            "Data: PB2002 model, Peter Bird (2003); GIS data Hugo Ahlenius, Nordpil, ODC-By 1.0"
+        );
     });
 });

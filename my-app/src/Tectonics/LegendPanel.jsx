@@ -38,6 +38,14 @@ const areaSwatch = (rgba) => ({
     border: '1px solid var(--color-border-strong)',
 });
 
+const CREDIT_LINKS = {
+    bird: 'https://doi.org/10.1029/2001GC000252',
+    gis: 'https://github.com/fraxen/tectonicplates',
+    licence: 'https://opendatacommons.org/licenses/by/1-0/',
+};
+
+const creditLink = {color: 'inherit', textDecoration: 'underline'};
+
 const row = {display: 'flex', alignItems: 'center', margin: '2px 0'};
 const labelStyle = {display: 'flex', alignItems: 'center', cursor: 'pointer', flex: 1};
 
@@ -87,8 +95,20 @@ function LegendPanel(props) {
                 </Checkbox>
             </div>
 
-            <div style={{marginTop: 8, fontSize: '11px', color: 'var(--color-text-faint)'}}>
-                Data: Bird (2002) PB2002 model
+            {/* ODC-By 1.0 §4.3 notice, and the credit fraxen/tectonicplates asks for. */}
+            <div style={{marginTop: 8, fontSize: '11px', lineHeight: 1.5, color: 'var(--color-text-faint)'}}>
+                Data: PB2002 model,{' '}
+                <a href={CREDIT_LINKS.bird} style={creditLink} target="_blank" rel="noopener noreferrer">
+                    Peter Bird (2003)
+                </a>
+                ; GIS data{' '}
+                <a href={CREDIT_LINKS.gis} style={creditLink} target="_blank" rel="noopener noreferrer">
+                    Hugo Ahlenius, Nordpil
+                </a>
+                ,{' '}
+                <a href={CREDIT_LINKS.licence} style={creditLink} target="_blank" rel="noopener noreferrer">
+                    ODC-By 1.0
+                </a>
             </div>
         </React.Fragment>
     );
