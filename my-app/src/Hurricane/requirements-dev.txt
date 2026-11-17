@@ -1,0 +1,7 @@
+# Pinned test dependencies for the Hurricane pipeline.
+# Installed by the locked environment in src/pipeline_testing (uv.lock).
+# Runtime libraries (netCDF4, numpy, geopy, boto3, pillow, matplotlib) stay
+# on the `uv run --with` commands in the README. They are not test deps.
+pytest==9.2.0
+pytest-socket==0.8.1
+moto[s3]==5.2.5

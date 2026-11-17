@@ -154,3 +154,33 @@ uv run --with boto3 --with netCDF4 --with numpy --with pillow --with matplotlib 
 # 4. Deploy the site (uploads storms.json.gz; leaves hurricane-ir/ untouched):
 cd ../../.. && npm run deploy
 ```
+
+## Tests
+
+Pipeline tests are local and offline. From `my-app/`:
+
+```bash
+./test-pipelines.sh
+```
+
+That installs the locked environment in [`../pipeline_testing`](../pipeline_testing)
+(`uv.lock`, Python 3.11) and runs the Hurricane and Snow suites. Hurricane only:
+
+```bash
+uv run --directory src/pipeline_testing --frozen \
+  pytest --rootdir "$PWD/src/Hurricane" "$PWD/src/Hurricane/tests"
+```
+
+Direct pins are in [`requirements-dev.txt`](requirements-dev.txt) (pytest 9.2.0,
+pytest-socket 0.8.1, moto 5.2.5 with the `s3` extra). Transitive pins, including
+boto3, are in the lock. Runtime libraries stay on the `uv run --with` commands
+above.
+
+`pytest-socket` blocks Python sockets, including DNS. AWS credential files are
+set to `/dev/null`, credential environment variables are removed, and EC2
+instance metadata is disabled. S3 tests take the `moto_s3` fixture; its dummy
+`testing` keys exist only inside that fixture, and the credential files stay
+on `/dev/null`. `make_s3_client` still requests the `makoa` profile, which
+cannot load under that setting, so a test that calls it has to patch
+`make_s3_client`. pytest-socket does not see a `curl` subprocess; patch the
+download helper instead of letting it run.

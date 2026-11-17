@@ -1,0 +1,23 @@
+[project]
+name = "pipeline-testing"
+version = "0.0.0"
+description = "Locked test environment for the Hurricane and Snow pipelines. Runtime dependencies stay with each pipeline."
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "pytest==9.2.0",
+    "pytest-socket==0.8.1",
+    "moto[s3]==5.2.5",
+]
+
+[tool.pytest.ini_options]
+# Used when pytest is started from this directory. The my-app/test-pipelines.sh
+# command passes the same flags explicitly so one run covers both pipelines.
+addopts = "-p pipeline_testing.guards --disable-socket --import-mode=importlib"
+testpaths = ["../Hurricane/tests", "../Snow/tests"]
+pythonpath = [".."]

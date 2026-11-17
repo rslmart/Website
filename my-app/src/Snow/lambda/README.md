@@ -57,3 +57,7 @@ BUCKET_NAME=your-bucket DISTRIBUTION_ID=EXXXX python handler.py
 # Or invoke the deployed function:
 aws lambda invoke --function-name wa-snowfall-daily-updater /dev/stdout
 ```
+
+The automated suite does not use those credentials. From `my-app/`,
+`./test-pipelines.sh` runs the Snow tests with network blocked and with moto
+available for S3. See the Snow README.
