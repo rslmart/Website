@@ -67,11 +67,24 @@ const formatValue = (key, value) => {
     return value || 'N/A';
 };
 
-const NodeToolTip = ({ data }) => {
+const NodeToolTip = ({ data, onFocus }) => {
     if (!data) return null;
+
+    const title = String(data.label || '').split('\n')[0];
+    const showFocus = typeof onFocus === 'function' && data.id && data.type !== 'marriage';
 
     return (
         <div>
+            {showFocus && (
+                <button
+                    type="button"
+                    className="royal-tree-focus-enter"
+                    onClick={() => onFocus(data.id)}
+                    aria-label={`Focus on ${title}`}
+                >
+                    Focus
+                </button>
+            )}
             <div style={{
                 fontWeight: 'bold',
                 marginBottom: '8px',

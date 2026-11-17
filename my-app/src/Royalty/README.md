@@ -112,6 +112,13 @@ People without an uploaded portrait render as a solid colored node.
   birth year. Clicking a shared node highlights the bloodline path to the nearest
   monarch in each connected realm.
 
+## Focused person
+
+`focusedPersonId` on the page state is the Wikidata id of the person in focus,
+or `null` when the full tree is showing. The hourglass depth and the expanded
+`+k` branches are separate fields. The page does not write `focusedPersonId`,
+or anything else about focus, to the URL.
+
 ## Regenerating the data
 
 ```bash
