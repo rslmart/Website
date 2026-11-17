@@ -20,10 +20,20 @@ export default defineConfig({
         baseURL,
         serviceWorkers: "block",
         trace: "retain-on-failure",
+        // Light is pinned so a dark system theme cannot move these tests.
+        colorScheme: "light",
     },
     projects: [
-        { name: "desktop", use: { ...devices["Desktop Chrome"] } },
-        { name: "phone", use: { ...devices["Pixel 7"] } },
+        // Widths are the shell-smoke sizes. Phone keeps Pixel 7's touch/mobile
+        // flags so the data pages take their phone layout; only the viewport changes.
+        {
+            name: "desktop",
+            use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } },
+        },
+        {
+            name: "phone",
+            use: { ...devices["Pixel 7"], viewport: { width: 390, height: 844 } },
+        },
     ],
     webServer: {
         command: `npx vite build && npx vite preview --host 127.0.0.1 --port ${PORT} --strictPort`,
