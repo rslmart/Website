@@ -10,7 +10,7 @@ tree cannot change another tree's people, whatever the build order.
 import json
 import os
 
-from royaltree import wikidata
+from royaltree import wdqs, wikidata
 from royaltree.store import atomic_write
 
 
@@ -35,12 +35,13 @@ class Labels:
         self.map.update(found)
         missing = [q for q in need if q not in found]
         if missing and not self.offline:
-            for ents, batch in wikidata.iter_entity_batches(missing, props="labels|info"):
-                labels = {q: wikidata.entity_label(ents.get(q)) for q in batch}
-                revs = {q: ents[q].get("lastrevid") for q in batch if q in ents}
-                self.store.put_many("label", labels, "wbgetentities", revs)
-                self.map.update(labels)
-                self.counters["labels_fetched"] += len(labels)
+            # WDQS first. fetch_labels uses wbgetentities only when WDQS does not answer.
+            found_labels = wdqs.fetch_labels(missing)
+            labels = {q: (found_labels.get(q) or {}).get("label") for q in missing}
+            labels = {q: label for q, label in labels.items() if label}
+            self.store.put_many("label", labels, wdqs.SOURCE)
+            self.map.update(labels)
+            self.counters["labels_fetched"] += len(labels)
         elif missing:
             self.counters["labels_missing_offline"] += len(missing)
 
@@ -48,8 +49,24 @@ class Labels:
         return self.map.get(qid, default)
 
 
+def _load_people(store, qids):
+    """Typed rows win field by field. Kind ``person`` fills anything they omit."""
+    qids = list(qids)
+    if not qids:
+        return {}
+    typed = store.get(wdqs.KIND, qids)
+    legacy = store.get("person", qids)
+    out = {}
+    for qid in qids:
+        if qid in typed:
+            out[qid] = wdqs.merge_person(typed[qid], legacy.get(qid))
+        elif qid in legacy:
+            out[qid] = legacy[qid]
+    return out
+
+
 def _labelled(store, labels, qids):
-    raw = store.get("person", qids)
+    raw = _load_people(store, qids)
     needed = set()
     for rec in raw.values():
         needed |= wikidata.qids_in(rec)

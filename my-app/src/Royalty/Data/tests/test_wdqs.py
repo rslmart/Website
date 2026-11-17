@@ -284,6 +284,10 @@ def test_format_date_century_decade_and_bce():
     assert "/" not in decade
     assert wdqs.format_date({"time": "1990-01-01T00:00:00Z", "precision": 8}) == "1990s"
     assert wdqs.format_date({"time": "+0000-00-00T00:00:00Z", "precision": 9}) == "1 BCE"
+    assert wdqs.format_date({"time": "+0000-00-00T00:00:00Z", "precision": 11}) == "1 BCE"
+    assert wdqs.format_date({"time": "+0000-00-00T00:00:00Z", "precision": 7}) == "c. 1st century"
+    assert wdqs.format_date({"time": "+0000-00-00T00:00:00Z", "precision": 8}) == "0s"
+    assert wdqs.format_date({"time": "+0000-00-00T00:00:00Z", "precision": 6}) == "c. 1st millennium"
     assert wdqs.format_date({"time": "-0043-03-15T00:00:00Z", "precision": 11}) == "15 March 44 BCE"
     assert wdqs.format_date({"time": "+0044-03-15T00:00:00Z", "precision": 11}) == "15 March 44"
     assert wdqs.format_date({"time": "-0100-01-01T00:00:00Z", "precision": 7}) == "c. 2nd century BCE"
@@ -311,6 +315,8 @@ def test_pinned_cases(pinned):
     # A somevalue snak is in the pin, and the real date is still there.
     assert "somevalue" in _snaks(pinned, "Q215224", "P569")
     assert "value" in records["Q215224"]["date of birth"]
+    death = records["Q215224"]["date of death"]
+    assert death.get("tie") is True and "value" not in death
     assert "somevalue" in _snaks(pinned, "Q170470", "P570")
     assert "value" in records["Q170470"]["date of death"]
     uk = [p for p in records["Q43274"]["position held"] if p.get("id") == "Q9134365"]
@@ -323,21 +329,39 @@ def test_pinned_cases(pinned):
 def test_queries_are_sequential_batches_without_best_rank_only():
     texts = wdqs.queries_for(["Q43274", "Q45068"])
     names = [text.split("# royaltree wdqs ", 1)[1].split("\n", 1)[0] for text in texts]
-    assert names == ["single", "dates", "relations", "positions"]
+    assert names == ["facts", "dates", "positions"]
     joined = "\n".join(texts)
     assert "BestRank" not in joined
     assert joined.count("{") == joined.count("}")
     assert "DeprecatedRank" in joined and "isSomeValue" in joined
-    assert "P582" not in texts[2]
-    assert "OPTIONAL" in texts[3] and "pqv:P582" in texts[3]
+    assert "timeValue" not in texts[0] and "P40" in texts[0] and "P22" in texts[0]
+    assert "wikibase:timeValue" in texts[1]
+    assert "OPTIONAL" in texts[2] and "pqv:P582" in texts[2]
+    inverse = wdqs.inverse_query(["Q1"])
+    assert "BestRank" not in inverse and "DeprecatedRank" in inverse
+    assert "P22" in inverse and "P25" in inverse and "P40" in inverse
     assert "wd:Q43274" in texts[0] and "wd:Q45068" in texts[0]
     with pytest.raises(ValueError):
         wdqs.queries_for(["Q1; DROP"])
 
 
+def test_walk_groups_keep_time_value_off_the_facts_query():
+    facts = wdqs.queries_for(["Q43274"], groups=("facts",))
+    assert len(facts) == 1
+    assert "timeValue" not in facts[0]
+    assert "P22" in facts[0] and "P25" in facts[0] and "P40" in facts[0] and "P3373" in facts[0]
+    later = wdqs.queries_for(["Q43274"], groups=("positions", "dates"))
+    names = [text.split("# royaltree wdqs ", 1)[1].split("\n", 1)[0] for text in later]
+    assert names == ["dates", "positions"]
+    assert "wikibase:timeValue" in later[0]
+    assert "pqv:P582" in later[1]
+    with pytest.raises(ValueError):
+        wdqs.queries_for(["Q1"], groups=("timeValue",))
+
+
 def test_fetch_posts_in_batches_of_about_400(fake_http):
     wdqs.fetch_typed([f"Q{i}" for i in range(1, 402)])
-    assert len(fake_http.calls) == 8  # 2 batches x 4 queries, in order
+    assert len(fake_http.calls) == 6  # 2 batches x 3 queries, in order
     first = fake_http.calls[0]
     assert first["method"] == "post"
     assert first["url"] == wdqs.ENDPOINT
@@ -346,13 +370,58 @@ def test_fetch_posts_in_batches_of_about_400(fake_http):
     assert first["timeout"] == http.DEFAULT_TIMEOUT
     assert "query" in first["data"]
     assert "wd:Q400" in first["data"]["query"] and "wd:Q401" not in first["data"]["query"]
-    second_batch = fake_http.calls[4]["data"]["query"]
+    second_batch = fake_http.calls[3]["data"]["query"]
     assert "wd:Q401" in second_batch and "wd:Q400" not in second_batch
-    assert http.STATS.requests == 8
+    assert http.STATS.requests == 6
     names = []
-    for call in fake_http.calls[:4]:
+    for call in fake_http.calls[:3]:
         names.append(call["data"]["query"].split("# royaltree wdqs ", 1)[1].split("\n", 1)[0])
-    assert names == ["single", "dates", "relations", "positions"]
+    assert names == ["facts", "dates", "positions"]
+
+
+def test_facts_during_the_walk_are_one_query_and_the_tail_stays_at_400(fake_http):
+    ids = [f"Q{i}" for i in range(1, 402)]
+    wdqs.fetch_typed(ids, groups=("facts",))
+    assert len(fake_http.calls) == 2  # 2 batches x the facts query only
+    assert "wd:Q400" in fake_http.calls[0]["data"]["query"]
+    assert "wd:Q401" not in fake_http.calls[0]["data"]["query"]
+    assert "timeValue" not in fake_http.calls[0]["data"]["query"]
+    fake_http.calls.clear()
+    wdqs.fetch_typed(ids, groups=("dates", "positions"))
+    assert len(fake_http.calls) == 4  # 2 batches x dates, then positions
+    names = [call["data"]["query"].split("# royaltree wdqs ", 1)[1].split("\n", 1)[0]
+             for call in fake_http.calls]
+    assert names == ["dates", "positions", "dates", "positions"]
+    assert "wikibase:timeValue" in fake_http.calls[0]["data"]["query"]
+    assert "pqv:P582" in fake_http.calls[1]["data"]["query"]
+    assert "wd:Q401" not in fake_http.calls[0]["data"]["query"]
+    assert "wd:Q401" in fake_http.calls[2]["data"]["query"]
+
+
+def test_merge_enrichment_keeps_facts_ties_and_open_positions():
+    base = {
+        "id": "Q1", "revision": 3,
+        "father": {"rank": "preferred", "value": {"id": "Q2"}},
+        "child": [{"rank": "normal", "id": "Q3"}],
+        "date of birth": {"rank": "normal", "value": {"time": "+1000-01-01T00:00:00Z", "precision": 9}},
+    }
+    extra = {
+        "id": "Q1", "revision": 4,
+        "date of death": {"rank": "normal", "tie": True, "values": [
+            {"time": "+1125-01-01T00:00:00Z", "precision": 9},
+            {"time": "+1200-01-01T00:00:00Z", "precision": 7},
+        ]},
+        "position held": [{"rank": "preferred", "id": "Q9134365",
+                           "start": {"time": "2022-09-08T00:00:00Z", "precision": 11}}],
+    }
+    merged = wdqs.merge_enrichment(base, extra)
+    assert merged["father"]["value"]["id"] == "Q2"
+    assert merged["child"][0]["id"] == "Q3"
+    assert merged["date of death"]["tie"] is True and "value" not in merged["date of death"]
+    assert "date of birth" not in merged
+    assert "end" not in merged["position held"][0]
+    assert merged["position held"][0]["start"]["time"].startswith("2022")
+    assert merged["revision"] == 4
 
 
 def test_client_parses_a_posted_result(fake_http, pinned):
@@ -429,6 +498,54 @@ def test_missing_label_service_qid_is_not_a_label(fake_http):
         }]},
     })]
     assert wdqs.fetch_labels(["Q1"], retries=1) == {"Q1": {"label": None, "description": None}}
+
+
+def test_assess_expects_an_explicit_death_tie():
+    tied = {"id": "Q215224", "date of death": {
+        "rank": "normal", "tie": True,
+        "values": [
+            {"time": "1200-01-01T00:00:00Z", "precision": 7},
+            {"time": "1125-01-01T00:00:00Z", "precision": 9},
+        ],
+    }}
+    expect = {"Q215224": {"death_tie": [
+        {"time": "1125-01-01T00:00:00Z", "precision": 9},
+        {"time": "1200-01-01T00:00:00Z", "precision": 7},
+    ]}}
+    assert wdqs.assess({"Q215224": tied}, expect) == []
+    picked = {"id": "Q215224", "date of death": {
+        "rank": "normal", "value": {"time": "1125-01-01T00:00:00Z", "precision": 9},
+    }}
+    assert wdqs.assess({"Q215224": picked}, expect)
+
+
+def test_merge_person_keeps_a_date_tie_and_drops_a_parent_tie():
+    typed = {"id": "Q1", "father": {
+        "rank": "normal", "tie": True, "values": [{"id": "Q2"}, {"id": "Q3"}],
+    }, "date of death": {
+        "rank": "normal", "tie": True, "values": [
+            {"time": "1125-01-01T00:00:00Z", "precision": 9},
+            {"time": "1200-01-01T00:00:00Z", "precision": 7},
+        ],
+    }}
+    legacy = {"id": "Q1", "father": "Q2", "date of death": "+1125-00-00T00:00:00Z",
+              "child": ["Q4"], "label": "Someone"}
+    merged = wdqs.merge_person(typed, legacy)
+    assert "father" not in merged
+    assert merged["date of death"]["tie"] is True and "value" not in merged["date of death"]
+    assert merged["child"] == ["Q4"] and merged["label"] == "Someone"
+    single = {"id": "Q1", "father": {"rank": "preferred", "value": {"id": "Q9"}}}
+    assert wdqs.merge_person(single, legacy)["father"] == "Q9"
+
+
+def test_parse_inverse_links_both_directions_and_skips_self():
+    result = sparql([
+        {"item": uri(WD + "Q1"), "other": uri(WD + "Q2"), "pid": lit("P40")},
+        {"item": uri(WD + "Q1"), "other": uri(WD + "Q3"), "pid": lit("P22")},
+        {"item": uri(WD + "Q1"), "other": uri(WD + "Q1"), "pid": lit("P25")},
+        {"item": uri(WD + "Q9"), "other": uri(WD + "Q2"), "pid": lit("P40")},
+    ])
+    assert wdqs.parse_inverse(result, ["Q1"]) == [("Q1", "Q2", "P40"), ("Q1", "Q3", "P22")]
 
 
 def test_store_source_and_kind_are_wdqs(tmp_path):

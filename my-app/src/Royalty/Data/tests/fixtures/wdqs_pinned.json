@@ -7132,7 +7132,11 @@
       }
     },
     "Q215224": {
-      "birth_has_value": true
+      "birth_has_value": true,
+      "death_tie": [
+        {"time": "1125-01-01T00:00:00Z", "precision": 9},
+        {"time": "1200-01-01T00:00:00Z", "precision": 7}
+      ]
     },
     "Q170470": {
       "death_has_value": true
