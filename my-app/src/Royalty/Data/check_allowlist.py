@@ -26,6 +26,7 @@ ALLOWLIST = {
         "subjects": {
             "Q1230482",    # both Q1528
             "Q24883338",   # both Q24239614
+            "Q3495067",    # both Q103560123 (seen again in the 2026-11-17 rebuild)
             "Q96238919",   # both Q96238920
         },
     },
@@ -35,17 +36,15 @@ ALLOWLIST = {
                   "QID, the record is the redirect target, so one person can "
                   "appear twice. Fix in -wdqs-fetch (resolve redirects).",
         "subjects": {
-            "Q100436124",  # holds Q10347659
             "Q11067934",   # holds Q6759744
-            "Q19959139",   # holds Q110414640
-            "Q55114348",   # holds Q101519918
-            "Q61889411",   # holds Q17997225
+            # Q100436124, Q19959139, Q55114348 and Q61889411 no longer mismatch
+            # after the 2026-11-17 rebuild: each redirect target is the published record.
         },
     },
     "schema-person": {
         "reason": "null inside a labelled list: the referenced item had no "
                   "English label (or, for 'unmarried partner', the known "
-                  "label-before-combine bug in CleanRoyalTreeData.py). Fix in "
+                  "label-before-combine bug, now in royaltree/build.py combine). Fix in "
                   "-wdqs-fetch.",
         "subjects": {
             "Q10290543:occupation",
@@ -55,17 +54,12 @@ ALLOWLIST = {
             "Q19244:occupation",
             "Q2889821:occupation",
             "Q3108524:occupation",
+            "Q12860:unmarried partner",  # null in the list; same label bug as Q361000
             "Q361000:unmarried partner",
             "Q379792:languages spoken, written or signed",
             "Q72686:occupation",
             "Q827937:occupation",
         },
-    },
-    "succession-dangling": {
-        "reason": "A succession path names a person missing from "
-                  "monarchy_data.json, so the frontend can't draw it. Fix in "
-                  "-monarch-registry / -wdqs-fetch.",
-        "subjects": {"Poland.json.gz:Q75385627"},
     },
     # --- Bulk rules (subjects in check_allowlist.json) -----------------------
     "monarch-missing": {

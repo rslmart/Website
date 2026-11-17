@@ -1,0 +1,4 @@
+# Entity store (royaltree/store.py) and its WAL/lock files: regenerable caches.
+data/royaltree.sqlite*
+# Read-only APFS clone of the pre-store JSON caches, used by import-legacy.
+data.legacy/

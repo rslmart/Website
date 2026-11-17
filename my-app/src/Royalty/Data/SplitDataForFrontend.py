@@ -18,12 +18,15 @@ Outputs (public/royalty/):
     <House>.json.gz           -> { type:"house", monarchList, successionList:[],
                                    members, nodes } (optional)
 
-Run from the Data/ directory (or via pipeline.py). Pure local transform; no
+Run via ``python -m royaltree split`` (or standalone from Data/). Pure local transform; no
 network access required.
 """
 import gzip
+import io
 import json
 import os
+
+from royaltree.store import atomic_write
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 PUBLIC_DIR = os.path.abspath(
@@ -63,8 +66,11 @@ def _write_gz(path, payload):
     identical bytes (and ``aws s3 sync`` skips it). Returns the raw size.
     """
     raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
-    with gzip.GzipFile(path, "wb", mtime=0) as out:
+    buf = io.BytesIO()
+    # filename= keeps the same gzip FNAME header as writing to ``path`` directly.
+    with gzip.GzipFile(filename=os.path.basename(path), mode="wb", fileobj=buf, mtime=0) as out:
         out.write(raw)
+    atomic_write(path, buf.getvalue())
     return len(raw)
 
 
@@ -77,7 +83,7 @@ def split():
         monarch_lists = json.load(f)
 
     # Optional, additive: ancestor+sibling closures for European monarchies
-    # (produced by GatherAncestors.combine_ancestors, stored per-monarchy in
+    # (produced by royaltree/build.py combine, stored per-monarchy in
     # monarchy_ancestors.json). Absent -> frontend keeps current behavior.
     extended_map = {}
     extended_path = os.path.join(DATA_DIR, "monarchy_ancestors.json")
@@ -107,9 +113,9 @@ def split():
             extra = f", {len(payload['extendedNodes'])} extended"
         print(f"{monarchy}: {len(payload['nodes'])} nodes{extra} -> {out_path} ({raw_size} B raw)")
 
-    with open(os.path.join(PUBLIC_DIR, "index.json"), "w") as f:
-        json.dump(monarchies, f)
+    atomic_write(os.path.join(PUBLIC_DIR, "index.json"), json.dumps(monarchies))
     print(f"Wrote index with {len(monarchies)} monarchies to {PUBLIC_DIR}")
+    return monarchies
 
 
 def split_houses():
@@ -124,7 +130,7 @@ def split_houses():
     houses_path = os.path.join(DATA_DIR, "houses.json")
     if not os.path.exists(houses_path):
         print("No houses.json; skipping house split.")
-        return
+        return []
 
     with open(houses_path) as f:
         houses = json.load(f)
@@ -145,11 +151,46 @@ def split_houses():
               f"{len(payload['nodes'])} nodes ({raw_size} B raw)")
 
     index.sort(key=lambda h: h["name"])
-    with open(os.path.join(PUBLIC_DIR, "houses.json"), "w") as f:
-        json.dump(index, f)
+    atomic_write(os.path.join(PUBLIC_DIR, "houses.json"), json.dumps(index))
     print(f"Wrote houses index with {len(index)} houses to {PUBLIC_DIR}")
+    return [h["id"] for h in index]
+
+
+def listed_names(path, key=None):
+    """Names a royalty index file lists (strings only; anything else is ignored)."""
+    if not os.path.exists(path):
+        return set()
+    with open(path) as f:
+        items = json.load(f)
+    if not isinstance(items, list):
+        return set()
+    if key:
+        items = [i.get(key) for i in items if isinstance(i, dict)]
+    return {i for i in items if isinstance(i, str) and i and os.path.basename(i) == i}
+
+
+def published_names():
+    """Payload names the current index.json and houses.json list. Read this
+    before split() overwrites them, then hand it to prune()."""
+    return (listed_names(os.path.join(PUBLIC_DIR, "index.json"))
+            | listed_names(os.path.join(PUBLIC_DIR, "houses.json"), key="id"))
+
+
+def prune(previous, names):
+    """Delete payloads the previous indexes listed that this split no longer
+    writes (e.g. a house that fell below MIN_HOUSE_MEMBERS). Only names a
+    royalty index listed are ever deleted, so a folder that was never a royalty
+    payload folder (a mistyped --out-dir) loses nothing. Returns what was removed."""
+    removed = []
+    for name in sorted(set(previous) - set(names)):
+        path = os.path.join(PUBLIC_DIR, name + ".json.gz")
+        if os.path.exists(path):
+            os.remove(path)
+            removed.append(name + ".json.gz")
+            print(f"Removed stale payload {name}.json.gz")
+    return removed
 
 
 if __name__ == "__main__":
-    split()
-    split_houses()
+    _previous = published_names()
+    prune(_previous, split() + split_houses())

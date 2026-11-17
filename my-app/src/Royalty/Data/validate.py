@@ -47,7 +47,7 @@ DATE = {"type": "string", "pattern": r"^[+-][0-9]{1,}-[0-9]{2}-[0-9]{2}T00:00:00
 STR_OR_NULL = {"type": ["string", "null"]}
 QID_LIST = {"type": "array", "items": QID}
 STR_LIST = {"type": "array", "items": {"type": "string"}}
-# Wikidata items labelled to strings by GetData.label_people.
+# Wikidata items labelled to strings by royaltree.wikidata.label_record.
 LABEL_LIST = {"type": "array", "items": {"type": "string"}}
 QUALIFIED_LIST = {
     "type": "array",
@@ -59,7 +59,7 @@ QUALIFIED_LIST = {
             "label": STR_OR_NULL,
             "start time": DATE,
             "end time": DATE,
-            # Qualifiers kept by GetData.py (see P155/P1365 there): predecessors (P1365,
+            # Qualifiers kept by royaltree/wikidata.py parse_person (see P155/P1365 there): predecessors (P1365,
             # P155) as "from" and successors (P1366, P156) as "to" stay Q-IDs;
             # P642/P1001 "of" and P1534 "end cause" are labelled.
             "from": QID_LIST,

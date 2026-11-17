@@ -37,6 +37,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 from PIL import Image
 
+from royaltree.http import USER_AGENT
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH = os.path.join(HERE, "data", "monarchy_data.json")
 MANIFEST_PATH = os.path.join(HERE, "monarch_images_manifest.json")
@@ -50,8 +52,8 @@ S3_PROFILE = "makoa"
 THUMB_WIDTH = 200
 JPEG_QUALITY = 82
 
-# Wikimedia requires a descriptive User-Agent (see utils.WIKIMEDIA_HEADERS).
-HEADERS = {"User-Agent": "MonarchyBot/0.1 (makoa1693@gmail.com)"}
+# Wikimedia requires a descriptive User-Agent; one source: royaltree/http.py.
+HEADERS = {"User-Agent": USER_AGENT}
 FILEPATH_BASE = "https://commons.wikimedia.org/wiki/Special:FilePath"
 
 _print_lock = threading.Lock()
