@@ -1,7 +1,8 @@
 import { resolve } from "node:path";
-import { readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { defineConfig, loadEnv, createFilter, transformWithEsbuild } from "vite";
 import react from "@vitejs/plugin-react";
+import { ROUTES, applySiteMetaBlock, routeByPath } from "./src/siteMeta.js";
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
     setEnv(mode);
@@ -16,6 +17,7 @@ export default defineConfig(({ mode }) => {
             importPrefixPlugin(),
             htmlPlugin(mode),
             svgrPlugin(),
+            routeHtmlPlugin(),
         ],
     };
 });
@@ -114,11 +116,13 @@ function buildPathPlugin() {
 function basePlugin() {
     return {
         name: "base-plugin",
-        config(_, { mode }) {
-            const { PUBLIC_URL } = loadEnv(mode, ".", ["PUBLIC_URL"]);
-            return {
-                base: PUBLIC_URL || "",
-            };
+        config() {
+            // The site is served from the domain root. package.json
+            // `homepage: "."` is the CRA relative-path default; using it as
+            // Vite's base rewrites icon links to `/./favicon-...` and would
+            // point a nested route shell at the wrong script. Data URLs still
+            // use process.env.PUBLIC_URL, which stays `.`.
+            return { base: "/" };
         },
     };
 }
@@ -165,6 +169,51 @@ function svgrPlugin() {
                     code: res.code,
                     map: null,
                 };
+            }
+        },
+    };
+}
+/* One built shell per route, so /Bio's response already contains that
+   page's title and share tags. Preview crawlers do not run the bundle.
+   Rendering the React tree here would pull in Mapbox and deck.gl for a
+   head that does not need them. */
+function routeHtmlPlugin() {
+    let outDir = "build";
+    let command = "serve";
+    return {
+        name: "route-html",
+        configResolved(config) {
+            outDir = config.build.outDir;
+            command = config.command;
+        },
+        transformIndexHtml(html, ctx) {
+            if (command === "build") return html;
+            const route = routeByPath(ctx?.originalUrl || "/") ?? ROUTES[0];
+            return applySiteMetaBlock(html, route);
+        },
+        closeBundle() {
+            if (command !== "build") return;
+            const indexPath = resolve(outDir, "index.html");
+            if (!existsSync(indexPath)) return;
+            const shell = readFileSync(indexPath, "utf8");
+            for (const route of ROUTES) {
+                const html = applySiteMetaBlock(shell, route);
+                if (route.path === "/") {
+                    writeFileSync(indexPath, html);
+                    continue;
+                }
+                // Vite's preview fallback rewrites /Bio to /Bio.html, and a
+                // trailing slash rewrites /Bio/ to /Bio/index.html. Write
+                // both so either URL has this route's tags before JS runs.
+                // public/ is already in outDir. hurricane, snow, and
+                // tectonics exist, and this disk ignores case, so a
+                // Hurricane/ shell would sit beside the data files.
+                const name = route.path.slice(1);
+                writeFileSync(resolve(outDir, `${name}.html`), html);
+                const dir = resolve(outDir, name);
+                if (existsSync(dir)) continue;
+                mkdirSync(dir, { recursive: true });
+                writeFileSync(resolve(dir, "index.html"), html);
             }
         },
     };

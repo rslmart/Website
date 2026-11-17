@@ -14,6 +14,7 @@ import Home from "./Home";
 import NotFound from "./NotFound";
 import ThemeToggle from "./components/ThemeToggle";
 import useTheme from "./hooks/useTheme";
+import { applyDocumentMeta, routeByPath } from "./siteMeta";
 
 /* Each page is its own chunk, fetched only when its route is visited, so
    e.g. /Snow and /Bio never download mapbox-gl or deck.gl. React Router's
@@ -151,6 +152,10 @@ function RootLayout() {
     useEffect(() => writeReloadFlag(null), []);
     const { pathname } = useLocation();
     const { theme, lightOnly } = useTheme(pathname);
+    useEffect(() => {
+        const route = routeByPath(pathname);
+        if (route) applyDocumentMeta(route);
+    }, [pathname]);
     // The toggle comes after the page in the DOM so Tab reaches the page's
     // Home button (visually to its left) first.
     return (
