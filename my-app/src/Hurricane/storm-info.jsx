@@ -89,8 +89,81 @@ const stormInfoStyles = {
     zIndex: 9999,
 };
 
+const tapButton = {
+    minWidth: 44,
+    minHeight: 44,
+    padding: 0,
+    fontSize: 18,
+    lineHeight: 1,
+    border: "1px solid var(--color-border)",
+    borderRadius: "var(--radius-sm)",
+    background: "var(--color-surface)",
+    color: "var(--color-text)",
+    cursor: "pointer",
+};
+
+const imageryFrame = {
+    width: "100%",
+    maxWidth: 300,
+    minHeight: 72,
+    margin: "8px 0",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    boxSizing: "border-box",
+    border: "1px solid var(--color-border)",
+    borderRadius: "var(--radius-sm)",
+    background: "var(--color-surface)",
+    color: "var(--color-text)",
+    fontSize: 16,
+    textAlign: "center",
+    padding: "8px 12px",
+};
+
+function SatelliteImage({ stormInfo, pointInfo }) {
+    const irKey = `${stormInfo["id"]}|${pointInfo.date_time}`;
+    const [attempt, setAttempt] = React.useState(0);
+    const [ready, setReady] = React.useState(false);
+    React.useEffect(() => {
+        setAttempt(0);
+        setReady(false);
+    }, [irKey]);
+
+    const candidates = buildIrCandidateUrls(stormInfo, pointInfo);
+    const season = stormInfo.season || 0;
+    const source = season >= 2016 ? "Enhanced IR — RAMMB/CIRA" : "Infrared — HURSAT-B1 (NOAA NCEI)";
+    const url = attempt < candidates.length ? candidates[attempt] : null;
+
+    if (!url) {
+        return (
+            <div role="status" style={imageryFrame}>No imagery</div>
+        );
+    }
+
+    return (
+        <div aria-busy={!ready} style={{ maxWidth: 300 }}>
+            {!ready && (
+                <div role="status" style={imageryFrame}>Loading imagery…</div>
+            )}
+            <img
+                key={url}
+                src={url}
+                alt={`Infrared satellite image of ${stormInfo["name"]} near ${pointInfo.date_time}`}
+                aria-hidden={ready ? undefined : true}
+                style={{ width: "100%", maxWidth: 300, display: ready ? "block" : "none" }}
+                onLoad={() => setReady(true)}
+                onError={() => {
+                    setReady(false);
+                    setAttempt((n) => n + 1);
+                }}
+            />
+            {ready && <div style={{ fontSize: 11, color: "var(--color-text-faint)" }}>{source}</div>}
+        </div>
+    );
+}
+
 function StormInfo(props) {
-    const { stormInfo, selectedPoint, onChange, exitStormInfo, embedded } = props;
+    const { stormInfo, selectedPoint, onChange, exitStormInfo, embedded, collapsed, onToggleCollapsed } = props;
 
     function getColorToHex(windSpeed) {
         const color = getColorFromWindSpeed(windSpeed);
@@ -98,13 +171,6 @@ function StormInfo(props) {
     }
 
     const pointInfo = stormInfo.track_points[selectedPoint];
-    const irCandidates = buildIrCandidateUrls(stormInfo, pointInfo);
-    const irSource = (stormInfo.season || 0) >= 2016 ? "Enhanced IR — RAMMB/CIRA" : "Infrared — HURSAT-B1 (NOAA NCEI)";
-    // Reset to the exact-hour candidate whenever the selected point (or storm) changes.
-    const irKey = `${stormInfo["id"]}|${pointInfo.date_time}`;
-    const [irIndex, setIrIndex] = React.useState(0);
-    React.useEffect(() => { setIrIndex(0); }, [irKey]);
-    const irImageUrl = irIndex < irCandidates.length ? irCandidates[irIndex] : null;
 
     // Prepare chart data
     const chartData = stormInfo.track_points.map((point, i) => ({
@@ -120,32 +186,25 @@ function StormInfo(props) {
     const pressureValues = chartData.map(d => d.pressure).filter(Boolean);
     const hasPressureData = pressureValues.length > 0;
 
-    return (
-        <div style={embedded ? { color: 'var(--color-text-muted)' } : stormInfoStyles}>
-            {/* Header and close button remains the same */}
-            <div style={{ marginBottom: "20px" }}>
-                <h3 style={{ float: "left", marginTop: 0, marginBottom: 0, color: "var(--color-text)" }}>
-                    {stormInfo["name"]} {stormInfo["season"]}
-                    {stormInfo.provisional ? " · Provisional" : ""}
-                </h3>
-                <button onClick={evt => exitStormInfo(evt)} style={{ float: "right" }} aria-label="Close storm details">&times;</button>
-            </div>
+    const title = (
+        <h3 style={{
+            float: embedded ? "none" : "left",
+            flex: embedded ? 1 : undefined,
+            marginTop: 0,
+            marginBottom: 0,
+            color: "var(--color-text)",
+            fontSize: embedded ? 16 : undefined,
+        }}>
+            {stormInfo["name"]} {stormInfo["season"]}
+            {stormInfo.provisional ? " · Provisional" : ""}
+        </h3>
+    );
 
-            {/* IR imagery: HURSAT-B1 (1978-2015, pre-rendered to S3) or RAMMB/CIRA (2016+).
-                Falls back to the nearest available frame before/after; hidden only if none load. */}
-            {irImageUrl && (
-                <div>
-                    <img
-                        src={irImageUrl}
-                        alt={`Infrared satellite image of ${stormInfo["name"]} near ${pointInfo.date_time}`}
-                        style={{ width: "300px", display: "block" }}
-                        onError={() => setIrIndex((i) => i + 1)}
-                    />
-                    <div style={{ fontSize: 11, color: "var(--color-text-faint)" }}>{irSource}</div>
-                </div>
-            )}
+    const body = (
+        <>
+            <SatelliteImage stormInfo={stormInfo} pointInfo={pointInfo} />
 
-            <div style={{ width: 300, height: 300 }}>
+            <div style={{ width: embedded ? "100%" : 300, maxWidth: 300, height: embedded ? 200 : 300 }}>
                 <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={chartData}>
                         <CartesianGrid strokeDasharray="3 3" />
@@ -242,10 +301,15 @@ function StormInfo(props) {
                 </ResponsiveContainer>
             </div>
 
-            {/* Rest of the component remains the same */}
-            <div key={'selectedPoint'} className="input">
+            <div key={'selectedPoint'} className="input" style={embedded ? { display: "flex", alignItems: "center", gap: 8 } : undefined}>
                 <label>{"Select Point:  "}</label>
-                <button name="backwardSelectedPoint" onClick={evt => onChange(evt)} aria-label="Previous track point">{"<"}</button>
+                <button
+                    type="button"
+                    name="backwardSelectedPoint"
+                    onClick={evt => onChange(evt)}
+                    aria-label="Previous track point"
+                    style={embedded ? tapButton : undefined}
+                >{"<"}</button>
                 <input
                     name="selectedPoint"
                     type="range"
@@ -253,11 +317,51 @@ function StormInfo(props) {
                     min={0}
                     max={stormInfo.track_points.length - 1}
                     onChange={evt => onChange(evt)}
+                    style={embedded ? { flex: "1 1 auto", minHeight: 44, minWidth: 44 } : undefined}
                 />
-                <button name="forwardSelectedPoint" onClick={evt => onChange(evt)} aria-label="Next track point">{">"}</button>
+                <button
+                    type="button"
+                    name="forwardSelectedPoint"
+                    onClick={evt => onChange(evt)}
+                    aria-label="Next track point"
+                    style={embedded ? tapButton : undefined}
+                >{">"}</button>
             </div>
             <div>Date/Time: {pointInfo.date_time}</div>
             <div>Wind: {pointInfo.wind == null ? "—" : pointInfo.wind} Pressure: {pointInfo.pressure}</div>
+        </>
+    );
+
+    if (embedded) {
+        return (
+            <div style={{ color: "var(--color-text-muted)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 44 }}>
+                    {title}
+                    <button
+                        type="button"
+                        onClick={onToggleCollapsed}
+                        aria-expanded={!collapsed}
+                        aria-label={collapsed ? "Expand storm details" : "Collapse storm details"}
+                        style={tapButton}
+                    >
+                        {collapsed ? "+" : "−"}
+                    </button>
+                    <button type="button" onClick={evt => exitStormInfo(evt)} aria-label="Close storm details" style={tapButton}>
+                        &times;
+                    </button>
+                </div>
+                {!collapsed && body}
+            </div>
+        );
+    }
+
+    return (
+        <div style={stormInfoStyles}>
+            <div style={{ marginBottom: "20px" }}>
+                {title}
+                <button type="button" onClick={evt => exitStormInfo(evt)} style={{ float: "right" }} aria-label="Close storm details">&times;</button>
+            </div>
+            {body}
         </div>
     );
 }

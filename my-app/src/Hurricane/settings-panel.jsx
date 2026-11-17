@@ -25,7 +25,29 @@ const openButtonStyles = {
     fontWeight: 600,
     color: "var(--color-text)",
     cursor: "pointer",
+    minHeight: 44,
+    minWidth: 44,
 };
+
+function NumberField({ label, name, value, min, max, settings, onSettingsChange, embedded }) {
+    return (
+        <div>
+            <label htmlFor={name} style={embedded ? { display: "block", fontSize: 16, lineHeight: 1.35 } : undefined}>
+                {label}{embedded ? "" : ": "}
+            </label>
+            <input
+                id={name}
+                name={name}
+                type="number"
+                value={value}
+                min={min}
+                max={max}
+                onChange={evt => onSettingsChange(evt, settings)}
+                style={embedded ? { minHeight: 44, minWidth: 44, fontSize: 16, width: "100%", boxSizing: "border-box" } : undefined}
+            />
+        </div>
+    );
+}
 
 function SettingsPanel(props) {
     const openButtonRef = React.useRef(null);
@@ -47,181 +69,57 @@ function SettingsPanel(props) {
     const {cellSize, elevationScale} = gridSettings;
     const {radiusPixels, intensity, threshold} = heatmapSettings;
 
+    const field = (label, name, value, min, settings) => (
+        <NumberField
+            label={label}
+            name={name}
+            value={value}
+            min={min}
+            max={Number.MAX_SAFE_INTEGER}
+            settings={settings}
+            onSettingsChange={onSettingsChange}
+            embedded={embedded}
+        />
+    );
+    const heading = (text) => (
+        <div style={embedded ? { fontSize: 16, fontWeight: 600, marginTop: 8 } : undefined}>{text}</div>
+    );
+
     const scatterplotDiv = (
         <div>
-            <label>Scatterplot</label>
-            <div>
-                <label>radiusScale: </label>
-                <input
-                    name="radiusScale"
-                    type="number"
-                    value={radiusScale}
-                    min={1}
-                    max={Number.MAX_SAFE_INTEGER}
-                    onChange={evt => onSettingsChange(evt, scatterplotSettings)}
-                />
-            </div>
-            <div>
-                <label>radiusMinPixels: </label>
-                <input
-                    name="radiusMinPixels"
-                    type="number"
-                    value={radiusMinPixels}
-                    min={0}
-                    max={Number.MAX_SAFE_INTEGER}
-                   onChange={evt => onSettingsChange(evt, scatterplotSettings)}
-                />
-            </div>
-            <div>
-                <label>radiusMaxPixels: </label>
-                <input
-                    name="radiusMaxPixels"
-                    type="number"
-                    value={radiusMaxPixels}
-                    min={0}
-                    max={Number.MAX_SAFE_INTEGER}
-                   onChange={evt => onSettingsChange(evt, scatterplotSettings)}
-                />
-            </div>
-            <div>
-                <label>lineWidthScale: </label>
-                <input
-                    name="lineWidthScale"
-                    type="number"
-                    value={lineWidthScale}
-                    min={1}
-                    max={Number.MAX_SAFE_INTEGER}
-                   onChange={evt => onSettingsChange(evt, scatterplotSettings)}
-                />
-            </div>
-            <div>
-                <label>lineWidthMinPixels: </label>
-                <input
-                    name="lineWidthMinPixels"
-                    type="number"
-                    value={lineWidthMinPixels}
-                    min={0}
-                    max={Number.MAX_SAFE_INTEGER}
-                   onChange={evt => onSettingsChange(evt, scatterplotSettings)}
-                />
-            </div>
-            <div>
-                <label>lineWidthMaxPixels: </label>
-                <input
-                    name="lineWidthMaxPixels"
-                    type="number"
-                    value={lineWidthMaxPixels}
-                    min={0}
-                    max={Number.MAX_SAFE_INTEGER}
-                   onChange={evt => onSettingsChange(evt, scatterplotSettings)}
-                />
-            </div>
+            {heading("Scatterplot")}
+            {field("Point size", "radiusScale", radiusScale, 1, scatterplotSettings)}
+            {field("Minimum point size (px)", "radiusMinPixels", radiusMinPixels, 0, scatterplotSettings)}
+            {field("Maximum point size (px)", "radiusMaxPixels", radiusMaxPixels, 0, scatterplotSettings)}
+            {field("Outline width", "lineWidthScale", lineWidthScale, 1, scatterplotSettings)}
+            {field("Thinnest outline (px)", "lineWidthMinPixels", lineWidthMinPixels, 0, scatterplotSettings)}
+            {field("Thickest outline (px)", "lineWidthMaxPixels", lineWidthMaxPixels, 0, scatterplotSettings)}
         </div>
     );
 
     const lineDiv = (
         <div>
-            <label>Line</label>
-            <div>
-                <label>widthScale: </label>
-                <input
-                    name="widthScale"
-                    type="number"
-                    value={widthScale}
-                    min={1}
-                    max={Number.MAX_SAFE_INTEGER}
-                    onChange={evt => onSettingsChange(evt, lineSettings)}
-                />
-            </div>
-            <div>
-                <label>widthMinPixels: </label>
-                <input
-                    name="widthMinPixels"
-                    type="number"
-                    value={widthMinPixels}
-                    min={0}
-                    max={Number.MAX_SAFE_INTEGER}
-                    onChange={evt => onSettingsChange(evt, lineSettings)}
-                />
-            </div>
-            <div>
-                <label>widthMaxPixels: </label>
-                <input
-                    name="widthMaxPixels"
-                    type="number"
-                    value={widthMaxPixels}
-                    min={0}
-                    max={Number.MAX_SAFE_INTEGER}
-                    onChange={evt => onSettingsChange(evt, lineSettings)}
-                />
-            </div>
+            {heading("Line")}
+            {field("Line width", "widthScale", widthScale, 1, lineSettings)}
+            {field("Thinnest line (px)", "widthMinPixels", widthMinPixels, 0, lineSettings)}
+            {field("Thickest line (px)", "widthMaxPixels", widthMaxPixels, 0, lineSettings)}
         </div>
     );
 
     const gridDiv = (
         <div>
-            <label>Grid</label>
-            <div>
-                <label>cellSize: </label>
-                <input
-                    name="cellSize"
-                    type="number"
-                    value={cellSize}
-                    min={1}
-                    max={Number.MAX_SAFE_INTEGER}
-                    onChange={evt => onSettingsChange(evt, gridSettings)}
-                />
-            </div>
-            <div>
-                <label>elevationScale: </label>
-                <input
-                    name="elevationScale"
-                    type="number"
-                    value={elevationScale}
-                    min={0}
-                    max={Number.MAX_SAFE_INTEGER}
-                    onChange={evt => onSettingsChange(evt, gridSettings)}
-                />
-            </div>
+            {heading("Grid")}
+            {field("Cell size (m)", "cellSize", cellSize, 1, gridSettings)}
+            {field("Bar height", "elevationScale", elevationScale, 0, gridSettings)}
         </div>
     );
 
     const heatmapDiv = (
         <div>
-            <label>Heatmap</label>
-            <div>
-                <label>radiusPixels: </label>
-                <input
-                    name="radiusPixels"
-                    type="number"
-                    value={radiusPixels}
-                    min={1}
-                    max={Number.MAX_SAFE_INTEGER}
-                    onChange={evt => onSettingsChange(evt, heatmapSettings)}
-                />
-            </div>
-            <div>
-                <label>intensity: </label>
-                <input
-                    name="intensity"
-                    type="number"
-                    value={intensity}
-                    min={0}
-                    max={Number.MAX_SAFE_INTEGER}
-                    onChange={evt => onSettingsChange(evt, heatmapSettings)}
-                />
-            </div>
-            <div>
-                <label>threshold: </label>
-                <input
-                    name="threshold"
-                    type="number"
-                    value={threshold}
-                    min={0}
-                    max={Number.MAX_SAFE_INTEGER}
-                    onChange={evt => onSettingsChange(evt, heatmapSettings)}
-                />
-            </div>
+            {heading("Heatmap")}
+            {field("Blur radius (px)", "radiusPixels", radiusPixels, 1, heatmapSettings)}
+            {field("Intensity", "intensity", intensity, 0, heatmapSettings)}
+            {field("Threshold", "threshold", threshold, 0, heatmapSettings)}
         </div>
     );
 
@@ -256,8 +154,9 @@ function SettingsPanel(props) {
                 <h3 style={{float: "left", marginTop: 0, marginBottom: 0, color: "var(--color-text)"}}>Settings</h3>
                 <button
                     ref={collapseButtonRef}
+                    type="button"
                     onClick={evt => toggleSettingsPanel(evt)}
-                    style={{float: "right", border: "none", background: "none", fontSize: 20, lineHeight: 1, cursor: "pointer", color: "var(--color-text-muted)"}}
+                    style={{float: "right", border: "none", background: "none", fontSize: 20, lineHeight: 1, cursor: "pointer", color: "var(--color-text-muted)", minWidth: 44, minHeight: 44}}
                     aria-label="Collapse settings"
                     aria-expanded="true"
                 >

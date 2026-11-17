@@ -56,6 +56,7 @@ function FilterPanel(props) {
                                 <label>Name: </label>
                                 <input
                                     name="name"
+                                    type="text"
                                     value={name}
                                     onChange={evt => onChange(evt)}
                                 />

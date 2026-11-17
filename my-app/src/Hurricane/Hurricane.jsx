@@ -62,6 +62,21 @@ Filters
 // the Hurricane README (Map style).
 export const MAP_STYLE = "mapbox://styles/mapbox/dark-v9";
 
+// The shared sheet is 72dvh (88dvh on a short screen) and covers the track.
+// These caps leave the upper map clear; fit padding below uses the same shares.
+export function mobileSheetMaxHeight(isShort) {
+    return isShort ? "36dvh" : "40dvh";
+}
+
+// Bottom inset matches the open sheet so the fitted track sits in the map above it.
+// A collapsed sheet is one row. The top inset clears the home and help buttons.
+export function mobileStormPadding({ isShort, collapsed, height }) {
+    const fallback = isShort ? 390 : 844;
+    const share = isShort ? 0.36 : 0.40;
+    const bottom = collapsed ? 88 : Math.round((height > 0 ? height : fallback) * share);
+    return { top: 56, right: 16, bottom, left: 16 };
+}
+
 export const PLOT_TYPES = {
     STORM: "Storm",
     SCATTER_PLOT: "Scatter Plot",
@@ -357,6 +372,7 @@ class Hurricane extends Component {
         only6Hour: false,
         hoverInfo: {},
         stormInfo: null,
+        stormSheetCollapsed: false,
         selectedPoint: 0,
         filterPanelOpen: true,
         settingsOpen: false,
@@ -382,9 +398,52 @@ class Hurricane extends Component {
     };
 
     exitStormInfo = async (evt) => {
-        await this.setState({ stormInfo: null, selectedPoint: 0 });
+        await this.setState({ stormInfo: null, selectedPoint: 0, stormSheetCollapsed: false });
         this.onChange(evt);
     };
+
+    toggleStormSheet = () => {
+        this.setState((prev) => {
+            const stormSheetCollapsed = !prev.stormSheetCollapsed;
+            if (!prev.stormInfo) {
+                return { stormSheetCollapsed };
+            }
+            return {
+                stormSheetCollapsed,
+                viewState: this.viewStateForStorm(prev.stormInfo, stormSheetCollapsed),
+            };
+        });
+    };
+
+    // Frame the selected track in the map that remains above the phone sheet.
+    viewStateForStorm(storm, collapsed, width, height) {
+        const { minLat, maxLat, minLon, maxLon } = getNewViewPort(storm.track_points);
+        const isMobile = this.props.viewport && this.props.viewport.isMobile;
+        const w = width || this.state.width || (typeof window !== "undefined" ? window.innerWidth : 800);
+        const h = height || this.state.height || (typeof window !== "undefined" ? window.innerHeight : 600);
+        if (w < 10 || h < 10) {
+            return this.state.viewState;
+        }
+        const viewport = new WebMercatorViewport({ ...this.state.viewState, width: w, height: h });
+        let padding = isMobile
+            ? mobileStormPadding({
+                isShort: !!(this.props.viewport && this.props.viewport.isShort),
+                collapsed,
+                height: h,
+            })
+            : 80;
+        if (padding && typeof padding === "object" && (padding.top + padding.bottom >= h - 40)) {
+            padding = 16;
+        }
+        const fitted = viewport.fitBounds([[minLon, minLat], [maxLon, maxLat]], { padding });
+        return {
+            longitude: fitted.longitude,
+            latitude: fitted.latitude,
+            zoom: fitted.zoom,
+            pitch: fitted.pitch || 0,
+            bearing: fitted.bearing || 0,
+        };
+    }
 
     onChange = async (evt) => {
         if (evt.target.name === "name") {
@@ -443,19 +502,12 @@ class Hurricane extends Component {
         }
         else if (evt.target.name === "selectStorm") {
             const selectedStorm = this.state.storms[evt.target.value.id];
-            const { minLat, maxLat, minLon, maxLon } = getNewViewPort(selectedStorm.track_points);
-            const viewport = new WebMercatorViewport(this.state.viewState);
-            const newViewport = viewport.fitBounds([[minLon, minLat], [maxLon, maxLat]], {padding: 80});
-            const newViewState = {
-                longitude: newViewport.longitude,
-                latitude: newViewport.latitude,
-                zoom: newViewport.zoom,
-                pitch: newViewport.pitch,
-                bearing: newViewport.bearing,
-                // Include padding if necessary (check if newViewport.padding exists)
-                ...(newViewport.padding && { padding: { ...newViewport.padding } })
-            };
-            await this.setState({ stormInfo: selectedStorm, viewState: newViewState });
+            const newViewState = this.viewStateForStorm(selectedStorm, false);
+            await this.setState({
+                stormInfo: selectedStorm,
+                viewState: newViewState,
+                stormSheetCollapsed: false,
+            });
         }
         else if (evt.target.name === "selectedPoint") {
             await this.setState({ selectedPoint: parseInt(evt.target.value) });
@@ -554,15 +606,20 @@ class Hurricane extends Component {
             // instance here makes deck.gl throw on the resize re-render
             // ("Cannot assign to read only property 'padding'"); DeckGL sizes
             // itself from its container, so width/height aren't needed here.
+            // With a storm open on a phone, refit into the area above the sheet
+            // instead of jumping back to the Atlantic overview.
+            const keepStorm = this.state.stormInfo && this.props.viewport && this.props.viewport.isMobile;
             this.setState({
                 height, width,
-                viewState: {
-                    longitude: -64,
-                    latitude: 26,
-                    zoom: 3,
-                    pitch: 0,
-                    bearing: 0
-                },
+                viewState: keepStorm
+                    ? this.viewStateForStorm(this.state.stormInfo, this.state.stormSheetCollapsed, width, height)
+                    : {
+                        longitude: -64,
+                        latitude: 26,
+                        zoom: 3,
+                        pitch: 0,
+                        bearing: 0
+                    },
             });
         }
     };
@@ -623,8 +680,30 @@ class Hurricane extends Component {
 
     render() {
         const isMobile = this.props.viewport && this.props.viewport.isMobile;
+        const isShort = this.props.viewport && this.props.viewport.isShort;
         return (
-            <div className="mobile-dvh" style={{width: "100vw", height: "100vh"}} ref={ (divElement) => { this.divElement = divElement } }>
+            <div className="mobile-dvh hurricane-page" style={{width: "100vw", height: "100vh"}} ref={ (divElement) => { this.divElement = divElement } }>
+                <style>{`
+                    .hurricane-page .mobile-sheet button,
+                    .hurricane-page .mobile-drawer-body button,
+                    .hurricane-page .mobile-drawer-body input,
+                    .hurricane-page .mobile-drawer-body select,
+                    .hurricane-page .mobile-drawer-close {
+                        min-height: 44px;
+                        min-width: 44px;
+                        font-size: 16px;
+                    }
+                    .hurricane-page .mobile-drawer-body input[type="checkbox"],
+                    .hurricane-page .mobile-drawer-body input[type="radio"] {
+                        width: 44px;
+                        height: 44px;
+                    }
+                    .hurricane-page .mobile-drawer-body label,
+                    .hurricane-page .mobile-sheet label {
+                        font-size: 16px;
+                        line-height: 1.35;
+                    }
+                `}</style>
                 <HomeButton />
                 <DeckGL
                     viewState={this.state.viewState}
@@ -705,9 +784,19 @@ class Hurricane extends Component {
                 )}
                 {this.state.stormInfo && (
                     isMobile ? (
-                        <div className="mobile-sheet">
+                        <div
+                            className="mobile-sheet"
+                            style={{
+                                maxHeight: this.state.stormSheetCollapsed
+                                    ? "none"
+                                    : mobileSheetMaxHeight(!!isShort),
+                                paddingRight: 72,
+                            }}
+                        >
                             <StormInfo
                                 embedded
+                                collapsed={this.state.stormSheetCollapsed}
+                                onToggleCollapsed={this.toggleStormSheet}
                                 stormInfo={this.state.stormInfo}
                                 selectedPoint={this.state.selectedPoint}
                                 onChange={this.onChange}
