@@ -38,11 +38,6 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-import numpy as np
-import netCDF4 as nc
-import matplotlib as mpl
-from PIL import Image
-
 HERE = os.path.dirname(os.path.abspath(__file__))
 STORMS_PATH = os.path.join(HERE, "..", "..", "..", "public", "hurricane", "storms.json.gz")
 MANIFEST_PATH = os.path.join(HERE, "hursat_manifest.json")
@@ -62,7 +57,30 @@ MAX_YEAR = 2015  # HURSAT-B1 coverage end (RAMMB takes over in 2016)
 # turbo_r, warm ocean to blue. vmin/vmax in Kelvin.
 IR_VMIN = 190.0
 IR_VMAX = 300.0
-_LUT = (mpl.colormaps["turbo_r"](np.linspace(0, 1, 256))[:, :3] * 255).astype(np.uint8)
+_LUT = None
+
+
+def _imaging():
+    """Import the render stack only when a frame is drawn.
+
+    Dry-run tests import this module with the download helper patched.
+    numpy, netCDF4, matplotlib and pillow are runtime libraries, not test
+    dependencies, and the dry-run path never reaches them.
+    """
+    import numpy as np
+    import netCDF4 as nc
+    import matplotlib as mpl
+    from PIL import Image
+
+    return np, nc, mpl, Image
+
+
+def _color_lut():
+    global _LUT
+    if _LUT is None:
+        np, _nc, mpl, _image = _imaging()
+        _LUT = (mpl.colormaps["turbo_r"](np.linspace(0, 1, 256))[:, :3] * 255).astype(np.uint8)
+    return _LUT
 
 # {sid}.{NAME}.{YYYY}.{MM}.{DD}.{HHMM}.{sat_idx}.{SAT}.{VZA}.hursat-b1.v06.nc
 _NC_RE = re.compile(
@@ -164,6 +182,8 @@ def download_tarball(url, dest_path):
 
 def render_ir(path):
     """Return JPEG bytes for the IRWIN grid, north-up, or None if unreadable."""
+    np, nc, _mpl, Image = _imaging()
+    lut = _color_lut()
     with _nc_lock:  # HDF5 is not thread-safe
         ds = nc.Dataset(path)
         try:
@@ -177,7 +197,7 @@ def render_ir(path):
             ds.close()
     filled = np.ma.filled(np.ma.masked_invalid(arr), IR_VMAX)
     idx = np.clip((filled - IR_VMIN) / (IR_VMAX - IR_VMIN), 0, 1)
-    rgb = _LUT[(idx * 255).astype(np.uint8)]
+    rgb = lut[(idx * 255).astype(np.uint8)]
     if float(lat[0]) < float(lat[-1]):  # lat ascending -> row 0 is south, flip so north is up
         rgb = rgb[::-1]
     img = Image.fromarray(rgb, "RGB")

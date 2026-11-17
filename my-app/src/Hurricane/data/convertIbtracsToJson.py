@@ -74,8 +74,11 @@ def cell(value):
     return value.item() if hasattr(value, "item") else value
 
 
-def main():
-    ds = nc.Dataset(NC_PATH)
+def main(nc_path=None, out_path=None):
+    """Write storms.json.gz. Defaults are the module path constants."""
+    nc_path = NC_PATH if nc_path is None else nc_path
+    out_path = OUT_PATH if out_path is None else out_path
+    ds = nc.Dataset(nc_path)
     n_storms = ds.dimensions["storm"].size
 
     # Bulk-read once; per-element NetCDF access is far too slow.
@@ -228,14 +231,16 @@ def main():
 
     ds.close()
 
-    os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
+    out_dir = os.path.dirname(out_path)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
     payload = json.dumps(storms, separators=(",", ":")).encode("utf-8")
-    with gzip.open(OUT_PATH, "wb", compresslevel=9) as fp:
+    with gzip.open(out_path, "wb", compresslevel=9) as fp:
         fp.write(payload)
 
-    size_mb = os.path.getsize(OUT_PATH) / (1024 * 1024)
+    size_mb = os.path.getsize(out_path) / (1024 * 1024)
     raw_mb = len(payload) / (1024 * 1024)
-    print(f"Wrote {len(storms)} storms to {OUT_PATH} ({size_mb:.1f} MB gzipped, {raw_mb:.1f} MB raw)")
+    print(f"Wrote {len(storms)} storms to {out_path} ({size_mb:.1f} MB gzipped, {raw_mb:.1f} MB raw)")
     print(f"Seasons: {min_season}-{max_season}")
 
 
