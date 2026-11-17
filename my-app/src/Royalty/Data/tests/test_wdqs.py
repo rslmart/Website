@@ -345,6 +345,20 @@ def test_queries_are_sequential_batches_without_best_rank_only():
         wdqs.queries_for(["Q1; DROP"])
 
 
+def test_walk_groups_keep_time_value_off_the_facts_query():
+    facts = wdqs.queries_for(["Q43274"], groups=("facts",))
+    assert len(facts) == 1
+    assert "timeValue" not in facts[0]
+    assert "P22" in facts[0] and "P25" in facts[0] and "P40" in facts[0] and "P3373" in facts[0]
+    later = wdqs.queries_for(["Q43274"], groups=("positions", "dates"))
+    names = [text.split("# royaltree wdqs ", 1)[1].split("\n", 1)[0] for text in later]
+    assert names == ["dates", "positions"]
+    assert "wikibase:timeValue" in later[0]
+    assert "pqv:P582" in later[1]
+    with pytest.raises(ValueError):
+        wdqs.queries_for(["Q1"], groups=("timeValue",))
+
+
 def test_fetch_posts_in_batches_of_about_400(fake_http):
     wdqs.fetch_typed([f"Q{i}" for i in range(1, 402)])
     assert len(fake_http.calls) == 6  # 2 batches x 3 queries, in order
@@ -363,6 +377,51 @@ def test_fetch_posts_in_batches_of_about_400(fake_http):
     for call in fake_http.calls[:3]:
         names.append(call["data"]["query"].split("# royaltree wdqs ", 1)[1].split("\n", 1)[0])
     assert names == ["facts", "dates", "positions"]
+
+
+def test_facts_during_the_walk_are_one_query_and_the_tail_stays_at_400(fake_http):
+    ids = [f"Q{i}" for i in range(1, 402)]
+    wdqs.fetch_typed(ids, groups=("facts",))
+    assert len(fake_http.calls) == 2  # 2 batches x the facts query only
+    assert "wd:Q400" in fake_http.calls[0]["data"]["query"]
+    assert "wd:Q401" not in fake_http.calls[0]["data"]["query"]
+    assert "timeValue" not in fake_http.calls[0]["data"]["query"]
+    fake_http.calls.clear()
+    wdqs.fetch_typed(ids, groups=("dates", "positions"))
+    assert len(fake_http.calls) == 4  # 2 batches x dates, then positions
+    names = [call["data"]["query"].split("# royaltree wdqs ", 1)[1].split("\n", 1)[0]
+             for call in fake_http.calls]
+    assert names == ["dates", "positions", "dates", "positions"]
+    assert "wikibase:timeValue" in fake_http.calls[0]["data"]["query"]
+    assert "pqv:P582" in fake_http.calls[1]["data"]["query"]
+    assert "wd:Q401" not in fake_http.calls[0]["data"]["query"]
+    assert "wd:Q401" in fake_http.calls[2]["data"]["query"]
+
+
+def test_merge_enrichment_keeps_facts_ties_and_open_positions():
+    base = {
+        "id": "Q1", "revision": 3,
+        "father": {"rank": "preferred", "value": {"id": "Q2"}},
+        "child": [{"rank": "normal", "id": "Q3"}],
+        "date of birth": {"rank": "normal", "value": {"time": "+1000-01-01T00:00:00Z", "precision": 9}},
+    }
+    extra = {
+        "id": "Q1", "revision": 4,
+        "date of death": {"rank": "normal", "tie": True, "values": [
+            {"time": "+1125-01-01T00:00:00Z", "precision": 9},
+            {"time": "+1200-01-01T00:00:00Z", "precision": 7},
+        ]},
+        "position held": [{"rank": "preferred", "id": "Q9134365",
+                           "start": {"time": "2022-09-08T00:00:00Z", "precision": 11}}],
+    }
+    merged = wdqs.merge_enrichment(base, extra)
+    assert merged["father"]["value"]["id"] == "Q2"
+    assert merged["child"][0]["id"] == "Q3"
+    assert merged["date of death"]["tie"] is True and "value" not in merged["date of death"]
+    assert "date of birth" not in merged
+    assert "end" not in merged["position held"][0]
+    assert merged["position held"][0]["start"]["time"].startswith("2022")
+    assert merged["revision"] == 4
 
 
 def test_client_parses_a_posted_result(fake_http, pinned):

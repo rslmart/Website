@@ -19,6 +19,20 @@ describe('formatDate', () => {
     expect(formatDate({ time: '2022-09-08T00:00:00Z', precision: 11 })).toBe('8 September 2022');
   });
 
+  it('keeps a bare timestamp as a year', () => {
+    expect(formatDate('+1100-01-01T00:00:00Z')).toBe('1100');
+    expect(formatDate('+1214-04-25T00:00:00Z')).toBe('1214');
+    expect(formatDate('+0990-01-01T00:00:00Z')).toBe('990');
+    expect(formatDate('+0000-01-01T00:00:00Z')).toBe('1 BCE');
+    expect(formatDate('-0043-03-15T00:00:00Z')).toBe('44 BCE');
+    const person = {
+      label: 'Ealdgyth',
+      'date of birth': '+1100-01-01T00:00:00Z',
+      'date of death': '+1214-04-25T00:00:00Z',
+    };
+    expect(createLabel(person)).toBe('Ealdgyth\n1100-1214');
+  });
+
   it('does not pick one side of a date tie', () => {
     const tie = {
       tie: true,

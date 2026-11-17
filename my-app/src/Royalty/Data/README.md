@@ -175,7 +175,7 @@ summary):
 | `lists` (only if a list is missing, or `--lists`) | `GetListOfMonarchs.get_monarch_lists` | Wikipedia + Wikidata | `data/monarch_list.json` |
 | `refetch-conflicts` (only with `--refresh-conflicts`) | `cli.refresh_conflicts` | Wikidata | store |
 | `revision-check`, `refetch` (only with `--refresh`/`--since`) | `cli.refresh` | Wikidata `props=info` | store |
-| `traverse:<M>` per requested tree | `graph.traverse_tree` | WDQS typed rows and inverse edges, for people not in the store; `wbgetentities` only if a label query fails | store: kind `wdqs` (kind `person` is left in place), the tree's paths, ancestors and member set |
+| `traverse:<M>` per requested tree | `graph.traverse_tree` | WDQS facts query for people not in the store; after the walk, the dates query and the positions query in batches of 400 for the people the tree kept. The walk does not fetch inverse edges. `wbgetentities` only if a label query fails | store: kind `wdqs` (kind `person` is left in place), the tree's paths, ancestors and member set |
 | `combine` (every stored tree) | `build.combine` | WDQS labels, then `wbgetentities` if WDQS does not answer | nothing yet |
 | `write-combined` | `build.write_combined` | | `data/monarchy_data.json`, `monarchy_family_trees.json`, `monarchy_ancestors.json` |
 | `houses` | `BuildHouses.build_houses` | | `data/houses.json` |
@@ -210,10 +210,13 @@ next five in the list. It is capped by `MAX_BFS_DEPTH` (8) and `MAX_BFS_NODES`
 `royaltree/wdqs.py` fetches those rows. It POSTs to
 `https://query.wikidata.org/sparql` (`Accept: application/sparql-results+json`)
 in sequential `VALUES` batches of 400, through the same HTTP session as the
-Action API. One batch is three queries: facts and family relations together,
-dates on their own (`wikibase:timeValue` stays off the other queries), then
-positions. Single-valued facts (parents, sex, family, birth, death) use the
-best rank: preferred over normal, deprecated never, and a tie or an unknown
+Action API. A full fetch is three queries: facts and family relations together,
+dates on their own (`wikibase:timeValue` stays off the facts query), then
+positions. The walk sends only the facts query. After succession and the
+ancestor walk it sends the dates query and the positions query once, still in
+batches of 400, over the people the tree kept. Single-valued facts (parents,
+sex, family, birth, death) use the best rank: preferred over normal, deprecated
+never, and a tie or an unknown
 value is stored explicitly. Positions, titles, spouses, children and siblings
 keep every non-deprecated statement and its rank, including a position with no
 end date. As each level is fetched, a parent who lists the child is linked

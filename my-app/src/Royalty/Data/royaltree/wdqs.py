@@ -8,10 +8,12 @@ link. A tie stays a tie. Dates on that projection are ``{"time", "precision"}``.
 Queries are POSTed to ``https://query.wikidata.org/sparql`` through
 ``royaltree.http`` (one session, the project User-Agent, a timeout, and
 429/5xx/maxlag back-off). A batch is about 400 QIDs in a ``VALUES`` clause,
-sent one query at a time. Three queries cover one batch. Facts and family
+sent one query at a time. Three queries cover a full batch. Facts and family
 relations share a query. Dates stay separate because a join on
 ``wikibase:timeValue`` has timed out on this endpoint before. Positions stay
-separate so their qualifiers are not joined into that time query.
+separate so their qualifiers are not joined into that time query. The tree
+walk sends only the facts query. It sends the dates query and the positions
+query once, after the walk, over the people it kept.
 
 Ranks follow Wikidata, not claim order. Preferred beats normal. Deprecated
 statements are never used. ``wikibase:BestRank`` is right for a single-valued
@@ -181,13 +183,33 @@ def format_date(when):
     return f"{year}{era}"
 
 
-def queries_for(qids):
-    """The SPARQL texts for one VALUES batch, in send order."""
+def _groups(names):
+    """``_GROUPS`` rows named by ``names``, in the module's send order.
+
+    ``None`` is all three. An unknown name is an error, so a typo does not
+    silently drop dates or positions.
+    """
+    if names is None:
+        return _GROUPS
+    wanted = set(names)
+    known = {group[0] for group in _GROUPS}
+    unknown = wanted - known
+    if unknown:
+        raise ValueError(f"unknown WDQS group: {sorted(unknown)}")
+    return tuple(group for group in _GROUPS if group[0] in wanted)
+
+
+def queries_for(qids, groups=None):
+    """The SPARQL texts for one VALUES batch, in send order.
+
+    ``groups`` selects ``facts``, ``dates`` and ``positions``. The default
+    sends all three. ``wikibase:timeValue`` is only on the dates query.
+    """
     qids = _qid_list(qids)
     if not qids:
         return []
     return [_group_query(name, qids, props, times, quals)
-            for name, props, times, quals in _GROUPS]
+            for name, props, times, quals in _groups(groups)]
 
 
 def _group_query(name, qids, props, times, qualifiers):
@@ -258,19 +280,24 @@ def query(sparql, *, timeout=None, retries=None):
     return data
 
 
-def fetch_typed(qids, *, batch_size=BATCH, retries=None, timeout=None):
+def fetch_typed(qids, *, batch_size=BATCH, retries=None, timeout=None, groups=None):
     """``{qid: typed record}`` for every id. Missing people are empty records.
 
     Batches run in order, and the queries inside a batch run in order. Nothing
-    is fetched concurrently.
+    is fetched concurrently. ``groups`` selects which of the three queries to
+    send. The default sends facts, then dates, then positions. The tree walk
+    asks for ``facts`` while it searches, and for ``dates`` and ``positions``
+    once afterwards. The batch size stays 400.
     """
     if batch_size < 1:
         raise ValueError("batch_size must be positive")
+    _groups(groups)
     out = {}
     seen = list(dict.fromkeys(_qid_list(qids)))
     for start in range(0, len(seen), batch_size):
         batch = seen[start:start + batch_size]
-        results = [query(text, retries=retries, timeout=timeout) for text in queries_for(batch)]
+        results = [query(text, retries=retries, timeout=timeout)
+                   for text in queries_for(batch, groups)]
         out.update(parse_typed(results, batch))
     return out
 
@@ -377,6 +404,30 @@ _LINK_FIELDS = ("father", "mother", "sex or gender", "family")
 _LIST_FIELDS = ("child", "spouse", "sibling")
 _DATE_FIELDS = ("date of birth", "date of death")
 _POSITION_FIELDS = ("position held", "noble title")
+
+
+def merge_enrichment(base, extra):
+    """Copy dates and positions from a later query onto a facts record.
+
+    Father, mother, child, sibling and the other facts on ``base`` stay. A
+    date or position the later query does not return is removed, so the
+    second pass replaces those fields. Revision moves forward when the later
+    query saw a newer one. A tie stays a tie. An open position stays open:
+    this does not invent an end date.
+    """
+    out = dict(base or {})
+    found = extra or {}
+    if found.get("id") and not out.get("id"):
+        out["id"] = found["id"]
+    for key in _DATE_FIELDS + _POSITION_FIELDS:
+        if key in found:
+            out[key] = found[key]
+        else:
+            out.pop(key, None)
+    revision = found.get("revision")
+    if revision is not None and (out.get("revision") is None or revision > out["revision"]):
+        out["revision"] = revision
+    return out
 
 
 def is_typed_record(rec):

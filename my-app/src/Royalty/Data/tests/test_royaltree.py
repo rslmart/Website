@@ -301,6 +301,51 @@ def test_walk_does_not_call_the_live_inverse_lookup(tmp_path, monkeypatch):
         assert calls == []
 
 
+def test_walk_sends_facts_then_dates_and_positions_once(tmp_path, monkeypatch):
+    calls = []
+    inverse = []
+
+    def fake_fetch(qids, groups=None, **kwargs):
+        selected = tuple(groups or ("facts", "dates", "positions"))
+        calls.append((selected, list(qids)))
+        out = {}
+        for qid in qids:
+            rec = {"id": qid, "revision": 4 if "dates" in selected else 3}
+            if "facts" in selected and qid == "Q1":
+                rec["child"] = [{"rank": "normal", "id": "Q2"}]
+            if "dates" in selected and qid == "Q1":
+                rec["date of death"] = {
+                    "rank": "normal", "tie": True,
+                    "values": [
+                        {"time": "+1125-01-01T00:00:00Z", "precision": 9},
+                        {"time": "+1200-01-01T00:00:00Z", "precision": 7},
+                    ],
+                }
+            if "positions" in selected and qid == "Q1":
+                rec["position held"] = [{
+                    "rank": "preferred", "id": "Q9134365",
+                    "start": {"time": "2022-09-08T00:00:00Z", "precision": 11},
+                }]
+            out[qid] = rec
+        return out
+
+    monkeypatch.setattr(graph.wdqs, "fetch_typed", fake_fetch)
+    monkeypatch.setattr(graph.wdqs, "fetch_inverse", lambda qids, **kwargs: inverse.append(list(qids)))
+    monkeypatch.setattr(graph.wdqs, "fetch_labels", lambda qids, **kwargs: {})
+    with Store(str(tmp_path)) as store:
+        artefacts = graph.traverse_tree("Alpha", ["Q1", "Q2"], store, offline=False, counters=Counter())
+        stored = store.get("wdqs", ["Q1"])["Q1"]
+    assert [groups for groups, _qids in calls] == [("facts",), ("dates", "positions")]
+    assert calls[0][1] == ["Q1", "Q2"]
+    assert calls[1][1] == ["Q1", "Q2"]
+    assert inverse == []
+    assert stored["child"][0]["id"] == "Q2"
+    assert stored["date of death"]["tie"] is True
+    assert "end" not in stored["position held"][0]
+    assert artefacts["family_tree"] == [["Q1", "Q2"], []]
+    assert "ancestors" not in artefacts
+
+
 # -- legacy import -------------------------------------------------------------
 def test_import_legacy_is_offline_and_prefers_published_snapshot(tmp_path):
     legacy = tmp_path / "legacy"

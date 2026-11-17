@@ -2,9 +2,13 @@
 
 Behaviour is GetData.bfs / construct_family_tree_from_monarch_list and
 GatherAncestors._gather_one, but reading from the shared store instead of a
-per-monarchy JSON cache that was re-serialised on every call. Missing people
-are fetched (online) in 50-ID batches and committed per batch; offline they
-count as absent.
+per-monarchy JSON cache that was re-serialised on every call. The walk fetches
+missing people with the facts query only. A frontier is one ``VALUES`` batch,
+capped at 400, and usually smaller, so that is one request. After succession
+and the ancestor walk, the dates query and the positions query run once, in
+batches of 400, over the people the tree kept. Offline, a missing person
+counts as absent. The legacy person refresh still uses 50-ID ``wbgetentities``
+batches. The walk does not.
 """
 
 from royaltree import http, wdqs, wikidata
@@ -81,8 +85,12 @@ class Retriever:
                 self.cache[qid] = legacy[qid]
 
     def _fetch_typed(self, qids):
-        """Store kind ``wdqs``. Kind ``person`` is left as it was."""
-        records = wdqs.fetch_typed(qids)
+        """Store kind ``wdqs`` from the facts query. Kind ``person`` is left as it was.
+
+        Dates and positions are not on this request. The walk reads father,
+        mother, child and sibling, which the facts query already returns.
+        """
+        records = wdqs.fetch_typed(qids, groups=("facts",))
         wdqs.store_typed(self.store, records)
         legacy = self.store.get("person", list(records))
         for qid, rec in records.items():
@@ -146,6 +154,34 @@ class Retriever:
         if parent not in self.parents[child]:
             self.parents[child].append(parent)
 
+    def _kept(self):
+        """People this walk loaded, in a stable order for the 400-QID batches."""
+        return sorted((qid for qid in self.touched if qid in self.cache),
+                      key=lambda qid: (len(qid), qid))
+
+    def attach_dates_and_positions(self):
+        """Dates query, then positions query, once, for the people this walk kept.
+
+        Both stay their own queries, in ``VALUES`` batches of 400.
+        ``wikibase:timeValue`` stays on the dates query. An open position stays
+        on the positions query. Preferred-over-normal and explicit ties are
+        unchanged: they are how those queries are already collapsed. Offline
+        runs leave the stored rows as they are.
+        """
+        if self.offline:
+            return
+        qids = self._kept()
+        if not qids:
+            return
+        extra = wdqs.fetch_typed(qids, groups=("dates", "positions"))
+        existing = self.store.get(wdqs.KIND, list(extra))
+        legacy = self.store.get("person", list(extra))
+        merged = {qid: wdqs.merge_enrichment(existing.get(qid), found)
+                  for qid, found in extra.items()}
+        wdqs.store_typed(self.store, merged)
+        for qid, rec in merged.items():
+            self.cache[qid] = wdqs.merge_person(rec, legacy.get(qid))
+
     def attach_missing_labels(self):
         """English labels for typed rows that do not have one yet.
 
@@ -173,8 +209,9 @@ class Retriever:
 def bfs(start_id, target_id, retriever, max_depth=MAX_BFS_DEPTH, max_nodes=MAX_BFS_NODES):
     """Shortest path on the fetched father/mother/child graph.
 
-    The search itself only reads ``retriever.adj``. Missing people and inverse
-    edges are fetched one level at a time before that level is walked.
+    The search itself only reads ``retriever.adj``. Missing people are loaded
+    one level at a time, facts only, before that level is walked. The walk
+    does not call ``fetch_inverse``.
     """
     if start_id == target_id:
         return [start_id]
@@ -274,6 +311,7 @@ def traverse_tree(monarchy, monarch_ids, store, offline, counters, fresh_members
     settings = ancestor_settings(monarchy)
     if settings:
         artefacts["ancestors"] = gather_ancestors(monarch_ids, retriever, *settings)
+    retriever.attach_dates_and_positions()
     retriever.attach_missing_labels()
     touched = {q for q in retriever.touched if retriever.present(q)}
     if not fresh_membership:

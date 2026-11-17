@@ -1,8 +1,10 @@
 // One date rendering for RoyalTree labels and tooltips.
-// Same rules as royaltree.wdqs.format_date, including the year-0 rule:
-// at precision 6-8, astronomical year 0 is the positive block
-// (c. 1st millennium, c. 1st century, 0s). Year 0 is 1 BCE only at
+// {time, precision} and a tie follow royaltree.wdqs.format_date, including
+// the year-0 rule: at precision 6-8, astronomical year 0 is the positive
+// block (c. 1st millennium, c. 1st century, 0s). Year 0 is 1 BCE only at
 // year precision and finer. Astronomical -43 at day precision is 44 BCE.
+// A string carries no precision. It stays a year, including a 1 January
+// timestamp. It is not read as a calendar day.
 
 const MONTHS = [
   null, 'January', 'February', 'March', 'April', 'May', 'June',
@@ -33,12 +35,7 @@ export function formatDate(when) {
   if (typeof when === 'string') {
     const parts = splitTime(when);
     if (!parts) return '?';
-    const month = parts[1];
-    const day = parts[2];
-    let precision = 9;
-    if (month && day) precision = 11;
-    else if (month) precision = 10;
-    return formatDate({ time: when, precision });
+    return formatDate({ time: when, precision: 9 });
   }
   if (typeof when !== 'object') return '?';
   if (when.tie) {
