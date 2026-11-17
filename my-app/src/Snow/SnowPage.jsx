@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import { ResponsiveContainer, LineChart, CartesianGrid, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, Line, ReferenceArea } from 'recharts';
+import { ResponsiveContainer, LineChart, CartesianGrid, BarChart, Bar, XAxis, YAxis, Tooltip, Line, ReferenceArea } from 'recharts';
 // NOAA Oceanic Nino Index (ONI) DJF anomaly per season start-year. Small and
 // only changes once a year, so it is imported at build time. Source:
 // https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt (the DJF value
@@ -73,6 +73,72 @@ const describeEnso = (season) => {
     return `${phase}, ${ensoStrength(anom)} (ONI ${formatOni(anom)})`;
 }
 
+// Series strokes, measured 2026-11-17 against the page background and the
+// low-confidence band in both themes. Each pair is at least 3:1. Average
+// keeps --chart-reference, which already clears that bar per theme.
+const SERIES_COLOR = {
+    current: '#8855CC',
+    highest: '#1E8A45',
+    lowest: '#C25A16',
+    laNina: '#2A7CC0',
+    elNino: '#C4473A',
+};
+
+const AXIS_MONTHS = ['Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+
+// "2025" -> "2025–26". Baseline names (Average, La Nina avg) pass through.
+const seasonRange = (season) => {
+    if (!/^\d{4}$/.test(String(season))) return String(season);
+    const end = String(Number(season) + 1).slice(-2);
+    return `${season}\u2013${end}`;
+};
+
+const seriesLabel = (season, role) => (
+    role ? `${seasonRange(season)} (${role})` : seasonRange(season)
+);
+
+// Phone widths skip the 15th, and the narrowest phones also skip every other
+// month, so the remaining month names have room.
+const axisTicks = (width) => {
+    const months = width <= 480
+        ? AXIS_MONTHS.filter((_, index) => index % 2 === 0)
+        : AXIS_MONTHS;
+    if (width > 1100) {
+        return AXIS_MONTHS.flatMap((month) => [`1-${month}`, `15-${month}`]);
+    }
+    return months.map((month) => `1-${month}`);
+};
+
+const formatAxisTick = (value, width) => {
+    const [day, month] = String(value).split('-');
+    if (!month) return String(value);
+    return width > 1100 ? `${month} ${day}` : month;
+};
+
+const formatCalendarDay = (value) => {
+    const [day, month] = String(value).split('-');
+    return month ? `${month} ${day}` : String(value);
+};
+
+const prefersReducedMotion = () => (
+    typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+);
+
+const listen = (target, event, handler) => {
+    if (!target) return () => {};
+    if (typeof target.addEventListener === 'function') {
+        target.addEventListener(event, handler);
+        return () => target.removeEventListener(event, handler);
+    }
+    if (typeof target.addListener === 'function') {
+        target.addListener(handler);
+        return () => target.removeListener(handler);
+    }
+    return () => {};
+};
+
 
 const passNames = {
     'Blewett_Pass_US-97': 'Blewett Pass US-97',
@@ -98,38 +164,30 @@ class Snow extends Component {
             data: [],
             hiddenSeries: {},
             controlsDrawerOpen: false,
+            reduceMotion: prefersReducedMotion(),
+            viewportWidth: typeof window !== 'undefined' ? window.innerWidth : 1280,
         };
     }
 
-    // Toggle a series (by its legend name) on/off across all charts.
-    toggleSeries = (name) => {
-        if (name === undefined || name === null) return;
+    // Toggle one series on every chart. The key is the series role, so
+    // "this season" and "highest" stay independent when they share a year.
+    toggleSeries = (id) => {
+        if (id === undefined || id === null) return;
         this.setState(prev => {
             const next = { ...prev.hiddenSeries };
-            if (next[name]) {
-                delete next[name];
+            if (next[id]) {
+                delete next[id];
             } else {
-                next[name] = true;
+                next[id] = true;
             }
             return { hiddenSeries: next };
         });
     }
 
-    handleLegendClick = (entry) => {
-        this.toggleSeries(entry && (entry.value ?? entry.dataKey));
-    }
-
-    legendFormatter = (value) => (
-        <span style={{
-            color: this.state.hiddenSeries[value] ? 'var(--color-text-faint)' : 'var(--color-text)',
-            textDecoration: this.state.hiddenSeries[value] ? 'line-through' : 'none',
-            cursor: 'pointer'
-        }}>
-            {value}
-        </span>
-    )
-
-    tooltipFormatter = (value) => (typeof value === 'number' ? value.toFixed(1) : value)
+    tooltipFormatter = (value, name) => [
+        typeof value === 'number' ? `${value.toFixed(1)} inches` : value,
+        name,
+    ]
 
     onChange = async (evt) => {
         if (evt.target.name === "passNameSelect") {
@@ -143,10 +201,21 @@ class Snow extends Component {
     componentDidMount() {
         this.mounted = true;
         this.loadData();
+        this.motionMedia = window.matchMedia('(prefers-reduced-motion: reduce)');
+        this.onMotionChange = () => {
+            if (this.mounted) this.setState({ reduceMotion: this.motionMedia.matches });
+        };
+        this.removeMotionListener = listen(this.motionMedia, 'change', this.onMotionChange);
+        this.onResize = () => {
+            if (this.mounted) this.setState({ viewportWidth: window.innerWidth });
+        };
+        this.removeResizeListener = listen(window, 'resize', this.onResize);
     }
 
     componentWillUnmount() {
         this.mounted = false;
+        if (this.removeMotionListener) this.removeMotionListener();
+        if (this.removeResizeListener) this.removeResizeListener();
     }
 
     loadData = () => {
@@ -202,189 +271,242 @@ class Snow extends Component {
         });
     }
 
-    renderLineChart(title, dataKey) {
-        const isMobile = this.props.viewport && this.props.viewport.isMobile;
+    lineSeries() {
+        const { currentSeason, highestSeason, lowestSeason } = this.state;
+        const specs = [];
+        if (currentSeason) {
+            specs.push({ id: 'current', season: currentSeason, role: 'this season', color: SERIES_COLOR.current });
+        }
+        if (highestSeason) {
+            specs.push({ id: 'highest', season: highestSeason, role: 'highest', color: SERIES_COLOR.highest });
+        }
+        if (lowestSeason) {
+            specs.push({ id: 'lowest', season: lowestSeason, role: 'lowest', color: SERIES_COLOR.lowest });
+        }
+        specs.push({
+            id: AVERAGE_SEASON,
+            season: AVERAGE_SEASON,
+            role: null,
+            color: this.props.referenceColor,
+            dash: '5 5',
+        });
+        specs.push({
+            id: LA_NINA_AVG,
+            season: LA_NINA_AVG,
+            role: null,
+            color: SERIES_COLOR.laNina,
+            dash: '6 3',
+            linesOnly: true,
+        });
+        specs.push({
+            id: EL_NINO_AVG,
+            season: EL_NINO_AVG,
+            role: null,
+            color: SERIES_COLOR.elNino,
+            dash: '6 3',
+            linesOnly: true,
+        });
+        return specs;
+    }
+
+    renderLegend(specs) {
         return (
-            <div style={isMobile ? { height: 300, minHeight: 260 } : { height: '33vh' }}>
-                <h4 style={{ textAlign: 'center', margin: '10px 0' }}>{title}</h4>
-                <ResponsiveContainer width="100%" height="80%">
-                    <LineChart
-                        data={this.state.data}
-                        margin={{ top: 5, right: 30, left: 20, bottom: 50 }}
-                    >
-                        <CartesianGrid strokeDasharray="3 3" vertical={!isMobile} />
-                        {!this.state.hiddenSeries[AVERAGE_SEASON] && lowConfidenceSpans(this.state.data).map(([x1, x2]) => (
-                            <ReferenceArea
-                                key={`${x1}-${x2}`}
-                                x1={x1}
-                                x2={x2}
-                                fill={this.props.bandColor}
-                                fillOpacity={1}
-                                strokeOpacity={0}
-                                ifOverflow="hidden"
-                            />
-                        ))}
-                        <XAxis
-                            dataKey="name"
-                            tick={{ dy: 5, dx: -10, fontSize: 12 }}
-                            interval={0}
-                            tickFormatter={(value) => {
-                                const [day, month] = value.split('-');
-                                return (day === '1' || day === '15') ? `${month} ${day}` : '';
-                            }}
-                        />
-                        <YAxis label={{ value: 'Inches', angle: -90, dx: -15}} />
-                        <Tooltip formatter={this.tooltipFormatter} />
-                        <Legend onClick={this.handleLegendClick} formatter={this.legendFormatter} />
-                        <Line
-                            dot={false}
-                            connectNulls={true}
-                            dataKey={`${this.state.currentSeason}${dataKey}`}
-                            name={this.state.currentSeason}
-                            stroke={"#8884d8"}
-                            hide={!!this.state.hiddenSeries[this.state.currentSeason]}
-                        />
-                        {this.state.highestSeason && (
-                            <Line
-                                dot={false}
-                                connectNulls={true}
-                                dataKey={`${this.state.highestSeason}${dataKey}`}
-                                name={this.state.highestSeason}
-                                stroke={"#82ca9d"}
-                                hide={!!this.state.hiddenSeries[this.state.highestSeason]}
-                            />
-                        )}
-                        {this.state.lowestSeason && (
-                            <Line
-                                dot={false}
-                                connectNulls={true}
-                                dataKey={`${this.state.lowestSeason}${dataKey}`}
-                                name={this.state.lowestSeason}
-                                stroke={"#ff8042"}
-                                hide={!!this.state.hiddenSeries[this.state.lowestSeason]}
-                            />
-                        )}
-                        <Line
-                            dot={false}
-                            connectNulls={true}
-                            dataKey={`${AVERAGE_SEASON}${dataKey}`}
-                            name={AVERAGE_SEASON}
-                            stroke={this.props.referenceColor}
-                            strokeDasharray="5 5"
-                            hide={!!this.state.hiddenSeries[AVERAGE_SEASON]}
-                        />
-                        <Line
-                            dot={false}
-                            connectNulls={true}
-                            dataKey={`${LA_NINA_AVG}${dataKey}`}
-                            name={LA_NINA_AVG}
-                            stroke={"#1f6fb2"}
-                            strokeDasharray="6 3"
-                            hide={!!this.state.hiddenSeries[LA_NINA_AVG]}
-                        />
-                        <Line
-                            dot={false}
-                            connectNulls={true}
-                            dataKey={`${EL_NINO_AVG}${dataKey}`}
-                            name={EL_NINO_AVG}
-                            stroke={"#b5322e"}
-                            strokeDasharray="6 3"
-                            hide={!!this.state.hiddenSeries[EL_NINO_AVG]}
-                        />
-                    </LineChart>
-                </ResponsiveContainer>
+            <div className="snow-legend">
+                <p className="snow-legend-unit">Values in inches</p>
+                <ul aria-label="Chart series, in inches">
+                    {specs.map((spec) => {
+                        const hidden = !!this.state.hiddenSeries[spec.id];
+                        return (
+                            <li key={spec.id}>
+                                <button
+                                    type="button"
+                                    className={hidden ? 'snow-legend-button is-off' : 'snow-legend-button'}
+                                    aria-pressed={!hidden}
+                                    onClick={() => this.toggleSeries(spec.id)}
+                                >
+                                    <span
+                                        className="snow-legend-swatch"
+                                        style={{ background: spec.color }}
+                                        aria-hidden="true"
+                                    />
+                                    {seriesLabel(spec.season, spec.role)}
+                                </button>
+                            </li>
+                        );
+                    })}
+                </ul>
             </div>
         );
     }
 
-    render() {
-        const titleBarStyle = {
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            zIndex: 1000,
-            backgroundColor: 'var(--color-surface)',
-            // Room on the left for the fixed Home button and theme menu.
-            padding: '10px 20px 10px 120px',
-            boxShadow: 'var(--shadow-sm)',
-            display: 'flex',
-            justifyContent: 'space-between', // Changed to space-between
-            alignItems: 'center',
-            gap: '16px'
-        };
+    renderAxes(isMobile) {
+        const width = this.state.viewportWidth;
+        const animate = !this.state.reduceMotion;
+        return (
+            <>
+                <CartesianGrid strokeDasharray="3 3" vertical={!isMobile} />
+                <XAxis
+                    dataKey="name"
+                    ticks={axisTicks(width)}
+                    interval={0}
+                    minTickGap={0}
+                    tickFormatter={(value) => formatAxisTick(value, width)}
+                    tick={{ fontSize: 12 }}
+                    tickMargin={6}
+                    padding={{ left: 16, right: 16 }}
+                    height={32}
+                />
+                <YAxis
+                    width={52}
+                    tick={{ fontSize: 12 }}
+                    label={{ value: 'Inches', angle: -90, dx: -8 }}
+                />
+                <Tooltip
+                    formatter={this.tooltipFormatter}
+                    labelFormatter={formatCalendarDay}
+                    isAnimationActive={animate}
+                    animationDuration={animate ? 400 : 0}
+                />
+            </>
+        );
+    }
 
-        const titleStyle = {
-            fontSize: '1.5rem',
-            fontWeight: 'bold',
-            color: 'var(--color-text)'
-        };
+    renderLines(specs, suffix) {
+        const animate = !this.state.reduceMotion;
+        return specs.map((spec) => (
+            <Line
+                key={spec.id}
+                dot={false}
+                connectNulls
+                isAnimationActive={animate}
+                animationDuration={animate ? 400 : 0}
+                dataKey={`${spec.season}${suffix}`}
+                name={seriesLabel(spec.season, spec.role)}
+                stroke={spec.color}
+                strokeWidth={2.5}
+                strokeDasharray={spec.dash}
+                hide={!!this.state.hiddenSeries[spec.id]}
+            />
+        ));
+    }
 
-        const brandStyle = {
-            display: 'block',
-            fontSize: '0.9rem',
-            fontWeight: 'normal',
-            color: 'var(--color-text-muted)'
-        };
-
-        const ensoBadgeContainerStyle = {
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '2px'
-        };
-
-        const selectContainerStyle = {
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px',
-            width: '200px'
-        };
-
-        // Colours, border and focus ring come from the global select styles.
-        const selectStyle = {
-            padding: '6px',
-        };
-
+    renderLineChart(title, dataKey, specs) {
         const isMobile = this.props.viewport && this.props.viewport.isMobile;
+        const titleId = `snow-${dataKey}-title`;
+        return (
+            <section className="snow-chart" aria-labelledby={titleId}>
+                <h2 id={titleId} className="snow-chart-title">{title}</h2>
+                <div className={isMobile ? 'snow-chart-plot is-mobile' : 'snow-chart-plot'}>
+                    <ResponsiveContainer width="100%" height="100%">
+                        <LineChart
+                            data={this.state.data}
+                            margin={{ top: 8, right: 8, left: 12, bottom: 0 }}
+                        >
+                            {!this.state.hiddenSeries[AVERAGE_SEASON] && lowConfidenceSpans(this.state.data).map(([x1, x2]) => (
+                                <ReferenceArea
+                                    key={`${x1}-${x2}`}
+                                    x1={x1}
+                                    x2={x2}
+                                    fill={this.props.bandColor}
+                                    fillOpacity={1}
+                                    strokeOpacity={0}
+                                    ifOverflow="hidden"
+                                />
+                            ))}
+                            {this.renderAxes(isMobile)}
+                            {this.renderLines(specs, dataKey)}
+                        </LineChart>
+                    </ResponsiveContainer>
+                </div>
+                {this.renderLegend(specs)}
+            </section>
+        );
+    }
 
-        // Static (non-fixed) compact header on mobile so the page scrolls
-        // naturally; leaves room on the left for the fixed Home button.
-        const mobileHeaderStyle = {
-            backgroundColor: 'var(--color-surface)',
-            boxShadow: 'var(--shadow-sm)',
-            padding: '10px 12px 10px 116px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: '12px',
-        };
+    renderBarChart(specs) {
+        const isMobile = this.props.viewport && this.props.viewport.isMobile;
+        const animate = !this.state.reduceMotion;
+        return (
+            <section className="snow-chart" aria-labelledby="snow-daily-title">
+                <h2 id="snow-daily-title" className="snow-chart-title">New Daily Snowfall</h2>
+                <div className={isMobile ? 'snow-chart-plot is-mobile' : 'snow-chart-plot'}>
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                            data={this.state.data}
+                            margin={{ top: 8, right: 8, left: 12, bottom: 0 }}
+                            barSize={40}
+                            barGap={-40}
+                        >
+                            {this.renderAxes(isMobile)}
+                            {specs.map((spec) => (
+                                <Bar
+                                    key={spec.id}
+                                    isAnimationActive={animate}
+                                    animationDuration={animate ? 400 : 0}
+                                    dataKey={`${spec.season}newDailySnowFall`}
+                                    name={seriesLabel(spec.season, spec.role)}
+                                    fill={spec.color}
+                                    stroke={spec.color}
+                                    hide={!!this.state.hiddenSeries[spec.id]}
+                                />
+                            ))}
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+                {this.renderLegend(specs)}
+            </section>
+        );
+    }
 
-        const mobileTitleStyle = {
-            fontSize: '1.05rem',
-            fontWeight: 'bold',
-            color: 'var(--color-text)',
-            lineHeight: 1.25,
-        };
+    renderHeading() {
+        return (
+            <div className="snow-heading">
+                <p className="snow-kicker">WA Snowfall</p>
+                <h1 className="snow-title">{passNames[this.state.passName]}</h1>
+                <p className="snow-season-line">
+                    {seasonRange(this.state.currentSeason)} season: {describeEnso(this.state.currentSeason)}
+                </p>
+            </div>
+        );
+    }
+
+    renderLabeledSelect({ id, label, name, value, children, autoFocus = false }) {
+        return (
+            <label className="snow-field" htmlFor={id}>
+                <span>{label}</span>
+                <select
+                    id={id}
+                    name={name}
+                    value={value}
+                    autoFocus={autoFocus}
+                    onChange={evt => this.onChange(evt)}
+                >
+                    {children}
+                </select>
+            </label>
+        );
+    }
+
+    closeControls = () => {
+        this.setState({ controlsDrawerOpen: false }, () => {
+            if (this.controlsButton) this.controlsButton.focus();
+        });
+    }
+
+    render() {
+        const isMobile = this.props.viewport && this.props.viewport.isMobile;
 
         if (!this.state.snowFallData) {
             return (
-                <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    gap: '12px',
-                    height: '100vh',
-                    color: 'var(--color-text-muted)'
-                }}>
+                <div className="snow-status">
                     <HomeButton />
+                    <h1>WA Snowfall</h1>
                     {this.state.loadError ? (
                         <>
                             <div role="alert">
                                 Couldn't load WA Snowfall data ({this.state.loadError}).
                             </div>
-                            <button type="button" className="btn-primary" onClick={this.loadData}>
+                            <button type="button" className="btn-primary snow-controls" onClick={this.loadData}>
                                 Retry
                             </button>
                         </>
@@ -401,189 +523,108 @@ class Snow extends Component {
 
         const seasonOptions = Object.keys(this.state.snowFallData[this.state.passName])
             .filter(season => seasonHasData(this.state.snowFallData[this.state.passName][season]));
-        const passSelect = (
-            <select style={{ ...selectStyle, width: '100%' }} name="passNameSelect" value={this.state.passName} onChange={evt => this.onChange(evt)}>
-                {Object.keys(passNames).map(name =>
-                    <option key={name} value={name}>{passNames[name]}</option>)}
-            </select>
-        );
-        const seasonSelect = (
-            <select style={{ ...selectStyle, width: '100%' }} name="seasonSelect" value={this.state.currentSeason} onChange={evt => this.onChange(evt)}>
-                {seasonOptions.map(season =>
-                    <option key={season} value={season}>
-                        {season} - {ensoPhase(oni[season]) || '?'} ({formatOni(oni[season])})
-                    </option>)}
-            </select>
-        );
         const ensoBadge = (
             <span className="enso-badge" data-phase={currentEnsoPhase}>
                 {describeEnso(latestSeason)}
             </span>
         );
 
-        return (
-            <div>
-                <HomeButton />
-                {!isMobile && (
-                <div style={titleBarStyle}>
-                    <div style={titleStyle}>
-                        <span style={brandStyle}>WA Snowfall</span>
-                        {passNames[this.state.passName]}
-                        <span style={brandStyle}>
-                            {this.state.currentSeason} season: {describeEnso(this.state.currentSeason)}
-                        </span>
-                    </div>
-                    <div style={ensoBadgeContainerStyle}>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Current ENSO status</span>
-                        {ensoBadge}
-                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-faint)' }}>
-                            {latestSeason}-{Number(latestSeason) + 1} winter
-                        </span>
-                    </div>
-                    <div style={selectContainerStyle}>
-                        <select style={selectStyle} name="passNameSelect" value={this.state.passName} onChange={evt => this.onChange(evt)}>
-                            {Object.keys(passNames).map(name =>
-                                <option key={name} value={name}>{passNames[name]}</option>)}
-                        </select>
-                        <select style={selectStyle} name="seasonSelect" value={this.state.currentSeason} onChange={evt => this.onChange(evt)}>
-                            {seasonOptions.map(season =>
-                                <option key={season} value={season}>
-                                    {season} - {ensoPhase(oni[season]) || '?'} ({formatOni(oni[season])})
-                                </option>)}
-                        </select>
-                    </div>
-                </div>
-                )}
-                {isMobile && (
-                <div style={mobileHeaderStyle}>
-                    <div style={mobileTitleStyle}>
-                        <span style={brandStyle}>WA Snowfall</span>
-                        {passNames[this.state.passName]}
-                        <span style={brandStyle}>
-                            {this.state.currentSeason}: {describeEnso(this.state.currentSeason)}
-                        </span>
-                    </div>
-                    <button
-                        type="button"
-                        className="btn-primary"
-                        onClick={() => this.setState({ controlsDrawerOpen: true })}
-                    >
-                        Controls
-                    </button>
-                </div>
-                )}
-                <div style={isMobile
-                    ? { width: '100%', padding: '12px 10px 32px', boxSizing: 'border-box' }
-                    : { width: '100%', height: '100vh', padding: '20px', paddingTop: '80px', boxSizing: 'border-box' }
-                }>
-                    {this.renderLineChart(
-                        `Snow Depth`,
-                        `totalSnowFall`
-                    )}
+        const lineSpecs = this.lineSeries();
+        const barSpecs = lineSpecs.filter(spec => !spec.linesOnly);
+        const passOptions = Object.keys(passNames).map(name =>
+            <option key={name} value={name}>{passNames[name]}</option>
+        );
+        const seasonChoices = seasonOptions.map(season =>
+            <option key={season} value={season}>
+                {seasonRange(season)}: {ensoPhase(oni[season]) || '?'} ({formatOni(oni[season])})
+            </option>
+        );
 
-                    {this.renderLineChart(
-                        `Accumulated Snowfall`,
-                        `accumulatedSnowFall`
-                    )}
-                    <p data-testid="season-tail-note" style={{
-                        textAlign: 'center',
-                        fontSize: '0.9rem',
-                        color: 'var(--color-text-muted)',
-                        margin: '0 16px 12px',
-                    }}>
+        return (
+            <div className="snow-page">
+                <HomeButton />
+                {isMobile ? (
+                    <header className="snow-header is-mobile">
+                        {this.renderHeading()}
+                        <button
+                            type="button"
+                            className="btn-primary snow-controls"
+                            ref={(node) => { this.controlsButton = node; }}
+                            onClick={() => this.setState({ controlsDrawerOpen: true })}
+                        >
+                            Controls
+                        </button>
+                    </header>
+                ) : (
+                    <header className="snow-header">
+                        {this.renderHeading()}
+                        <div className="snow-enso">
+                            <span className="snow-enso-caption">Current ENSO status</span>
+                            {ensoBadge}
+                            <span className="snow-enso-winter">{seasonRange(latestSeason)} winter</span>
+                        </div>
+                        <div className="snow-selects">
+                            {this.renderLabeledSelect({
+                                id: 'snow-pass',
+                                label: 'Mountain pass',
+                                name: 'passNameSelect',
+                                value: this.state.passName,
+                                children: passOptions,
+                            })}
+                            {this.renderLabeledSelect({
+                                id: 'snow-season',
+                                label: 'Season',
+                                name: 'seasonSelect',
+                                value: this.state.currentSeason,
+                                children: seasonChoices,
+                            })}
+                        </div>
+                    </header>
+                )}
+                <div className={isMobile ? 'snow-main is-mobile' : 'snow-main'}>
+                    {this.renderLineChart('Snow Depth', 'totalSnowFall', lineSpecs)}
+                    {this.renderLineChart('Accumulated Snowfall', 'accumulatedSnowFall', lineSpecs)}
+                    <p className="snow-note" data-testid="season-tail-note">
                         September and June readings are charted. Shading marks days averaged from only 3–6 seasons; on those days each average stays within {MAX_LOW_SAMPLE_STEP_INCHES} inches of the previous day.
                     </p>
-
-                    <div style={isMobile ? { height: 300, minHeight: 260 } : { height: '33vh' }}>
-                            <h4 style={{ textAlign: 'center', margin: '10px 0' }}>New Daily Snowfall</h4>
-                            <ResponsiveContainer width="100%" height="80%">
-                                <BarChart
-                                    data={this.state.data}
-                                    margin={{ top: 5, right: 30, left: 20, bottom: 50 }}
-                                    barSize={40}
-                                    barGap={-40}
-                                >
-                                    <CartesianGrid strokeDasharray="3 3" vertical={!isMobile} />
-                                    <XAxis
-                                        dataKey="name"
-                                        tick={{ dy: 5, dx: -10, fontSize: 12 }}
-                                        interval={0}
-                                        tickFormatter={(value) => {
-                                            const [day, month] = value.split('-');
-                                            return (day === '1' || day === '15') ? `${month} ${day}` : '';
-                                        }}
-                                    />
-                                    <YAxis label={{ value: 'Inches', angle: -90, dx: -15}} />
-                                    <Tooltip formatter={this.tooltipFormatter} />
-                                    <Legend onClick={this.handleLegendClick} formatter={this.legendFormatter} />
-                                    <Bar
-                                        dataKey={`${this.state.currentSeason}newDailySnowFall`}
-                                        name={this.state.currentSeason}
-                                        fill="#8884d8"
-                                        stroke="#8884d8"
-                                        hide={!!this.state.hiddenSeries[this.state.currentSeason]}
-                                    />
-                                    {this.state.highestSeason && (
-                                        <Bar
-                                            dataKey={`${this.state.highestSeason}newDailySnowFall`}
-                                            name={this.state.highestSeason}
-                                            fill="#82ca9d"
-                                            stroke="#82ca9d"
-                                            hide={!!this.state.hiddenSeries[this.state.highestSeason]}
-                                        />
-                                    )}
-                                    {this.state.lowestSeason && (
-                                        <Bar
-                                            dataKey={`${this.state.lowestSeason}newDailySnowFall`}
-                                            name={this.state.lowestSeason}
-                                            fill="#ff8042"
-                                            stroke="#ff8042"
-                                            hide={!!this.state.hiddenSeries[this.state.lowestSeason]}
-                                        />
-                                    )}
-                                    <Bar
-                                        dataKey={`${AVERAGE_SEASON}newDailySnowFall`}
-                                        name={AVERAGE_SEASON}
-                                        fill={this.props.referenceColor}
-                                        stroke={this.props.referenceColor}
-                                        hide={!!this.state.hiddenSeries[AVERAGE_SEASON]}
-                                    />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
-                        <div style={{
-                            textAlign: 'center',
-                            fontSize: '0.9rem',
-                            color: 'var(--color-text-muted)'
-                        }}>
-                            Data Source: {' '}
-                            <a
-                                href="https://wsdot.com/travel/real-time/mountainpasses/snowfallreport"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{ color: 'var(--color-primary)' }}
-                            >
-                                WSDOT Snowfall Data
-                            </a>
-                        </div>
+                    {this.renderBarChart(barSpecs)}
+                    <div className="snow-source">
+                        Data Source: {' '}
+                        <a
+                            href="https://wsdot.com/travel/real-time/mountainpasses/snowfallreport"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            WSDOT Snowfall Data
+                        </a>
                     </div>
+                </div>
                 {isMobile && (
                     <MobileDrawer
                         open={this.state.controlsDrawerOpen}
-                        onClose={() => this.setState({ controlsDrawerOpen: false })}
+                        onClose={this.closeControls}
                         title="Snowfall controls"
                     >
                         <div className="mobile-drawer-section">Current ENSO status</div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 6 }}>
+                        <div className="snow-enso">
                             {ensoBadge}
-                            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-faint)' }}>
-                                {latestSeason}-{Number(latestSeason) + 1} winter
-                            </span>
+                            <span className="snow-enso-winter">{seasonRange(latestSeason)} winter</span>
                         </div>
-                        <div className="mobile-drawer-section">Mountain pass</div>
-                        {passSelect}
-                        <div className="mobile-drawer-section">Season</div>
-                        {seasonSelect}
+                        {this.renderLabeledSelect({
+                            id: 'snow-pass',
+                            label: 'Mountain pass',
+                            name: 'passNameSelect',
+                            value: this.state.passName,
+                            autoFocus: true,
+                            children: passOptions,
+                        })}
+                        {this.renderLabeledSelect({
+                            id: 'snow-season',
+                            label: 'Season',
+                            name: 'seasonSelect',
+                            value: this.state.currentSeason,
+                            children: seasonChoices,
+                        })}
                     </MobileDrawer>
                 )}
             </div>
@@ -593,8 +634,8 @@ class Snow extends Component {
 
 /* The Average series is a neutral reference, not a season: #555555 on the
    light page, and the lighter --chart-reference grey in dark, where #555555
-   was 2.6:1 against the chart background. Recharts needs a real colour (it
-   also paints the legend icon), so read the token here. */
+   was 2.6:1 against the chart background. Recharts and the legend swatch need
+   a real colour, so read the token here. */
 // Consecutive thin-sample days, as [first, last] calendar-day names.
 function lowConfidenceSpans(rows) {
     const spans = [];

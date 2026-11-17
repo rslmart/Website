@@ -1,5 +1,227 @@
-/* Snow page chrome that needs per-theme values. Chart series, axes and grid
-   colours are data encodings and stay in SnowPage.jsx. */
+/* Snow page chrome that needs per-theme values. Chart series colours are a
+   data encoding and stay in SnowPage.jsx. Axes and grid use the global
+   chart tokens. */
+
+.snow-page {
+    color: var(--color-text);
+}
+
+.snow-status {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    min-height: 100vh;
+    color: var(--color-text-muted);
+    padding: 24px;
+}
+
+.snow-status h1,
+.snow-title {
+    margin: 0;
+    color: var(--color-text);
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.snow-status h1 {
+    font-size: 1.5rem;
+}
+
+.snow-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background: var(--color-surface);
+    box-shadow: var(--shadow-sm);
+    padding: 10px 20px 10px 120px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+}
+
+.snow-header.is-mobile {
+    position: static;
+    padding: 10px 12px 10px 116px;
+}
+
+.snow-title {
+    font-size: 1.5rem;
+}
+
+.snow-header.is-mobile .snow-title {
+    font-size: 1.05rem;
+}
+
+.snow-heading {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.snow-kicker,
+.snow-season-line {
+    display: block;
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 400;
+    color: var(--color-text-muted);
+}
+
+.snow-kicker {
+    margin-bottom: 2px;
+}
+
+.snow-enso {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    text-align: center;
+}
+
+.snow-enso-caption {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+}
+
+.snow-enso-winter {
+    font-size: 0.7rem;
+    color: var(--color-text-faint);
+}
+
+.snow-selects {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 220px;
+    flex: 0 0 auto;
+}
+
+.snow-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.snow-field select,
+.snow-controls {
+    min-height: 44px;
+    min-width: 44px;
+}
+
+.snow-field select {
+    width: 100%;
+}
+
+.mobile-drawer-body .snow-field {
+    width: 100%;
+    margin-top: 14px;
+}
+
+.snow-main {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 180px 20px 32px;
+}
+
+.snow-main.is-mobile {
+    padding: 12px 10px 32px;
+}
+
+.snow-chart-title {
+    margin: 10px 0;
+    text-align: center;
+    font-size: 1rem;
+    color: var(--color-text);
+}
+
+.snow-chart-plot {
+    height: 33vh;
+    min-height: 220px;
+}
+
+.snow-chart-plot.is-mobile {
+    height: 260px;
+}
+
+.snow-legend {
+    margin: 4px 0 16px;
+}
+
+.snow-legend-unit {
+    margin: 0 0 6px;
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+}
+
+.snow-legend ul {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.snow-legend-button {
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font: inherit;
+    font-size: 0.85rem;
+    line-height: 1.2;
+    cursor: pointer;
+}
+
+.snow-legend-button.is-off {
+    text-decoration: line-through;
+}
+
+.snow-legend-swatch {
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+    flex: 0 0 auto;
+}
+
+.snow-legend-button.is-off .snow-legend-swatch {
+    opacity: 0.35;
+}
+
+.snow-note,
+.snow-source {
+    text-align: center;
+    font-size: 0.9rem;
+    color: var(--color-text-muted);
+}
+
+.snow-note {
+    margin: 0 16px 12px;
+}
+
+.snow-source {
+    margin: 0;
+}
+
+.snow-source a {
+    color: var(--color-primary);
+}
 
 /* ENSO status badge: a tinted pill per phase. Each pair is >=4.5:1 in both
    themes (light: dark text on a pale tint; dark: light text on a faint tint
