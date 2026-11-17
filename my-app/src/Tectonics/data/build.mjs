@@ -5,6 +5,12 @@
 //
 //   node src/Tectonics/data/build.mjs
 //
+// Importing this module does not download or write. That happens only when
+// the file is the node entry point. A normal run leaves
+// TECTONICS_BUILD_OFFLINE unset and writes the same four files. Tests set
+// that variable to 1, with TECTONICS_PB2002_FIXTURE and TECTONICS_OUT_DIR,
+// to build a local fixture into a temporary directory.
+//
 // Source: the `master` branch, which has been frozen at commit
 // 339b0c56563c118307b1f4542703047f5f698fae (2014-10-06); the committed data was
 // built from it. See README.md for how to confirm that and check the output.
@@ -28,7 +34,7 @@
 // them the short way with deck.gl's `wrapLongitude`.
 
 import {gzipSync} from 'node:zlib';
-import {mkdirSync, writeFileSync} from 'node:fs';
+import {mkdirSync, readFileSync, realpathSync, writeFileSync} from 'node:fs';
 import {dirname, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
@@ -57,15 +63,15 @@ async function fetchJson(url) {
     return res.json();
 }
 
-function writeGzip(name, obj) {
+function writeGzip(outDir, name, obj) {
     const json = JSON.stringify(obj);
     const gz = gzipSync(Buffer.from(json), {level: 9});
-    const path = resolve(OUT_DIR, name);
+    const path = resolve(outDir, name);
     writeFileSync(path, gz);
     console.log(`  ${name}: ${(json.length / 1e6).toFixed(2)}MB -> ${(gz.length / 1e6).toFixed(2)}MB gz`);
 }
 
-function buildPlates(raw) {
+export function buildPlates(raw) {
     return {
         type: 'FeatureCollection',
         features: raw.features.map((f) => ({
@@ -76,7 +82,7 @@ function buildPlates(raw) {
     };
 }
 
-function buildOrogens(raw) {
+export function buildOrogens(raw) {
     return {
         type: 'FeatureCollection',
         features: raw.features.map((f) => ({
@@ -90,7 +96,7 @@ function buildOrogens(raw) {
 // Each step becomes a 2-point segment (start -> final). Steps are short and
 // contiguous, so the boundary reads as a continuous colored line while the
 // payload stays small.
-function buildBoundaries(rawSteps) {
+export function buildBoundaries(rawSteps) {
     const features = rawSteps.features.map((f) => {
         const p = f.properties;
         return {
@@ -113,7 +119,7 @@ function buildBoundaries(rawSteps) {
     return {type: 'FeatureCollection', features};
 }
 
-function buildVelocity(rawSteps) {
+export function buildVelocity(rawSteps) {
     const points = [];
     rawSteps.features.forEach((f, i) => {
         if (i % VELOCITY_SAMPLE !== 0) return;
@@ -149,24 +155,70 @@ function roundGeometry(geometry) {
     return geometry;
 }
 
-async function main() {
-    mkdirSync(OUT_DIR, {recursive: true});
-    console.log('Downloading PB2002 GeoJSON...');
-    const [plates, steps, orogens] = await Promise.all([
-        fetchJson(SOURCES.plates),
-        fetchJson(SOURCES.steps),
-        fetchJson(SOURCES.orogens),
-    ]);
+// True when node was started with this file as the program. Importing the
+// module (Vitest, or another script) leaves the entry point as that other file.
+export function invokedAsProgram(entry = process.argv[1], moduleUrl = import.meta.url) {
+    if (!entry) return false;
+    try {
+        return realpathSync(entry) === realpathSync(fileURLToPath(moduleUrl));
+    } catch {
+        return false;
+    }
+}
 
-    console.log('Writing gzipped output to public/tectonics/ ...');
-    writeGzip('plates.json.gz', buildPlates(plates));
-    writeGzip('orogens.json.gz', buildOrogens(orogens));
-    writeGzip('boundaries.json.gz', buildBoundaries(steps));
-    writeGzip('velocity.json.gz', buildVelocity(steps));
+// Test-only. Unset on a normal run, so main() downloads the three source URLs
+// and writes OUT_DIR exactly as before.
+function offlineInput() {
+    if (process.env.TECTONICS_BUILD_OFFLINE !== '1') return null;
+    const fixturePath = process.env.TECTONICS_PB2002_FIXTURE;
+    const outDir = process.env.TECTONICS_OUT_DIR;
+    if (!fixturePath || !outDir) {
+        throw new Error(
+            'TECTONICS_BUILD_OFFLINE=1 requires TECTONICS_PB2002_FIXTURE and TECTONICS_OUT_DIR',
+        );
+    }
+    return {outDir, input: JSON.parse(readFileSync(fixturePath, 'utf8'))};
+}
+
+export async function main(options = {}) {
+    const outDir = options.outDir ?? OUT_DIR;
+    mkdirSync(outDir, {recursive: true});
+    let plates;
+    let steps;
+    let orogens;
+    if (options.input) {
+        ({plates, steps, orogens} = options.input);
+    } else {
+        console.log('Downloading PB2002 GeoJSON...');
+        [plates, steps, orogens] = await Promise.all([
+            fetchJson(SOURCES.plates),
+            fetchJson(SOURCES.steps),
+            fetchJson(SOURCES.orogens),
+        ]);
+    }
+
+    console.log(
+        outDir === OUT_DIR
+            ? 'Writing gzipped output to public/tectonics/ ...'
+            : `Writing gzipped output to ${outDir} ...`,
+    );
+    writeGzip(outDir, 'plates.json.gz', buildPlates(plates));
+    writeGzip(outDir, 'orogens.json.gz', buildOrogens(orogens));
+    writeGzip(outDir, 'boundaries.json.gz', buildBoundaries(steps));
+    writeGzip(outDir, 'velocity.json.gz', buildVelocity(steps));
     console.log('Done.');
 }
 
-main().catch((err) => {
-    console.error(err);
-    process.exit(1);
-});
+if (invokedAsProgram()) {
+    try {
+        const offline = offlineInput();
+        const run = offline ? main(offline) : main();
+        run.catch((err) => {
+            console.error(err);
+            process.exit(1);
+        });
+    } catch (err) {
+        console.error(err);
+        process.exit(1);
+    }
+}

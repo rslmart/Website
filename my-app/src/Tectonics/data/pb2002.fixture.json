@@ -1,0 +1,69 @@
+{
+  "attribution": {
+    "license": "Open Data Commons Attribution License (ODC-By) 1.0",
+    "licenseUrl": "http://opendatacommons.org/licenses/by/1.0/",
+    "credit": "Hugo Ahlenius, Nordpil and Peter Bird",
+    "notice": "This collection of data is made available under the Open Data Commons Attribution License: http://opendatacommons.org/licenses/by/1.0/",
+    "source": "Synthetic PB2002-schema fixture for tests. Field names follow fraxen/tectonicplates GeoJSON at commit 339b0c56563c118307b1f4542703047f5f698fae (checked 2026-11-17). Coordinates are invented, not a copy of the published geometries. Step index 3 has endpoints 359.5° apart so the current builder emits a segment longer than 180°."
+  },
+  "plates": {
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "properties": {"LAYER": "plate", "Code": "AF", "PlateName": "Africa"},
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [[[0.1234, 1.9876], [2.5, 3], [4.2, 1.1], [0.1234, 1.9876]]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {"Code": "PA", "PlateName": "Pacific"},
+        "geometry": {
+          "type": "MultiPolygon",
+          "coordinates": [[[[10.1116, -20.2224], [11, -21], [12.5, -20], [10.1116, -20.2224]]]]
+        }
+      }
+    ]
+  },
+  "orogens": {
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "properties": {"Name": "Test Range", "Source": "synthetic"},
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [[[1.2346, 2], [1.5, 2.5], [1.2, 2.2], [1.2346, 2]]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {"name": "lowercase belt"},
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [[[-1.1114, 0], [-1, 0.5], [-1.2, 0.2], [-1.1114, 0]]]
+        }
+      }
+    ]
+  },
+  "steps": {
+    "type": "FeatureCollection",
+    "features": [
+      {"type": "Feature", "properties": {"SEQNUM": 1, "STEPCLASS": "SUB", "PLATEBOUND": "PA-NA", "VELOCITYLE": 25.4567, "VELOCITYAZ": 12.3454, "STARTLONG": 10.1116, "STARTLAT": -20.2224, "FINALLONG": 10.5551, "FINALLAT": -20.3334}, "geometry": {"type": "LineString", "coordinates": [[10.1116, -20.2224], [10.5551, -20.3334]]}},
+      {"type": "Feature", "properties": {"SEQNUM": 2, "STEPCLASS": "OSR", "PLATEBOUND": "AF-AN", "VELOCITYLE": 13.2, "VELOCITYAZ": 48, "STARTLONG": -0.5, "STARTLAT": -54.8, "FINALLONG": 0.4, "FINALLAT": -54.4}, "geometry": {"type": "LineString", "coordinates": [[-0.5, -54.8], [0.4, -54.4]]}},
+      {"type": "Feature", "properties": {"SEQNUM": 3, "STEPCLASS": "OTF", "PLATEBOUND": "AF-AN", "VELOCITYLE": 7.5, "VELOCITYAZ": 10, "STARTLONG": 20, "STARTLAT": 1, "FINALLONG": 20.4, "FINALLAT": 1.2}, "geometry": {"type": "LineString", "coordinates": [[20, 1], [20.4, 1.2]]}},
+      {"type": "Feature", "properties": {"SEQNUM": 4, "STEPCLASS": "CRB", "PLATEBOUND": "KE-AU", "VELOCITYLE": 4, "VELOCITYAZ": 90, "STARTLONG": 179.6, "STARTLAT": 5.25, "FINALLONG": -179.9, "FINALLAT": 5.5}, "geometry": {"type": "LineString", "coordinates": [[179.6, 5.25], [-179.9, 5.5]]}},
+      {"type": "Feature", "properties": {"SEQNUM": 5, "STEPCLASS": "CTF", "PLATEBOUND": "NA-EU", "VELOCITYLE": 1.25, "VELOCITYAZ": 270, "STARTLONG": -30, "STARTLAT": 40, "FINALLONG": -29.5, "FINALLAT": 40.2}, "geometry": {"type": "LineString", "coordinates": [[-30, 40], [-29.5, 40.2]]}},
+      {"type": "Feature", "properties": {"SEQNUM": 6, "STEPCLASS": "CCB", "PLATEBOUND": "IN-EU", "VELOCITYLE": 2.5, "VELOCITYAZ": 15, "STARTLONG": 70, "STARTLAT": 30, "FINALLONG": 70.2, "FINALLAT": 30.1}, "geometry": {"type": "LineString", "coordinates": [[70, 30], [70.2, 30.1]]}},
+      {"type": "Feature", "properties": {"SEQNUM": 7, "STEPCLASS": "OCB", "PLATEBOUND": "PS-AU", "VELOCITYLE": 0, "VELOCITYAZ": 99, "STARTLONG": 1, "STARTLAT": 2, "FINALLONG": 1.2, "FINALLAT": 2.2}, "geometry": {"type": "LineString", "coordinates": [[1, 2], [1.2, 2.2]]}},
+      {"type": "Feature", "properties": {"SEQNUM": 8, "STEPCLASS": "SUB", "PLATEBOUND": "NZ-PA", "VELOCITYLE": 9.5, "VELOCITYAZ": 200, "STARTLONG": 150, "STARTLAT": -10, "FINALLONG": 150.3, "FINALLAT": -10.1}, "geometry": {"type": "LineString", "coordinates": [[150, -10], [150.3, -10.1]]}},
+      {"type": "Feature", "properties": {"SEQNUM": 9, "STEPCLASS": "OSR", "PLATEBOUND": "AN-PA", "VELOCITYLE": 0, "VELOCITYAZ": 5, "STARTLONG": -80, "STARTLAT": -60, "FINALLONG": -79.5, "FINALLAT": -60.1}, "geometry": {"type": "LineString", "coordinates": [[-80, -60], [-79.5, -60.1]]}},
+      {"type": "Feature", "properties": {"SEQNUM": 10, "STEPCLASS": "OTF", "PLATEBOUND": "SA-AF", "VELOCITYLE": 3.1, "VELOCITYAZ": 80, "STARTLONG": -10, "STARTLAT": 0, "FINALLONG": -9.5, "FINALLAT": 0.2}, "geometry": {"type": "LineString", "coordinates": [[-10, 0], [-9.5, 0.2]]}},
+      {"type": "Feature", "properties": {"SEQNUM": 11, "STEPCLASS": "CRB", "PLATEBOUND": "SO-SM", "VELOCITYLE": 6, "VELOCITYAZ": 40, "STARTLONG": 45, "STARTLAT": 12, "FINALLONG": 45.4, "FINALLAT": 12.3}, "geometry": {"type": "LineString", "coordinates": [[45, 12], [45.4, 12.3]]}},
+      {"type": "Feature", "properties": {"SEQNUM": 12, "STEPCLASS": "CTF", "PLATEBOUND": "NA-PA", "VELOCITYLE": 8, "VELOCITYAZ": 310, "STARTLONG": -120, "STARTLAT": 35, "FINALLONG": -119.6, "FINALLAT": 35.1}, "geometry": {"type": "LineString", "coordinates": [[-120, 35], [-119.6, 35.1]]}},
+      {"type": "Feature", "properties": {"SEQNUM": 13, "STEPCLASS": "CCB", "PLATEBOUND": "EU-AF", "VELOCITYLE": 15.5551, "VELOCITYAZ": 180.1, "STARTLONG": -40.5, "STARTLAT": 12.25, "FINALLONG": -40.1, "FINALLAT": 12.5}, "geometry": {"type": "LineString", "coordinates": [[-40.5, 12.25], [-40.1, 12.5]]}}
+    ]
+  }
+}
