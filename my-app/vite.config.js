@@ -205,9 +205,13 @@ function routeHtmlPlugin() {
                 // Vite's preview fallback rewrites /Bio to /Bio.html, and a
                 // trailing slash rewrites /Bio/ to /Bio/index.html. Write
                 // both so either URL has this route's tags before JS runs.
+                // public/ is already in outDir. hurricane, snow, and
+                // tectonics exist, and this disk ignores case, so a
+                // Hurricane/ shell would sit beside the data files.
                 const name = route.path.slice(1);
                 writeFileSync(resolve(outDir, `${name}.html`), html);
                 const dir = resolve(outDir, name);
+                if (existsSync(dir)) continue;
                 mkdirSync(dir, { recursive: true });
                 writeFileSync(resolve(dir, "index.html"), html);
             }
