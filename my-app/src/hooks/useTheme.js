@@ -13,11 +13,13 @@ import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from "reac
      localStorage; "system" removes the saved value.
    - Storage can throw (private mode, blocked site data). Then the choice is
      kept in memory for this page load only and nothing is saved.
-   - LIGHT_ONLY_PATHS stay light whatever the choice, until their own
-     styles move onto the tokens: Bio until website-prop-bio-readability-a11y. */
+   - LIGHT_ONLY_PATHS stay light whatever the choice, for a page whose own
+     styles aren't on the tokens yet (RootLayout hides the theme menu there).
+     Empty since Bio moved onto the tokens (website-prop-bio-readability-a11y);
+     the tests exercise it with a temporary entry. */
 
 export const THEME_STORAGE_KEY = "theme";
-export const LIGHT_ONLY_PATHS = ["/bio"];
+export const LIGHT_ONLY_PATHS = [];
 
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 

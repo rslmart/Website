@@ -1,163 +1,250 @@
-.container * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-}
+/* Bio (resume) on the site tokens (global.css), so it follows light and dark
+   like the other pages. Fonts come from body (--font-sans). */
 
 .container {
     line-height: 1.6;
-    color: #333;
-    max-width: 1200px;
+    color: var(--color-text);
+    max-width: 1000px;
     margin: 0 auto;
-    padding: 20px;
+    /* The top padding clears the fixed Home and theme buttons (16px + 40px)
+       at every width, so they never cover the header. */
+    padding: 72px 24px 40px;
+}
+
+.container h1,
+.container h2,
+.container h3,
+.container p,
+.container ul {
+    margin: 0;
+}
+
+/* One link style for the whole page: primary token, underlined. */
+.container a {
+    color: var(--color-primary);
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+}
+
+.container a:hover {
+    color: var(--color-primary-hover);
 }
 
 .header {
     text-align: center;
-    margin-bottom: 30px;
-    padding: 20px;
-    background-color: #2c3e50;
-    color: white;
-    border-radius: 10px;
+    margin-bottom: 24px;
+    padding: 24px 20px;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
 }
 
 .title {
-    font-size: 2.5em;
-    margin-bottom: 10px;
+    font-size: 2.25rem;
+    line-height: 1.2;
+    font-weight: 700;
+    margin-bottom: 8px;
 }
 
 .contactInfo {
-    font-size: 0.9em;
-    margin-bottom: 10px;
-}
-
-.link {
-    color: #3498db;
-    text-decoration: none;
-    margin: 0 10px;
+    display: flex;
+    justify-content: center;
+    gap: 0.6em;
+    color: var(--color-text-muted);
 }
 
 .section {
-    margin-bottom: 30px;
-    padding: 20px;
-    background-color: #f9f9f9;
-    border-radius: 8px;
+    margin-bottom: 24px;
+    padding: 24px;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
 }
 
 .sectionTitle {
-    color: #2c3e50;
-    margin-bottom: 15px;
-    border-bottom: 2px solid #3498db;
-    padding-bottom: 5px;
+    font-size: 1.5rem;
+    line-height: 1.3;
+    font-weight: 700;
+    margin-bottom: 16px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid var(--color-primary);
 }
 
-.jobItem {
-    margin-bottom: 20px;
-    padding: 15px;
-    background-color: white;
-    border-radius: 5px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+.subTitle {
+    font-size: 1.125rem;
+    line-height: 1.35;
+    font-weight: 600;
+    margin-bottom: 8px;
 }
 
+/* Job, education and project entries: separated by a rule, not nested cards. */
+.jobItem,
+.projectItem,
+.educationItem {
+    padding: 16px 0;
+    border-top: 1px solid var(--color-border);
+}
+
+.section > .sectionTitle + .jobItem,
+.section > .sectionTitle + .projectItem,
+.section > .sectionTitle + .educationItem {
+    border-top: none;
+    padding-top: 0;
+}
+
+.jobItem:last-child,
+.projectItem:last-child,
+.educationItem:last-child {
+    padding-bottom: 0;
+}
+
+.jobItem ul {
+    margin-top: 8px;
+    padding-left: 1.25em;
+}
+
+.jobItem li + li {
+    margin-top: 4px;
+}
+
+/* Title and company on the left, location and date on the right (one row
+   from 768px). */
 .jobHeader {
     display: flex;
-    justify-content: space-between;
-    margin-bottom: 10px;
     flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 16px;
+    row-gap: 2px;
 }
 
-.company, .location, .date {
+.jobHeader h3 {
+    font-size: 1.125rem;
+    line-height: 1.35;
     font-weight: 600;
-    color: #666;
-    margin: 0 5px;
+}
+
+.company,
+.location,
+.date {
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+
+.location {
+    margin-left: auto;
+}
+
+.location + .date::before {
+    content: "·";
+    margin-right: 8px;
+    margin-left: -8px;
+}
+
+.educationItem p,
+.projectItem p {
+    margin-top: 4px;
 }
 
 .skillsContainer {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 20px;
+    gap: 16px 32px;
 }
 
-.skillCategory {
-    padding: 15px;
-    background-color: white;
-    border-radius: 5px;
-}
-
-.projectItem {
-    margin-bottom: 15px;
-    padding: 15px;
-    background-color: white;
-    border-radius: 5px;
+.skillCategory h3,
+.projectItem h3 {
+    font-size: 1.125rem;
+    line-height: 1.35;
+    font-weight: 600;
+    margin-bottom: 4px;
 }
 
 .techStack {
-    color: #666;
-    font-size: 0.9em;
-    margin: 5px 0;
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
 }
 
-.educationItem {
-    padding: 15px;
-    background-color: white;
-    border-radius: 5px;
-}
-
-.cvSection {
-    line-height: 1.7;
-    font-size: 0.95em;
-    white-space: pre-wrap;
-}
-
+/* Cover letter: a readable measure, left-aligned. Inter's "0" is wide, so
+   52ch keeps prose at <=75 characters per line. */
 .cvSubSection {
-    margin-bottom: 2rem;
+    max-width: 52ch;
+}
+
+.cvSubSection + .cvSubSection {
+    margin-top: 28px;
 }
 
 .cvParagraph {
-    margin-bottom: 1em;
-    text-align: justify;
+    line-height: 1.7;
+    text-align: left;
 }
 
-@media (max-width: 768px) {
-    /* Clear the fixed Home button (top-left) so it never covers the header. */
+.cvParagraph + .cvParagraph {
+    margin-top: 1em;
+}
+
+/* Phones and narrow tablets: the job header takes two lines, title and
+   date, then company and location. */
+@media (max-width: 767px) {
     .container {
-        padding-top: 64px;
-    }
-
-    .jobHeader {
-        flex-direction: column;
-        gap: 5px;
-    }
-
-    .contactInfo a {
-        display: block;
-        margin: 5px 0;
+        padding: 72px 16px 32px;
     }
 
     .title {
-        font-size: 2em;
+        font-size: 1.875rem;
     }
 
     .section {
-        padding: 15px;
-    }
-}
-
-@media (max-width: 480px) {
-    .container {
-        padding: 64px 10px 10px;
+        padding: 16px;
     }
 
-    .header {
-        padding: 15px;
+    .sectionTitle {
+        font-size: 1.375rem;
     }
 
-    .title {
-        font-size: 1.8em;
+    .jobHeader {
+        column-gap: 8px;
     }
 
-    .contactInfo {
-        font-size: 0.8em;
+    /* A zero-height full-width item that breaks the row after the date. */
+    .jobHeader::after {
+        content: "";
+        order: 2;
+        flex-basis: 100%;
+    }
+
+    .jobHeader h3 {
+        font-size: 1.0625rem;
+    }
+
+    .date {
+        order: 1;
+        margin-left: auto;
+    }
+
+    .company {
+        order: 3;
+    }
+
+    .location {
+        order: 4;
+        margin-left: 0;
+    }
+
+    .company,
+    .location,
+    .date {
+        font-size: 0.8125rem;
+    }
+
+    .location + .date::before {
+        content: none;
+    }
+
+    .company + .location::before {
+        content: "·";
+        margin-right: 8px;
     }
 }
