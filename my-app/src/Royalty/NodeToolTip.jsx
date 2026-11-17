@@ -1,6 +1,7 @@
 // NodeToolTip.js
 import React from 'react';
 import './RoyalTreeStyle.css'
+import { formatDate } from './formatDate';
 
 const INCLUDED_KEYS = new Set([
     'label',
@@ -26,48 +27,13 @@ const formatKey = (key) => {
         .replace(/^./, str => str.toUpperCase());
 };
 
-function formatDateToYMD(dateStr) {
-    if (!dateStr) return '?';
-
-    // Extract date part and parse with regex
-    const [fullDate] = dateStr.split('T');
-    const match = fullDate.match(/^(-?\+?\d+)-(\d{2})-(\d{2})$/);
-
-    if (!match) return 'Invalid Date';
-
-    let [, yearStr, monthStr, dayStr] = match;
-    let isBCE = false;
-
-    // Clean year string
-    if (yearStr.startsWith('-')) {
-        isBCE = true;
-        yearStr = yearStr.slice(1); // Remove negative sign
-    } else if (yearStr.startsWith('+')) {
-        yearStr = yearStr.slice(1); // Remove positive sign
-    }
-
-    // Convert to numbers and format
-    const year = parseInt(yearStr, 10);
-    const month = parseInt(monthStr, 10);
-    const day = parseInt(dayStr, 10);
-
-    // Handle year 0 edge case (1 BCE)
-    const displayYear = year === 0 ? 1 : year;
-
-    if (month === 0 && day === 0) {
-        return `${isBCE ? 'BCE ' : ''}${displayYear}`;
-    }
-
-    return `${isBCE ? 'BCE ' : ''}${displayYear}/${month.toString().padStart(2, '0')}/${day.toString().padStart(2, '0')}`;
-}
-
 const formatValue = (key, value) => {
     // Handle position held objects
     if (key === 'position held' || key === 'noble title') {
         const formatPosition = (position) => {
             const title = position.of || position.label || '';
-            const start = position["start time"] ? formatDateToYMD(position["start time"]) : '';
-            const end = position["end time"] ? formatDateToYMD(position["end time"]) : '';
+            const start = position["start time"] ? formatDate(position["start time"]) : '';
+            const end = position["end time"] ? formatDate(position["end time"]) : '';
             const cause = position["end cause"] ? `, ${position["end cause"]}` : '';
 
             const dates = [start, end].filter(d => d).join(' - ');
@@ -83,7 +49,7 @@ const formatValue = (key, value) => {
     }
 
     if (key === 'date of birth' || key === 'date of death') {
-        return formatDateToYMD(value);
+        return formatDate(value);
     }
 
     // Handle arrays of simple values

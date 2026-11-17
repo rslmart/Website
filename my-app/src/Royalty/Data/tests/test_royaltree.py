@@ -11,7 +11,7 @@ from collections import Counter
 
 import pytest
 
-from royaltree import cli, graph, http, store as store_mod, wikidata
+from royaltree import cli, graph, http, store as store_mod, wdqs, wikidata
 from royaltree.build import combine
 from royaltree.legacy import import_legacy
 from royaltree.store import Store, StoreLocked, atomic_write
@@ -234,16 +234,71 @@ def test_family_tree_and_ancestors_offline(seeded):
         assert r.absent == {"Q404"} and "Q404" not in r.cache
 
 
-def test_online_fetch_commits_each_batch(seeded, fake_http):
-    fake_http.entities = {"Q6": entity(person("Q6", father="Q3"), rev=55)}
+def test_online_fetch_stores_typed_rows_and_leaves_person_rows(seeded, monkeypatch):
+    def fake_fetch(qids, **kwargs):
+        out = {}
+        for qid in qids:
+            if qid == "Q6":
+                out[qid] = {"id": "Q6", "revision": 55,
+                            "father": {"rank": "normal", "value": {"id": "Q3"}}}
+            else:
+                out[qid] = {"id": qid}
+        return out
+
+    monkeypatch.setattr(graph.wdqs, "fetch_typed", fake_fetch)
     with Store(str(seeded)) as s:
         c = Counter()
         r = graph.Retriever(s, offline=False, counters=c)
         got = r.get_people(["Q3", "Q6", "Q7"])
-        assert got["Q6"]["father"] == "Q3" and got["Q7"] == {}
-        assert s.info("person", ["Q6"])["Q6"][0] == 55
-        assert s.get("label", ["Q6"]) == {"Q6": "PQ6"}
-        assert c["people_fetched"] == 2 and len(fake_http.calls) == 1
+        assert got["Q3"]["father"] == "Q2"
+        assert got["Q6"]["father"] == "Q3" and got["Q7"] == {"id": "Q7"}
+        assert s.get("person", ["Q6"]) == {}
+        assert s.info("wdqs", ["Q6"])["Q6"][0] == 55
+        assert c["people_fetched"] == 2
+
+
+def test_walk_uses_inverse_edges_and_does_not_pick_a_parent_tie(tmp_path):
+    records = {
+        "Q10": {"id": "Q10", "child": [{"rank": "normal", "id": "Q11"}]},
+        "Q11": {"id": "Q11"},
+        "Q12": {"id": "Q12", "father": {"rank": "normal", "value": {"id": "Q10"}}},
+        "Q13": {"id": "Q13", "father": {
+            "rank": "normal", "tie": True, "values": [{"id": "Q10"}, {"id": "Q14"}],
+        }},
+        "Q14": {"id": "Q14"},
+    }
+    with Store(str(tmp_path)) as s:
+        wdqs.store_typed(s, records)
+        retriever = graph.Retriever(s, offline=True, counters=Counter())
+        # Q11 does not list a parent. Q10 lists Q11 as a child, so the link exists.
+        assert graph.family_tree(["Q11", "Q10"], retriever) == [["Q11", "Q10"], []]
+        # Both records are loaded. Q12 lists Q10; Q10 does not list Q12.
+        retriever.expand(["Q10", "Q12"])
+        assert graph.bfs("Q10", "Q12", retriever) == ["Q10", "Q12"]
+        # The tie is not a father link, and Q10 does not list Q13.
+        assert graph.bfs("Q13", "Q10", retriever) is None
+        assert "father" not in retriever.get_person("Q13")
+
+
+def test_walk_does_not_call_the_live_inverse_lookup(tmp_path, monkeypatch):
+    calls = []
+
+    def fake_fetch(qids, **kwargs):
+        return {
+            qid: {"id": qid, "child": [{"rank": "normal", "id": "Q9"}]} if qid == "Q1" else {"id": qid}
+            for qid in qids
+        }
+
+    def fake_inverse(qids, **kwargs):
+        calls.append(list(qids))
+        return []
+
+    monkeypatch.setattr(graph.wdqs, "fetch_typed", fake_fetch)
+    monkeypatch.setattr(graph.wdqs, "fetch_inverse", fake_inverse)
+    with Store(str(tmp_path)) as store:
+        retriever = graph.Retriever(store, offline=False, counters=Counter())
+        assert graph.bfs("Q1", "Q9", retriever) == ["Q1", "Q9"]
+        assert calls == []
 
 
 # -- legacy import -------------------------------------------------------------

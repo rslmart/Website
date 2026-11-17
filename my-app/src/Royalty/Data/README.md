@@ -2,10 +2,14 @@
 
 Builds the datasets behind the royal tree charts (`/RoyalTree`). The ordered
 monarch lists are scraped from English Wikipedia. Person facts used by `build`
-come from [Wikidata](https://www.wikidata.org/) through the Action API
-(`wbgetentities`, 50 IDs per call). Typed SPARQL records
-([`royaltree/wdqs.py`](royaltree/wdqs.py)) are fetched and stored separately
-and are not read by `build` yet. Portraits come from Wikimedia Commons.
+come from the Wikidata Query Service
+([`royaltree/wdqs.py`](royaltree/wdqs.py)): typed rows with rank and precision,
+stored as kind `wdqs`. The walk projects a single best-rank QID into a
+father, mother or child link and leaves a tie explicit. Dates reach the page
+as `{time, precision}`. Kind `person` rows stay, and `parse_person` is still
+the legacy parser used when a row is refreshed through `wbgetentities`.
+Labels try WDQS first and fall back to `wbgetentities` when WDQS does not
+answer. Portraits come from Wikimedia Commons.
 
 Everything except portraits runs through one command, `python -m royaltree`
 ([`royaltree/`](royaltree/)), over one local entity store
@@ -171,8 +175,8 @@ summary):
 | `lists` (only if a list is missing, or `--lists`) | `GetListOfMonarchs.get_monarch_lists` | Wikipedia + Wikidata | `data/monarch_list.json` |
 | `refetch-conflicts` (only with `--refresh-conflicts`) | `cli.refresh_conflicts` | Wikidata | store |
 | `revision-check`, `refetch` (only with `--refresh`/`--since`) | `cli.refresh` | Wikidata `props=info` | store |
-| `traverse:<M>` per requested tree | `graph.traverse_tree` | Wikidata, for people not in the store | store: people, the tree's paths, ancestors and member set |
-| `combine` (every stored tree) | `build.combine` | Wikidata, for labels not in the store | nothing yet |
+| `traverse:<M>` per requested tree | `graph.traverse_tree` | WDQS typed rows and inverse edges, for people not in the store; `wbgetentities` only if a label query fails | store: kind `wdqs` (kind `person` is left in place), the tree's paths, ancestors and member set |
+| `combine` (every stored tree) | `build.combine` | WDQS labels, then `wbgetentities` if WDQS does not answer | nothing yet |
 | `write-combined` | `build.write_combined` | | `data/monarchy_data.json`, `monarchy_family_trees.json`, `monarchy_ancestors.json` |
 | `houses` | `BuildHouses.build_houses` | | `data/houses.json` |
 | `split` | `SplitDataForFrontend` | | `public/royalty/*`, removes payloads no longer indexed |
@@ -203,17 +207,28 @@ level-batched BFS over family edges from each monarch to the earliest of the
 next five in the list. It is capped by `MAX_BFS_DEPTH` (8) and `MAX_BFS_NODES`
 (4000) and records `[]` when no path is found.
 
-`royaltree/wdqs.py` is the typed fetcher for the next slice. It POSTs to
+`royaltree/wdqs.py` fetches those rows. It POSTs to
 `https://query.wikidata.org/sparql` (`Accept: application/sparql-results+json`)
 in sequential `VALUES` batches of 400, through the same HTTP session as the
-Action API. Single-valued facts (parents, sex, family, birth, death) use the
+Action API. One batch is three queries: facts and family relations together,
+dates on their own (`wikibase:timeValue` stays off the other queries), then
+positions. Single-valued facts (parents, sex, family, birth, death) use the
 best rank: preferred over normal, deprecated never, and a tie or an unknown
 value is stored explicitly. Positions, titles, spouses, children and siblings
 keep every non-deprecated statement and its rank, including a position with no
-end date. Dates are `{time, precision}`. `format_date` renders those for tests
-(a century is `c. 12th century`, a decade is `990s`, BCE years stay historical).
-Labels still come from `wbgetentities` when WDQS does not answer. Pinned
-responses live in [`tests/fixtures/wdqs_pinned.json`](tests/fixtures/wdqs_pinned.json);
+end date. As each level is fetched, a parent who lists the child is linked
+even when the child does not, and the reverse, using the statements on the
+fetched records. A separate ``fetch_inverse`` query can find a person who is
+on nobody's fetched statement; the walk does not call it, because that lookup
+took about 15s for 40 people. The succession search then runs on the fetched
+graph. Dates are
+`{time, precision}`. `format_date` renders them (a century is
+`c. 12th century`, a decade is `990s`). At year precision and finer,
+astronomical year 0 is 1 BCE; at millennium, century and decade precision,
+year 0 stays in the positive block. The page uses the same helper for the
+node label and the tooltip. Labels come from WDQS, and from `wbgetentities`
+when WDQS does not answer. Pinned responses live in
+[`tests/fixtures/wdqs_pinned.json`](tests/fixtures/wdqs_pinned.json);
 `uv run python -m royaltree.wdqs_drift` reports live drift and is not part of
 pytest.
 
@@ -224,7 +239,9 @@ every listed monarch and adds the siblings of each ancestor, for
 `EUROPEAN_MONARCHIES`, so multi-monarchy views show shared ancestry. The Mongol
 houses (`DEEP_ANCESTOR_MONARCHIES`) get a deeper (12), sibling-free pass that
 reconnects the khanates to Genghis Khan. Other trees have no ancestor stage.
-People whose `father` is missing in Wikidata stay unconnected.
+A parent link is the single best-rank father or mother. A tie is not used as
+that link. A child who does not list a parent is still connected when the
+parent lists the child, and the reverse.
 
 ### Labels and combine
 

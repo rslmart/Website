@@ -1,3 +1,5 @@
+import { formatDate } from './formatDate';
+
 function getMarriageName(father, mother) {
   return [father, mother].sort().join('');
 }
@@ -6,23 +8,9 @@ function getMarriageLabel(father, mother) {
   return [father, mother].sort().join(' + ');
 }
 
-function extractYear(dateStr) {
-  if (!dateStr) return '?';
-  // Wikidata timestamps carry a leading sign ("+1650-...", "-2600-..." for BCE),
-  // so grab the signed leading integer rather than splitting on '-' (which would
-  // strip a BCE year down to an empty token and yield NaN).
-  const [datePart] = String(dateStr).split('T');
-  const match = datePart.match(/^[+-]?\d+/);
-  if (!match) return '?';
-  const year = parseInt(match[0], 10);
-  if (Number.isNaN(year)) return '?';
-  // Astronomical year numbering: year 0 == 1 BCE, -2600 == 2601 BCE.
-  return year < 1 ? `${Math.abs(year - 1)} BCE` : `${year}`;
-}
-
-function createLabel(person) {
-  const birth = extractYear(person['date of birth']) ?? '?';
-  const death = extractYear(person['date of death']) ?? '?';
+export function createLabel(person) {
+  const birth = formatDate(person['date of birth']);
+  const death = formatDate(person['date of death']);
   return `${person.label}\n${birth}-${death}`;
 }
 
