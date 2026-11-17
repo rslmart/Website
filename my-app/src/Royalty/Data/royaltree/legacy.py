@@ -18,14 +18,12 @@ unknown fetch time, so a later revision check refetches them (capped).
 Makes no network requests.
 """
 import json
-import logging
 import os
 from collections import Counter
 
 from royaltree import wikidata
 from royaltree.store import LEGACY_TIME
 
-log = logging.getLogger("royaltree")
 
 CONFLICTS_KEY = "legacy_conflicts"
 COMBINED = {"monarch_list.json", "monarchy_data.json", "monarchy_family_trees.json",
@@ -63,7 +61,13 @@ def _candidates(legacy_dir, counters):
     return candidates, touched
 
 
-def import_legacy(store, legacy_dir, counters, conflicts_only=False):
+def import_legacy(store, legacy_dir, counters, conflicts_only=False, force=False):
+    if not conflicts_only and not force:
+        fetched = store.count("person", revised=True)
+        if fetched:
+            raise SystemExit(f"the store already holds {fetched} fetched people; a full import "
+                             "would replace them with older legacy snapshots. Use "
+                             "--conflicts-only, or --force to import anyway.")
     candidates, touched = _candidates(legacy_dir, counters)
     conflicts = sorted(q for q, slot in candidates.items() if len(slot) > 1)
     store.meta_set(CONFLICTS_KEY, conflicts)

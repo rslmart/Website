@@ -18,7 +18,6 @@ import json
 import os
 import sqlite3
 import tempfile
-import time
 from datetime import datetime, timezone
 
 STORE_NAME = "royaltree.sqlite"
@@ -85,16 +84,14 @@ class StoreLocked(RuntimeError):
 
 
 class Store:
-    def __init__(self, data_dir, readonly=False):
+    def __init__(self, data_dir):
         os.makedirs(data_dir, exist_ok=True)
         self.path = os.path.join(data_dir, STORE_NAME)
-        self._lock = None
-        if not readonly:
-            self._lock = open(self.path + ".lock", "w")
-            try:
-                fcntl.flock(self._lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError:
-                raise StoreLocked(f"another royaltree run holds {self.path}.lock")
+        self._lock = open(self.path + ".lock", "w")
+        try:
+            fcntl.flock(self._lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise StoreLocked(f"another royaltree run holds {self.path}.lock")
         self.conn = sqlite3.connect(self.path, timeout=30)
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA synchronous=NORMAL")
@@ -105,8 +102,7 @@ class Store:
 
     def close(self):
         self.conn.close()
-        if self._lock:
-            self._lock.close()
+        self._lock.close()
 
     def __enter__(self):
         return self
@@ -128,10 +124,6 @@ class Store:
                 out[qid] = json.loads(data)
         return out
 
-    def get_all(self, kind):
-        return {q: json.loads(d) for q, d in
-                self.conn.execute("SELECT qid, data FROM entities WHERE kind=?", (kind,))}
-
     def info(self, kind, qids=None):
         """{qid: (lastrevid, fetched_at, checked_at)}."""
         sql = "SELECT qid, lastrevid, fetched_at, checked_at FROM entities WHERE kind=?"
@@ -146,8 +138,12 @@ class Store:
                 out[r[0]] = r[1:]
         return out
 
-    def count(self, kind):
-        return self.conn.execute("SELECT COUNT(*) FROM entities WHERE kind=?", (kind,)).fetchone()[0]
+    def count(self, kind, revised=False):
+        """Rows of ``kind``; with revised=True only those fetched with a known revision."""
+        sql = "SELECT COUNT(*) FROM entities WHERE kind=?"
+        if revised:
+            sql += " AND lastrevid IS NOT NULL"
+        return self.conn.execute(sql, (kind,)).fetchone()[0]
 
     def put_many(self, kind, records, source, revisions=None, fetched_at=None):
         """Upsert {qid: data} in one transaction (all or nothing)."""

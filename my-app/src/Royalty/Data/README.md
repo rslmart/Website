@@ -48,7 +48,10 @@ Run the commands from this directory (`python -m` needs it on the path).
 ## Commands
 
 ```bash
-# Rebuild one tree from the store with no network (seconds; any request is an error)
+# Rebuild one tree from the store with no network (seconds; any request is an error).
+# build rewrites the combined files from the store's trees, so it refuses when the
+# store lacks a tree that is already published (e.g. a fresh clone: run
+# import-legacy or build --all first; --allow-dropped-trees drops one on purpose).
 python -m royaltree build England --offline
 
 # Rebuild every tree offline (about 10 s), then compare with the committed payloads
@@ -75,7 +78,8 @@ python -m royaltree split
 python -m royaltree check
 python -m royaltree diff --base master -v
 
-# One-time migration of the old data/*.json caches (no network)
+# One-time migration of the old data/*.json caches (no network). Refuses if the
+# store already holds fetched people (--force replaces them with the old snapshots).
 python -m royaltree import-legacy --from /path/to/old/data
 
 # After the migration: refetch the people whose old caches disagreed (see
@@ -88,8 +92,8 @@ python -m royaltree fetch --all --refresh-conflicts --max-refetch 5000 --maxlag 
 Options shared by every command: `--data-dir`, `--out-dir`, `--offline`,
 `--max-requests N` (default 3000: the run stops cleanly at the cap and the next
 run resumes) and `--summary-json PATH`. Tree commands also take `--all`,
-`--lists`, `--refresh`, `--since DATE`, `--refresh-conflicts`, `--max-refetch N` and
-`--fresh-membership` (see [Store](#the-entity-store)).
+`--lists`, `--refresh`, `--since DATE`, `--refresh-conflicts`, `--max-refetch N`,
+`--fresh-membership` and `--allow-dropped-trees` (see [Store](#the-entity-store)).
 
 Every run ends with a summary on stderr. It is also stored in the store's `runs`
 table:
@@ -269,8 +273,9 @@ parents of monarchs in trees without an ancestor stage.
 **Request hygiene** (`royaltree/http.py`). Every request goes through one
 session with the User-Agent `RoyalTreeBot/1.0 (+https://makoa.link)` and a
 `(10 s, 60 s)` timeout. It is sent serially, with `maxlag=5` on Wikidata, and
-backs off on HTTP 429/5xx (honouring `Retry-After`). maxlag waits have their
-own, more patient retry budget. Counters feed the summary.
+backs off on HTTP 429/5xx (honouring `Retry-After`; a request asking for more
+than 120 s fails instead of retrying early). maxlag waits have their own, more
+patient retry budget. Counters feed the summary.
 
 ## Data files
 
@@ -290,9 +295,15 @@ Git-ignored: `data/royaltree.sqlite*` (the store) and `data/houses.json` (about
 `data/properties.json` are no longer read or written. Import them once with
 `import-legacy`.
 
-A fresh clone without a store can run `split` offline. A fresh clone can also
-`build <M>` from an empty `data/` directory with the network: the list is
-scraped, then people and labels are fetched.
+A fresh clone without a store can run `split` offline. Building from an empty
+`data/` directory works with the network as `build --all` (lists are scraped,
+then people and labels fetched). A single `build <M>` on a store without the
+other published trees is refused rather than dropping them; import the old
+caches or build `--all` first.
+
+`split` deletes only payloads that the previous `index.json`/`houses.json`
+listed and this run no longer writes (e.g. a house that fell below the member
+threshold), so pointing `--out-dir` at another folder deletes nothing.
 
 ## Refreshing data
 
@@ -316,7 +327,8 @@ It records those QIDs in the store's `meta` table (`legacy_conflicts`; for an
 already-migrated store, `import-legacy --from <dir> --conflicts-only` records
 them without touching imported rows). `fetch --refresh-conflicts` refetches the
 whole recorded set, whatever trees are named, 50 per request. Only rows still
-without a known revision are due, so an interrupted run resumes and a finished
+without a known revision are due (an item since deleted on Wikidata is stored
+with revision 0 and not refetched again), so an interrupted run resumes and a finished
 one does nothing. It counts against `--max-refetch` (about 5,000 rows here, so
 raise the cap). Follow it with an online `build --all`, which fetches the
 relatives the fresh records newly reference.

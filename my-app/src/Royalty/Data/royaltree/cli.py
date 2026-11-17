@@ -161,7 +161,9 @@ def refresh(run, store, monarchies, since, max_refetch):
         for i in range(0, len(ids), 500):
             chunk = ids[i:i + 500]
             current = wikidata.revision_info(chunk)
-            same = {q: known[q] for q in chunk if current.get(q) == known[q]}
+            # A deleted/missing item is stored with lastrevid 0 and stays unchanged
+            # while Wikidata still returns nothing for it.
+            same = {q: known[q] for q in chunk if current.get(q, 0) == known[q]}
             changed += [q for q in chunk if q not in same]
             store.mark_checked("person", same)
     refetch = changed + unknown
@@ -180,7 +182,8 @@ def refresh_conflicts(run, store, max_refetch):
     """Refetch the people whose legacy caches disagreed (recorded by import-legacy).
 
     Covers the whole recorded set, whatever trees are named. Only rows still
-    without a known revision are due, so an interrupted run resumes and a
+    without a known revision are due (a refetched item that turned out to be
+    deleted is stored with lastrevid 0), so an interrupted run resumes and a
     finished one is a no-op. Counts against --max-refetch like --refresh.
     """
     from royaltree.legacy import CONFLICTS_KEY
@@ -200,8 +203,34 @@ def refresh_conflicts(run, store, max_refetch):
 
 
 # -- commands --------------------------------------------------------------
+def _published_trees(args):
+    """Trees the committed combined files or the current payload index publish."""
+    from SplitDataForFrontend import listed_names
+    names = listed_names(os.path.join(args.out_dir, "index.json"))
+    path = os.path.join(args.data_dir, "monarchy_family_trees.json")
+    if os.path.exists(path):
+        with open(path) as f:
+            names.update(json.load(f))
+    return names
+
+
+def check_tree_coverage(args, store, monarchies):
+    """build rewrites the combined files from the store's trees only. Refuse
+    (before any request) when that would silently drop published trees, e.g. a
+    fresh clone or worktree whose git-ignored store holds just one tree."""
+    dropped = sorted(_published_trees(args) - set(store.trees("family_tree")) - set(monarchies))
+    if dropped and not args.allow_dropped_trees:
+        raise SystemExit(
+            f"the store has no tree for {len(dropped)} published monarchies ({', '.join(dropped[:5])}"
+            f"{', ...' if len(dropped) > 5 else ''}); building would delete them from the combined "
+            "files and public/royalty. Run import-legacy or build --all first, or pass "
+            "--allow-dropped-trees to drop them on purpose.")
+
+
 def cmd_fetch(run, args, store, derive):
     monarchies = resolve_monarchies(args, _load_lists(args.data_dir))
+    if derive:
+        check_tree_coverage(args, store, monarchies)
     lists = ensure_lists(run, args, monarchies)
     if args.refresh_conflicts:
         refresh_conflicts(run, store, args.max_refetch)
@@ -229,15 +258,17 @@ def derive_outputs(run, args):
     with run.stage("houses"):  # local and cheap; lets a fresh clone rebuild every payload
         BuildHouses.build_houses()
     with run.stage("split"):
+        previous = SplitDataForFrontend.published_names()
         names = SplitDataForFrontend.split() + SplitDataForFrontend.split_houses()
         run.counters["payloads_written"] = len(names)
-        run.counters["stale_payloads_removed"] = len(SplitDataForFrontend.prune(names))
+        run.counters["stale_payloads_removed"] = len(SplitDataForFrontend.prune(previous, names))
 
 
 def cmd_import(run, args, store):
     from royaltree.legacy import import_legacy
     with run.stage("import-legacy"):
-        import_legacy(store, args.source, run.counters, conflicts_only=args.conflicts_only)
+        import_legacy(store, args.source, run.counters, conflicts_only=args.conflicts_only,
+                      force=args.force)
     run.counters["store_people"] = store.count("person")
     run.counters["store_labels"] = store.count("label")
 
@@ -272,6 +303,8 @@ def build_parser():
     trees.add_argument("--fresh-membership", action="store_true",
                        help="recompute each tree's member set from this run only, dropping "
                             "relatives that only earlier runs fetched")
+    trees.add_argument("--allow-dropped-trees", action="store_true",
+                       help="build: let the combined files lose published trees the store lacks")
     trees.add_argument("--max-refetch", type=int, default=DEFAULT_MAX_REFETCH,
                        help="refuse a refresh that would refetch more entities (default: %(default)s)")
 
@@ -289,6 +322,9 @@ def build_parser():
     p.add_argument("--conflicts-only", action="store_true",
                    help="only record the conflicting QIDs for --refresh-conflicts "
                         "(reads the legacy dir; leaves imported rows untouched)")
+    p.add_argument("--force", action="store_true",
+                   help="import even though the store already holds fetched rows "
+                        "(they would be replaced by the older legacy snapshots)")
     return parser
 
 

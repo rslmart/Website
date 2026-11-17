@@ -76,7 +76,6 @@ def convert_wiki_list_to_wiki_data_list(wiki_list, name_filter={}):
 # relative hrefs and to page redirects.
 # ---------------------------------------------------------------------------
 
-_SCRAPER_UA = {"User-Agent": requests.USER_AGENT}
 
 # Ancient king lists link a handful of classical chroniclers who are humans
 # (Q5) but obviously not pharaohs; drop them so they don't pollute the list.
@@ -104,7 +103,7 @@ def _title_from_href(href):
 
 
 def _get_soup(url):
-    return BeautifulSoup(requests.get(url, headers=_SCRAPER_UA, timeout=30).content, "html.parser")
+    return BeautifulSoup(requests.get(url, timeout=30).content, "html.parser")
 
 
 def _ordered_unique(seq):
@@ -201,7 +200,7 @@ def _resolve_titles_to_qids(titles):
                 "action": "query", "format": "json", "prop": "pageprops",
                 "ppprop": "wikibase_item", "redirects": 1, "titles": "|".join(batch),
             },
-            headers=_SCRAPER_UA, timeout=30,
+            timeout=30,
         ).json()
         query = resp.get("query", {})
         norm = {n["from"]: n["to"] for n in query.get("normalized", [])}

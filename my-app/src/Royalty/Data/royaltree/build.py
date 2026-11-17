@@ -8,13 +8,11 @@ person's record comes from the one store row for that QID. So rebuilding one
 tree cannot change another tree's people, whatever the build order.
 """
 import json
-import logging
 import os
 
 from royaltree import wikidata
 from royaltree.store import atomic_write
 
-log = logging.getLogger("royaltree")
 
 RELATIVE_FIELDS = ("father", "mother")
 RELATIVE_LIST_FIELDS = ("spouse", "sibling", "unmarried partner")

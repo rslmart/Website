@@ -125,31 +125,35 @@ def get(url, params=None, headers=None, timeout=None, retries=MAX_RETRIES, **kwa
         except requests.RequestException as exc:
             STATS.network_errors += 1
             last = exc
-            _wait(delay, f"network error: {type(exc).__name__}")
+            wait, why = delay, f"network error: {type(exc).__name__}"
             delay = min(delay * 2, 60)
-            continue
-        if resp.status_code == 429:
-            STATS.status_429 += 1
-            last = f"HTTP 429"
-            _wait(_retry_after(resp, delay), "HTTP 429")
-            delay = min(delay * 2, 60)
-            continue
-        if resp.headers.get("MediaWiki-API-Error") == "maxlag":
-            STATS.maxlag += 1
-            last = "maxlag"
-            if lag_waits < MAXLAG_RETRIES:
-                lag_waits += 1
-                attempt -= 1  # maxlag has its own budget
-            _wait(max(_retry_after(resp, 5), lag_delay), "maxlag: server lagged")
-            lag_delay = min(lag_delay * 1.5, 60)
-            continue
-        if resp.status_code >= 500:
-            STATS.server_errors += 1
-            last = f"HTTP {resp.status_code}"
-            _wait(_retry_after(resp, delay), last)
-            delay = min(delay * 2, 60)
-            continue
-        return resp
+        else:
+            if resp.status_code == 429:
+                STATS.status_429 += 1
+                last = why = "HTTP 429"
+                wait = _retry_after(resp, delay)
+                delay = min(delay * 2, 60)
+            elif resp.headers.get("MediaWiki-API-Error") == "maxlag":
+                STATS.maxlag += 1
+                last, why = "maxlag", "maxlag: server lagged"
+                if lag_waits < MAXLAG_RETRIES:
+                    lag_waits += 1
+                    attempt -= 1  # maxlag has its own budget
+                wait = max(_retry_after(resp, 5), lag_delay)
+                lag_delay = min(lag_delay * 1.5, 60)
+            elif resp.status_code >= 500:
+                STATS.server_errors += 1
+                last = why = f"HTTP {resp.status_code}"
+                wait = _retry_after(resp, delay)
+                delay = min(delay * 2, 60)
+            else:
+                return resp
+        if attempt >= retries:
+            break  # no point waiting before giving up
+        if wait > MAX_WAIT:
+            raise FetchError(f"{why}: server asked for {wait:.0f}s, more than the "
+                             f"{MAX_WAIT}s this client waits: {url}")
+        _wait(wait, why)
     raise FetchError(f"giving up after {retries} attempts ({last}): {url}")
 
 

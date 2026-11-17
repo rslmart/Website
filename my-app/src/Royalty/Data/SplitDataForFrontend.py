@@ -156,20 +156,41 @@ def split_houses():
     return [h["id"] for h in index]
 
 
-def prune(names):
-    """Delete .json.gz payloads not in ``names`` (e.g. a house that fell below
-    MIN_HOUSE_MEMBERS), so no unindexed file lingers. Returns what was removed."""
-    keep = {n + ".json.gz" for n in names}
-    # Safety: only prune a folder split() has just written (it has index.json),
-    # never an arbitrary --out-dir that happens to hold other .json.gz files.
-    if not os.path.exists(os.path.join(PUBLIC_DIR, "index.json")):
-        raise SystemExit(f"Refusing to prune {PUBLIC_DIR}: not a royalty payload folder")
-    removed = sorted(f for f in os.listdir(PUBLIC_DIR) if f.endswith(".json.gz") and f not in keep)
-    for f in removed:
-        os.remove(os.path.join(PUBLIC_DIR, f))
-        print(f"Removed stale payload {f}")
+def listed_names(path, key=None):
+    """Names a royalty index file lists (strings only; anything else is ignored)."""
+    if not os.path.exists(path):
+        return set()
+    with open(path) as f:
+        items = json.load(f)
+    if not isinstance(items, list):
+        return set()
+    if key:
+        items = [i.get(key) for i in items if isinstance(i, dict)]
+    return {i for i in items if isinstance(i, str) and i and os.path.basename(i) == i}
+
+
+def published_names():
+    """Payload names the current index.json and houses.json list. Read this
+    before split() overwrites them, then hand it to prune()."""
+    return (listed_names(os.path.join(PUBLIC_DIR, "index.json"))
+            | listed_names(os.path.join(PUBLIC_DIR, "houses.json"), key="id"))
+
+
+def prune(previous, names):
+    """Delete payloads the previous indexes listed that this split no longer
+    writes (e.g. a house that fell below MIN_HOUSE_MEMBERS). Only names a
+    royalty index listed are ever deleted, so a folder that was never a royalty
+    payload folder (a mistyped --out-dir) loses nothing. Returns what was removed."""
+    removed = []
+    for name in sorted(set(previous) - set(names)):
+        path = os.path.join(PUBLIC_DIR, name + ".json.gz")
+        if os.path.exists(path):
+            os.remove(path)
+            removed.append(name + ".json.gz")
+            print(f"Removed stale payload {name}.json.gz")
     return removed
 
 
 if __name__ == "__main__":
-    prune(split() + split_houses())
+    _previous = published_names()
+    prune(_previous, split() + split_houses())

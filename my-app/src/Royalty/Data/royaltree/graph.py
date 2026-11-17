@@ -6,11 +6,9 @@ per-monarchy JSON cache that was re-serialised on every call. Missing people
 are fetched (online) in 50-ID batches and committed per batch; offline they
 count as absent.
 """
-import logging
 
 from royaltree import http, wikidata
 
-log = logging.getLogger("royaltree")
 
 # GetData's BFS tuning (see the comment there in git history): depth binds in
 # sparse ancient genealogies, the node cap in dense European ones.
@@ -75,7 +73,7 @@ class Retriever:
             for q in batch:
                 ent = found.get(q)
                 records[q] = wikidata.parse_person(ent) if ent else {}
-                revs[q] = ent.get("lastrevid") if ent else None
+                revs[q] = ent.get("lastrevid") if ent else 0  # 0: deleted/missing, not "unknown"
                 if ent:
                     labels[q] = records[q].get("label")
             self.store.put_many("person", records, "wbgetentities", revs)

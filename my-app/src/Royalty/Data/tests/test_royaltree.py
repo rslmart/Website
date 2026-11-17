@@ -170,9 +170,9 @@ def test_caller_cannot_drop_ua(fake_http):
     assert fake_http.calls[0]["headers"]["User-Agent"] == http.USER_AGENT
 
 
-def test_429_maxlag_and_5xx_back_off(fake_http):
+def test_429_maxlag_and_5xx_back_off(fake_http, monkeypatch):
     waits = []
-    http._sleep = waits.append
+    monkeypatch.setattr(http, "_sleep", waits.append)
     fake_http.script = [
         FakeResponse(429, headers={"Retry-After": "3"}),
         FakeResponse(200, headers={"MediaWiki-API-Error": "maxlag", "Retry-After": "5"}),
@@ -195,10 +195,20 @@ def test_maxlag_has_its_own_patient_budget(fake_http):
         http.get("https://www.wikidata.org/w/api.php", retries=2)
 
 
-def test_gives_up_after_retries(fake_http):
+def test_gives_up_after_retries_without_a_final_wait(fake_http, monkeypatch):
+    waits = []
+    monkeypatch.setattr(http, "_sleep", waits.append)
     fake_http.script = [FakeResponse(429)] * 3
     with pytest.raises(http.FetchError):
         http.get("https://www.wikidata.org/w/api.php", retries=3)
+    assert len(waits) == 2  # waits between attempts only
+
+
+def test_retry_after_beyond_our_cap_fails_instead_of_retrying_early(fake_http):
+    fake_http.script = [FakeResponse(429, headers={"Retry-After": str(http.MAX_WAIT + 1)})]
+    with pytest.raises(http.FetchError, match="asked for"):
+        http.get("https://www.wikidata.org/w/api.php")
+    assert http.STATS.requests == 1
 
 
 def test_offline_and_request_cap(fake_http):
@@ -361,3 +371,69 @@ def test_refresh_refetches_only_changed_and_respects_cap(seeded, fake_http):
         info = s.info("person", ["Q1", "Q2", "Q3"])
     assert run.counters["refresh_changed"] == 1 and run.counters["refresh_unknown_revision"] == 1
     assert (info["Q2"][0], info["Q3"][0]) == (9, 4)
+
+
+# -- review fixes (2026-11-17) ----------------------------------------------------
+def test_build_refuses_to_drop_published_trees_the_store_lacks(tmp_path, seeded):
+    out = tmp_path / "out"
+    _build(seeded, out)  # both trees
+    before = _snapshot(out)
+    fresh = tmp_path / "fresh"  # a clone/worktree: committed files, no store
+    fresh.mkdir()
+    for f in ("monarch_list.json", "monarchy_data.json", "monarchy_family_trees.json",
+              "monarchy_ancestors.json"):
+        (fresh / f).write_bytes((seeded / f).read_bytes())
+    with pytest.raises(SystemExit, match="Beta"):
+        _build(fresh, out, "Alpha")
+    assert _snapshot(out) == before
+    assert json.loads((fresh / "monarchy_family_trees.json").read_text()).keys() == {"Alpha", "Beta"}
+    _build(fresh, out, "Alpha", extra=["--allow-dropped-trees"])  # on purpose
+    assert json.loads((out / "index.json").read_text()) == ["Alpha"]
+    assert not (out / "Beta.json.gz").exists()  # listed before, so pruned
+
+
+def test_prune_only_deletes_names_a_royalty_index_listed(tmp_path, seeded):
+    decoy = tmp_path / "tectonics"
+    decoy.mkdir()
+    (decoy / "plates.json.gz").write_bytes(b"x")
+    (decoy / "index.json").write_text(json.dumps({"not": "a royalty index"}))
+    _build(seeded, decoy)
+    assert (decoy / "plates.json.gz").exists()
+    # A payload the old index listed but this split no longer writes is removed.
+    (decoy / "index.json").write_text(json.dumps(["Alpha", "Beta", "Gone", "../escape"]))
+    (decoy / "Gone.json.gz").write_bytes(b"x")
+    _build(seeded, decoy, extra=["--allow-dropped-trees"])
+    assert not (decoy / "Gone.json.gz").exists() and (decoy / "plates.json.gz").exists()
+
+
+def test_full_import_refuses_over_fetched_rows(tmp_path):
+    legacy = tmp_path / "legacy"
+    legacy.mkdir()
+    (legacy / "Alpha.json").write_text(json.dumps({"Q1": PEOPLE["Q1"]}))
+    for f, v in (("properties.json", LABELS), ("monarchy_data.json", {}),
+                 ("monarchy_family_trees.json", {"Alpha": [["Q1"]]})):
+        (legacy / f).write_text(json.dumps(v))
+    with Store(str(tmp_path / "data")) as s:
+        s.put_many("person", {"Q1": PEOPLE["Q1"]}, "wbgetentities", {"Q1": 9})
+        with pytest.raises(SystemExit, match="fetched people"):
+            import_legacy(s, str(legacy), Counter())
+        assert s.info("person", ["Q1"])["Q1"][0] == 9
+        import_legacy(s, str(legacy), Counter(), conflicts_only=True)  # still allowed
+        import_legacy(s, str(legacy), Counter(), force=True)
+        assert s.info("person", ["Q1"])["Q1"][0] is None
+
+
+def test_deleted_items_are_not_refetched_forever(tmp_path, fake_http):
+    data_dir = tmp_path / "data"
+    with Store(str(data_dir)) as s:
+        s.meta_set("legacy_conflicts", ["Q404"])
+        s.put_many("person", {"Q404": {}}, "legacy:x")  # revision unknown
+        s.tree_put("Alpha", {"touched": ["Q404"]})
+        cli.refresh_conflicts(cli.Run("fetch"), s, max_refetch=5)
+        assert s.info("person", ["Q404"])["Q404"][0] == 0  # missing on Wikidata
+        n = http.STATS.requests
+        cli.refresh_conflicts(cli.Run("fetch"), s, max_refetch=5)
+        assert http.STATS.requests == n  # done, not due again
+        run = cli.Run("fetch")
+        cli.refresh(run, s, ["Alpha"], None, max_refetch=0)  # still missing: unchanged
+        assert run.counters["refresh_changed"] == 0
