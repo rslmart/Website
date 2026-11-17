@@ -1,0 +1,50 @@
+{
+  "Stevens_Pass_US-2": [
+    {
+      "displayOrder": 1,
+      "year": 2015,
+      "monthNum": 11,
+      "month": "Nov",
+      "avgNewSnowfallInches": 2.192052,
+      "avgTotalSnowfallInches": 12,
+      "dailySnowFall": [
+        {
+          "day": 1,
+          "newDailySnowFall": 0.0,
+          "totalSnowFall": 0,
+          "accumulatedSnowFall": 0
+        },
+        {
+          "day": 2,
+          "newDailySnowFall": 2.0,
+          "totalSnowFall": 2,
+          "accumulatedSnowFall": 2
+        }
+      ]
+    }
+  ],
+  "Blewett_Pass_US-97": [
+    {
+      "displayOrder": 1,
+      "year": 2010,
+      "monthNum": 11,
+      "month": "Nov",
+      "avgNewSnowfallInches": 0.732673,
+      "avgTotalSnowfallInches": 3,
+      "dailySnowFall": [
+        {
+          "day": 1,
+          "newDailySnowFall": 0.0,
+          "totalSnowFall": 0,
+          "accumulatedSnowFall": 0
+        },
+        {
+          "day": 2,
+          "newDailySnowFall": 0.0,
+          "totalSnowFall": 0,
+          "accumulatedSnowFall": 0
+        }
+      ]
+    }
+  ]
+}
