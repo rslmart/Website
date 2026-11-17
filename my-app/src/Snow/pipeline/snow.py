@@ -8,12 +8,15 @@ One command, standard library only:
 five passes. ``--backfill`` requests each pass from its first year of record
 through that season. Point ``--input`` at the dataset being updated (the same
 path as ``--output`` for a local file). A run writes that output and a
-sibling ``meta.json`` only when the season records changed. ``--dry-run``
-writes nothing. ``--upload`` is required before any S3 or CloudFront call.
+sibling ``meta.json`` when the season records changed. If that snowfall
+file is already current and ``meta.json`` is missing, the run writes
+``meta.json``. ``--dry-run`` writes nothing. ``--upload`` is required before
+any S3 or CloudFront call.
 
 ``generatedAt`` and ``lastDate`` sit beside the pass map. Season keys stay
 years, which is the shape the page already walks. ``lastDate`` is one ISO
-date per pass. A failed read, fetch, or validation writes nothing.
+date per pass. A failed read, fetch, or validation writes no dataset. The
+log records the error unless the run is a dry run.
 """
 
 import argparse
@@ -62,7 +65,7 @@ MONTHS = {
 
 
 class SnowError(Exception):
-    """A read, fetch, or validation failure. The run writes nothing."""
+    """A read, fetch, validation, or publish failure."""
 
 
 def current_season(today=None):
@@ -336,26 +339,59 @@ def meta_key_for(object_key):
     return f"{parent}/meta.json" if parent else "meta.json"
 
 
-def upload(bucket, key, document_text, meta_text, distribution_id):
-    s3, cloudfront = aws_clients()
-    meta_key = meta_key_for(key)
-    body = {
+def _object_headers():
+    return {
         "ContentType": "application/json",
         "CacheControl": "max-age=3600",
     }
-    try:
-        s3.put_object(Bucket=bucket, Key=key, Body=document_text.encode("utf-8"), **body)
-        s3.put_object(Bucket=bucket, Key=meta_key, Body=meta_text.encode("utf-8"), **body)
-        cloudfront.create_invalidation(
-            DistributionId=distribution_id,
-            InvalidationBatch={
-                "Paths": {
-                    "Quantity": 2,
-                    "Items": ["/" + key, "/" + meta_key],
-                },
-                "CallerReference": str(time.time_ns()),
+
+
+def _invalidate(cloudfront, distribution_id, key, meta_key):
+    cloudfront.create_invalidation(
+        DistributionId=distribution_id,
+        InvalidationBatch={
+            "Paths": {
+                "Quantity": 2,
+                "Items": ["/" + key, "/" + meta_key],
             },
-        )
+            "CallerReference": str(time.time_ns()),
+        },
+    )
+
+
+def _error_status(err):
+    response = getattr(err, "response", None)
+    if not isinstance(response, dict):
+        return "", None
+    code = response.get("Error", {}).get("Code", "")
+    status = response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+    return code, status
+
+
+def _is_missing(err):
+    code, status = _error_status(err)
+    return status == 404 or code in {"404", "NoSuchKey", "NotFound"}
+
+
+def _s3_exists(s3, bucket, key):
+    try:
+        s3.head_object(Bucket=bucket, Key=key)
+    except Exception as err:
+        if _is_missing(err):
+            return False
+        detail = _error_status(err)[0] or err
+        raise SnowError(f"could not read s3://{bucket}/{key}: {detail}") from err
+    return True
+
+
+def upload(bucket, key, document_text, meta_text, distribution_id):
+    s3, cloudfront = aws_clients()
+    meta_key = meta_key_for(key)
+    headers = _object_headers()
+    try:
+        s3.put_object(Bucket=bucket, Key=key, Body=document_text.encode("utf-8"), **headers)
+        s3.put_object(Bucket=bucket, Key=meta_key, Body=meta_text.encode("utf-8"), **headers)
+        _invalidate(cloudfront, distribution_id, key, meta_key)
     except Exception as err:
         raise SnowError(f"upload failed: {err}") from err
 
@@ -431,6 +467,65 @@ def _write_outputs(args, document, meta):
         raise SnowError(f"could not write output: {err}") from err
 
 
+def _same_file(left, right):
+    try:
+        return left.resolve() == right.resolve()
+    except OSError:
+        return False
+
+
+def _passes(document):
+    return {key: value for key, value in document.items() if key not in METADATA_KEYS}
+
+
+def _write_missing_meta(args, document):
+    """Write meta.json when this run's snowfall destination is already current.
+
+    A failed publish can replace the snowfall file and then die on meta.json.
+    The next run sees the same seasons and would otherwise skip both writes.
+    """
+    passes = _passes(document)
+    meta_text = None
+
+    def rendered():
+        nonlocal meta_text
+        if meta_text is None:
+            meta_text = render(meta_document(passes, document["generatedAt"]))
+        return meta_text
+
+    in_place = (
+        args.output
+        and args.input
+        and args.output.is_file()
+        and _same_file(args.output, args.input)
+    )
+    if in_place and not (args.output.parent / "meta.json").is_file():
+        try:
+            write_text(args.output.parent / "meta.json", rendered())
+        except OSError as err:
+            raise SnowError(f"could not write output: {err}") from err
+
+    # Without --input the snowfall object just read is the one --upload publishes.
+    if args.input or not args.upload:
+        return
+    s3, cloudfront = aws_clients()
+    meta_key = meta_key_for(args.key)
+    try:
+        if _s3_exists(s3, args.bucket, meta_key):
+            return
+        s3.put_object(
+            Bucket=args.bucket,
+            Key=meta_key,
+            Body=rendered().encode("utf-8"),
+            **_object_headers(),
+        )
+        _invalidate(cloudfront, args.distribution_id, args.key, meta_key)
+    except SnowError:
+        raise
+    except Exception as err:
+        raise SnowError(f"upload failed: {err}") from err
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="snow")
     mode = parser.add_mutually_exclusive_group()
@@ -446,7 +541,7 @@ def main(argv=None):
     )
     parser.add_argument("--input", type=Path, help="existing snowfall JSON to update")
     parser.add_argument("--output", type=Path, help="merged snowfall JSON")
-    parser.add_argument("--log", type=Path, help="log file, written only after a run that can publish")
+    parser.add_argument("--log", type=Path, help="log file; omitted on --dry-run")
     parser.add_argument("--today", type=datetime.date.fromisoformat)
     parser.add_argument("--dry-run", action="store_true", help="write nothing")
     parser.add_argument(
@@ -469,9 +564,18 @@ def main(argv=None):
             return 0
         if changed:
             _write_outputs(args, document, meta)
+        else:
+            _write_missing_meta(args, document)
         write_text(_log_path(args), "\n".join(log) + "\n")
     except SnowError as err:
-        print(str(err), file=sys.stderr)
+        message = str(err)
+        print(message, file=sys.stderr)
+        if not args.dry_run:
+            log.append(message)
+            try:
+                write_text(_log_path(args), "\n".join(log) + "\n")
+            except OSError as write_err:
+                print(f"could not write log: {write_err}", file=sys.stderr)
         return 1
     return 0
 

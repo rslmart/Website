@@ -137,7 +137,10 @@ def _current_body():
 
 def _only(tmp, source, before):
     assert source.read_bytes() == before
-    assert sorted(path.name for path in tmp.iterdir()) == [source.name]
+    assert sorted(path.name for path in tmp.iterdir()) == [source.name, "snow-update.log"]
+    assert not (tmp / "out.json").exists()
+    assert not (tmp / "meta.json").exists()
+    assert (tmp / "snow-update.log").read_text().strip()
 
 
 def _dataset_untouched(tmp, source, before):
@@ -445,7 +448,10 @@ def test_failure_writes_nothing(tmp_path, monkeypatch, capsys, problem):
     error = capsys.readouterr().err
     if problem == "missing":
         assert "missing input" in error
-        assert list(tmp_path.iterdir()) == []
+        assert [path.name for path in tmp_path.iterdir()] == ["snow-update.log"]
+        assert "missing input" in (tmp_path / "snow-update.log").read_text()
+        assert not (tmp_path / "out.json").exists()
+        assert not (tmp_path / "meta.json").exists()
         return
     if problem == "corrupt-input":
         assert "corrupt JSON" in error
@@ -460,6 +466,16 @@ def test_failure_writes_nothing(tmp_path, monkeypatch, capsys, problem):
     elif problem == "negative":
         assert "negative" in error
     _only(tmp_path, source, before)
+    assert error.strip() in (tmp_path / "snow-update.log").read_text()
+
+
+def test_dry_run_failure_writes_nothing(tmp_path, monkeypatch, capsys):
+    _freeze(monkeypatch)
+    _forbid_aws(monkeypatch)
+    argv = _local_argv(tmp_path, tmp_path / "absent.json", "--dry-run")
+    assert snow.main(argv) == 1
+    assert "missing input" in capsys.readouterr().err
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_retries_then_records_the_season(tmp_path, monkeypatch):
@@ -501,9 +517,11 @@ def test_persistent_503_backs_off(tmp_path, monkeypatch, capsys):
     argv = _local_argv(tmp_path, source)
     argv[argv.index("--retries") + 1] = "2"
     assert snow.main(argv) == 1
-    assert "HTTP 503" in capsys.readouterr().err
+    error = capsys.readouterr().err
+    assert "HTTP 503" in error
     assert slept == [1, 2]
     _only(tmp_path, source, before)
+    assert error.strip() in (tmp_path / "snow-update.log").read_text()
 
 
 def test_access_denied_and_bad_s3_write_nothing(tmp_path, monkeypatch, moto_s3, capsys):
@@ -549,10 +567,14 @@ def test_access_denied_and_bad_s3_write_nothing(tmp_path, monkeypatch, moto_s3, 
         ]
     )
     assert code == 1
-    assert "AccessDenied" in capsys.readouterr().err
+    error = capsys.readouterr().err
+    assert "AccessDenied" in error
     assert _s3_bytes(moto_s3) == before
     assert _invalidation_paths(distribution_id) == []
-    assert list(tmp_path.iterdir()) == []
+    assert [path.name for path in tmp_path.iterdir()] == ["snow-update.log"]
+    assert error.strip() in (tmp_path / "snow-update.log").read_text()
+    assert not (tmp_path / "out.json").exists()
+    assert not (tmp_path / "meta.json").exists()
 
 
 @pytest.mark.parametrize("failure", ["missing", "corrupt"])
@@ -584,13 +606,16 @@ def test_s3_read_failure_writes_nothing(tmp_path, monkeypatch, moto_s3, capsys, 
         ]
     )
     assert code == 1
+    error = capsys.readouterr().err
     assert not output.exists()
+    assert not (tmp_path / "meta.json").exists()
+    assert error.strip() in (tmp_path / "snow-update.log").read_text()
     assert _invalidation_paths(distribution_id) == []
     if failure == "corrupt":
-        assert "corrupt JSON" in capsys.readouterr().err
+        assert "corrupt JSON" in error
         assert _s3_bytes(moto_s3) == before
     else:
-        assert "could not read" in capsys.readouterr().err
+        assert "could not read" in error
 
 
 def test_upload_puts_only_after_the_flag_and_only_when_changed(tmp_path, monkeypatch, moto_s3):
@@ -643,6 +668,128 @@ def test_upload_puts_only_after_the_flag_and_only_when_changed(tmp_path, monkeyp
     assert _invalidation_paths(distribution_id) == [["/" + KEY, "/snow/meta.json"]]
     assert output.read_bytes()  # local file still the first publish
     assert json.loads(output.read_text())["generatedAt"] == STAMP
+
+
+def _assert_meta(meta, stored, generated_at):
+    assert set(meta) == {"source", "version", "generatedAt", "dataThrough"}
+    assert meta["source"] == snow.SOURCE_URL
+    assert meta["generatedAt"] == generated_at
+    assert meta["dataThrough"] == max(stored["lastDate"].values())
+    passes = {key: value for key, value in stored.items() if key not in snow.METADATA_KEYS}
+    digest = hashlib.sha256(
+        json.dumps(passes, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    assert meta["version"] == f"sha256:{digest}"
+
+
+def test_next_run_writes_meta_when_snowfall_was_replaced(tmp_path, monkeypatch, capsys):
+    _freeze(monkeypatch)
+    _forbid_aws(monkeypatch)
+    path = tmp_path / "pass_snowfall_data.json"
+    _write(path, _history())
+    _stub(monkeypatch, {(pass_id, 2026): _current_body() for _name, pass_id, _year in snow.PASSES})
+    original = snow.write_text
+
+    def fail_meta(target, text):
+        if target.name == "meta.json":
+            raise OSError("disk full")
+        original(target, text)
+
+    monkeypatch.setattr(snow, "write_text", fail_meta)
+    argv = [
+        "--input",
+        str(path),
+        "--output",
+        str(path),
+        "--log",
+        str(tmp_path / "snow-update.log"),
+        "--today",
+        TODAY,
+        "--retries",
+        "0",
+    ]
+    assert snow.main(argv) == 1
+    error = capsys.readouterr().err
+    assert "could not write output" in error
+    written = path.read_bytes()
+    stored = json.loads(written)
+    assert stored["generatedAt"] == STAMP
+    assert "2026" in stored["Stevens_Pass_US-2"]
+    assert not (tmp_path / "meta.json").exists()
+    assert error.strip() in (tmp_path / "snow-update.log").read_text()
+
+    monkeypatch.setattr(snow, "write_text", original)
+    _freeze(monkeypatch, "2026-11-18T09:00:00Z")
+    assert snow.main(argv) == 0
+    assert path.read_bytes() == written
+    _assert_meta(json.loads((tmp_path / "meta.json").read_text()), stored, "2026-11-18T09:00:00Z")
+    assert (tmp_path / "snow-update.log").read_text().splitlines()[-1] == "unchanged"
+
+
+def test_next_upload_writes_meta_when_snowfall_was_replaced(tmp_path, monkeypatch, moto_s3, capsys):
+    _freeze(monkeypatch)
+    distribution_id = _distribution()
+    moto_s3.create_bucket(Bucket=BUCKET)
+    moto_s3.put_object(Bucket=BUCKET, Key=KEY, Body=json.dumps(_history()).encode())
+    _stub(monkeypatch, {(pass_id, 2026): _current_body() for _name, pass_id, _year in snow.PASSES})
+    saved = snow.aws_clients
+    state = {"fail_meta": True}
+
+    def clients():
+        s3, cloudfront = saved()
+        if not state["fail_meta"]:
+            return s3, cloudfront
+        original = s3.put_object
+
+        def put_object(**kwargs):
+            if kwargs.get("Key") == "snow/meta.json":
+                raise s3.exceptions.ClientError(
+                    {"Error": {"Code": "InternalError", "Message": "meta failed"}},
+                    "PutObject",
+                )
+            return original(**kwargs)
+
+        s3.put_object = put_object
+        return s3, cloudfront
+
+    monkeypatch.setattr(snow, "aws_clients", clients)
+    argv = [
+        "--upload",
+        "--bucket",
+        BUCKET,
+        "--key",
+        KEY,
+        "--distribution-id",
+        distribution_id,
+        "--log",
+        str(tmp_path / "snow-update.log"),
+        "--today",
+        TODAY,
+        "--retries",
+        "0",
+    ]
+    assert snow.main(argv) == 1
+    error = capsys.readouterr().err
+    assert "upload failed" in error
+    written = _s3_bytes(moto_s3)
+    stored = json.loads(written)
+    assert stored["generatedAt"] == STAMP
+    assert "2026" in stored["Stevens_Pass_US-2"]
+    with pytest.raises(moto_s3.exceptions.ClientError):
+        moto_s3.get_object(Bucket=BUCKET, Key="snow/meta.json")
+    assert _invalidation_paths(distribution_id) == []
+    assert error.strip() in (tmp_path / "snow-update.log").read_text()
+    assert [path.name for path in tmp_path.iterdir()] == ["snow-update.log"]
+
+    state["fail_meta"] = False
+    _freeze(monkeypatch, "2026-11-18T09:00:00Z")
+    assert snow.main(argv) == 0
+    assert _s3_bytes(moto_s3) == written
+    meta_object = moto_s3.get_object(Bucket=BUCKET, Key="snow/meta.json")
+    _assert_meta(json.loads(meta_object["Body"].read()), stored, "2026-11-18T09:00:00Z")
+    assert meta_object["ContentType"] == "application/json"
+    assert meta_object["CacheControl"] == "max-age=3600"
+    assert _invalidation_paths(distribution_id) == [["/" + KEY, "/snow/meta.json"]]
 
 
 def test_without_upload_does_not_call_aws(tmp_path, monkeypatch):
