@@ -121,3 +121,31 @@ cd src/Snow/Data && python getData.py
 # then redeploy the site:
 npm run deploy
 ```
+
+## Pipeline tests
+
+From `my-app/`:
+
+```bash
+./test-pipelines.sh
+```
+
+That installs the locked environment in [`../pipeline_testing`](../pipeline_testing)
+and runs the Hurricane and Snow suites. Snow only:
+
+```bash
+uv run --directory src/pipeline_testing --frozen \
+  pytest --rootdir "$PWD/src/Snow" "$PWD/src/Snow/tests"
+```
+
+Direct pins are in [`requirements-dev.txt`](requirements-dev.txt). The lock in
+`src/pipeline_testing` pins the rest. The updater stays on the standard library;
+the Lambda keeps using the boto3 that the Lambda runtime provides. boto3 in the
+test environment comes in through moto.
+
+Sockets are blocked and AWS credentials are disabled (`AWS_SHARED_CREDENTIALS_FILE`
+and `AWS_CONFIG_FILE` are `/dev/null`, credential variables are unset, EC2
+metadata is off). S3 tests use the `moto_s3` fixture. `getData.py` and
+`lambda/handler.py` call WSDOT with `urllib`, which the socket guard rejects, so
+those tests have to stub the fetch. The chart tests are separate: `npm test`
+runs `snowStats.test.mjs`.

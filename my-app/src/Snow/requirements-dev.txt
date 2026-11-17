@@ -1,0 +1,8 @@
+# Pinned test dependencies for the Snow pipeline.
+# Installed by the locked environment in src/pipeline_testing (uv.lock).
+# The updater and the Lambda runtime stay on the standard library plus the
+# boto3 that the Lambda runtime already provides. boto3 in the test env comes
+# in through moto. Do not add runtime pins here.
+pytest==9.2.0
+pytest-socket==0.8.1
+moto[s3]==5.2.5
