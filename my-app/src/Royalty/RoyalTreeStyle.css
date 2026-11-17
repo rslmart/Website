@@ -73,13 +73,27 @@
     color: var(--color-danger);
 }
 
-/* Node-cap warning: asks before laying out a very large view. */
+/* While a new view is swapped in, the canvas is hidden and ignores the
+   pointer, so a partial view is never seen (see applyGraph in
+   RoyalTreePage.jsx). */
+.cytoscape-container.is-swapping {
+    visibility: hidden;
+    pointer-events: none;
+}
+
+/* Node-cap warning: a modal that asks before laying out a very large view.
+   Above the phone controls drawer (z-index 10050), which can trigger it. */
+.royal-tree-cap-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-overlay-soft);
+}
+
 .royal-tree-cap-warning {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 1003;
     width: min(380px, calc(100vw - 32px));
     box-sizing: border-box;
     background: var(--color-surface);

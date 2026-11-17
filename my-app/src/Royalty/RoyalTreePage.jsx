@@ -4,6 +4,7 @@ import FilterPanel from "./filter-panel";
 import SearchPanel from "./SearchPanel";
 import NodeToolTip from "./NodeToolTip";
 import HelpPanel from "./help-panel";
+import CapWarningDialog from "./CapWarningDialog";
 import HomeButton from "../components/HomeButton";
 import ControlsFab from "../components/ControlsFab";
 import MobileDrawer from "../components/MobileDrawer";
@@ -31,21 +32,14 @@ function mark(phase) {
 }
 // Run fn over consecutive slices of items (an array or Cytoscape collection),
 // yielding to the event loop whenever a task has run for SLICE_BUDGET_MS.
-// Renderer notifications are off inside each slice, so nothing is drawn until
-// the caller notifies. Resolves false if stale() turned true (superseded).
+// Resolves false if stale() turned true (superseded).
 const SLICE_SIZE = 150;
 const SLICE_BUDGET_MS = 40;
 const nextTask = () => new Promise(resolve => setTimeout(resolve, 0));
-async function inSlices(items, fn, cy, stale) {
+async function inSlices(items, fn, stale) {
   let taskStart = performance.now();
   for (let i = 0; i < items.length; i += SLICE_SIZE) {
-    const slice = items.slice(i, i + SLICE_SIZE);
-    cy.notifications(false);
-    try {
-      fn(slice);
-    } finally {
-      cy.notifications(true);
-    }
+    fn(items.slice(i, i + SLICE_SIZE));
     if (performance.now() - taskStart > SLICE_BUDGET_MS) {
       await nextTask();
       if (stale()) return false;
@@ -53,6 +47,26 @@ async function inSlices(items, fn, cy, stale) {
     }
   }
   return true;
+}
+
+// Viewport that fits a layoutGraph result's raw node positions (before
+// packing; labels approximated by a margin) into a w x h canvas.
+function roughFit(layout, w, h) {
+  let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+  layout.components.forEach(({ xy }) => {
+    for (let i = 0; i < xy.length; i += 2) {
+      x1 = Math.min(x1, xy[i]); x2 = Math.max(x2, xy[i]);
+      y1 = Math.min(y1, xy[i + 1]); y2 = Math.max(y2, xy[i + 1]);
+    }
+  });
+  const margin = 100;
+  const bw = x2 - x1 + 2 * margin;
+  const bh = y2 - y1 + 2 * margin;
+  const zoom = Math.max(1e-3, Math.min((w - 80) / bw, (h - 80) / bh));
+  return {
+    zoom,
+    pan: { x: w / 2 - zoom * (x1 + x2) / 2, y: h / 2 - zoom * (y1 + y2) / 2 },
+  };
 }
 
 const SUCCESSION_SELECTOR = 'edge[relation = "succession"]';
@@ -98,6 +112,7 @@ class RoyalTree extends Component {
     this.rendered = null;
     this.capAccepted = 0;
     this.renderToken = 0;
+    this.shownToken = 0; // renderToken of the view currently drawn
     // Succession overlay edges for the current view, added or removed on toggle
     // without touching the layout.
     this.successionElements = [];
@@ -368,52 +383,92 @@ class RoyalTree extends Component {
   //
   // Cytoscape computes style, label sizes and edge geometry lazily, which for
   // a few thousand elements is most of a second of main-thread work. It is
-  // forced here in time slices (with renderer notifications off, so no partial
-  // frames are drawn) so no single task blocks input for long.
-  applyGraph = async (elements, successionElements, layout, token) => {
+  // forced here in time slices so no single task blocks input for long.
+  //
+  // From removing the old elements until the new view is complete and fitted,
+  // the canvas is hidden (and ignores the pointer), so no partial view is
+  // ever shown; the "Laying out" status stays up meanwhile. Frames Cytoscape
+  // draws between slices are invisible but still build its element textures
+  // a few at a time, which keeps the first visible frame short.
+  //
+  // A superseded apply stops and leaves the canvas hidden for the newer
+  // render, which reveals it when it finishes or fails (revealCanvas).
+  applyGraph = async (elements, successionElements, layout, token, config) => {
     if (!this.cy) {
       this.cy = this.initializeGraph(this.containerRef.current);
     }
     const cy = this.cy;
     this.successionElements = successionElements;
     const stale = () => token !== this.renderToken || this.unmounted;
+    let complete = false;
     this.applying = true;
+    this.containerRef.current?.classList.add('is-swapping');
     try {
-      cy.elements().remove();
-      if (elements.length === 0) return; // Blank selection: nothing to fit.
-
       const positions = positionsById(layout);
       elements.forEach(el => {
         if (el.group === 'nodes') el.position = positions.get(el.data.id);
       });
 
       mark('cy-add');
-      if (!(await inSlices(elements, slice => cy.add(slice).boundingBox(), cy, stale))) return;
+      cy.elements().remove();
+      // Point the hidden canvas roughly where the final fit will be, so the
+      // frames drawn between slices warm textures at about the final zoom
+      // for every element (Cytoscape caches them per zoom level).
+      if (elements.length) cy.viewport(roughFit(layout, cy.width(), cy.height()));
+      if (!(await inSlices(elements, slice => cy.add(slice).boundingBox(), stale))) return;
+      // Packing moves everything, so label and edge geometry is recomputed,
+      // again in slices. This runs inside a batch: Cytoscape's render loop
+      // skips batched ticks, which stops its frames from recomputing every
+      // moved element in one task. (Adding happens outside the batch, because
+      // endBatch re-dirties the style of elements added during it.)
       mark('pack');
-      packComponents(cy, layout);
-      // Packing moved everything: recompute label and edge geometry, again in slices.
-      mark('geometry');
-      if (!(await inSlices(cy.elements(), slice => slice.boundingBox(), cy, stale))) return;
-      mark('fit');
-      if (this.state.showSuccession) cy.add(successionElements);
-      cy.notify('add', cy.elements()); // renderer: refresh its element list and draw
-      if (this.firstFitDone) {
-        cy.fit(undefined, 40);
-      } else {
-        // The first view has always been sized to the container and fitted
-        // without padding (formerly a setTimeout in initializeGraph).
-        this.firstFitDone = true;
-        cy.resize();
-        cy.fit();
+      cy.startBatch();
+      let done;
+      try {
+        packComponents(cy, layout);
+        mark('geometry');
+        done = await inSlices(cy.elements(), slice => slice.boundingBox(), stale);
+      } finally {
+        cy.endBatch();
       }
-      mark(null);
+      if (!done) return;
+      if (this.state.showSuccession) cy.add(successionElements);
+      complete = true;
     } catch (error) {
       console.error('Graph rendering error:', error);
     } finally {
       if (!stale()) {
+        mark('fit');
+        if (complete && elements.length) this.fitView();
+        this.revealCanvas();
+        mark(null);
         this.applying = false;
-        this.setState({ layingOut: 0 });
+        if (complete) {
+          this.shownToken = token;
+          this.rendered = config;
+        }
+        this.setState(complete
+            ? { layingOut: 0 }
+            : { layingOut: 0, error: 'Could not draw this view.' });
       }
+    }
+  };
+
+  // Show the canvas again after applyGraph hid it.
+  revealCanvas = () => {
+    this.containerRef.current?.classList.remove('is-swapping');
+  };
+
+  fitView = () => {
+    const cy = this.cy;
+    if (this.firstFitDone) {
+      cy.fit(undefined, 40);
+    } else {
+      // The first view has always been sized to the container and fitted
+      // without padding (formerly a setTimeout in initializeGraph).
+      this.firstFitDone = true;
+      cy.resize();
+      cy.fit();
     }
   };
 
@@ -513,6 +568,8 @@ class RoyalTree extends Component {
     if (selected.length === 0) {
       this.loadedPayloads = [];
       this.loadedSelected = [];
+      const token = ++this.renderToken; // drop any render still in flight
+      const config = { payloads: [], selected: [], bridgeOptions: this.state.bridgeOptions, rankOptions: this.state.rankOptions };
       this.setState(
           {
             selectedMonarchs: [],
@@ -536,10 +593,8 @@ class RoyalTree extends Component {
             capWarning: null,
             error: null,
           },
-          () => this.applyGraph([], [], { components: [] }, this.renderToken)
+          () => this.applyGraph([], [], { components: [] }, token, config)
       );
-      this.renderToken++; // drop any layout still in flight
-      this.rendered = { payloads: [], selected: [], bridgeOptions: this.state.bridgeOptions, rankOptions: this.state.rankOptions };
       return;
     }
 
@@ -605,13 +660,14 @@ class RoyalTree extends Component {
     } catch (error) {
       if (token !== this.renderToken || this.unmounted) return;
       console.error('Layout failed:', error);
+      this.revealCanvas(); // in case a superseded apply left it hidden
       this.setState({ layingOut: 0, error: error.message });
       return;
     }
     // A newer selection or knob change superseded this one.
     if (token !== this.renderToken || this.unmounted) return;
 
-    this.rendered = { payloads, selected, bridgeOptions, rankOptions };
+    const config = { payloads, selected, bridgeOptions, rankOptions };
     this.setState(
         {
           data: merged.data,
@@ -630,7 +686,7 @@ class RoyalTree extends Component {
           rootId: merged.highlightedNodes[0] || '',
           error: null,
         },
-        () => this.applyGraph(elements, successionElements, layout, token)
+        () => this.applyGraph(elements, successionElements, layout, token, config)
     );
   };
 
@@ -642,20 +698,34 @@ class RoyalTree extends Component {
     this.renderMerged(pending.payloads, pending.selected, pending.bridgeOptions, pending.rankOptions, true);
   };
 
+  //
+  // Declining also cancels anything still in flight (a fetch, layout or apply
+  // started before the dialog opened), so nothing lands that doesn't match
+  // the reverted controls. If the graph had already been cleared for such a
+  // render, the last completed view is drawn again (its layout is cached).
   declineCapWarning = () => {
     const rendered = this.rendered;
+    const inFlight = this.renderToken !== this.shownToken;
+    this.loadToken++;
+    this.renderToken++;
     if (!rendered) {
-      this.setState({ capWarning: null });
+      this.setState({ capWarning: null, layingOut: 0, loading: false });
+      this.revealCanvas();
       return;
     }
     this.loadedPayloads = rendered.payloads;
     this.loadedSelected = rendered.selected;
     this.setState({
       capWarning: null,
+      loading: false,
+      layingOut: 0,
       selectedMonarchs: rendered.selected,
       bridgeOptions: rendered.bridgeOptions,
       rankOptions: rendered.rankOptions,
     });
+    if (inFlight) {
+      this.renderMerged(rendered.payloads, rendered.selected, rendered.bridgeOptions, rendered.rankOptions, true);
+    }
   };
 
   // Re-run the merge with new bridging knobs against the already-fetched
@@ -728,29 +798,12 @@ class RoyalTree extends Component {
               </div>
           )}
           {this.state.capWarning && (
-              <div
-                  className="royal-tree-cap-warning"
-                  role="alertdialog"
-                  aria-labelledby="royal-tree-cap-title"
-                  aria-describedby="royal-tree-cap-body"
-              >
-                <strong id="royal-tree-cap-title">
-                  Show {this.state.capWarning.count.toLocaleString()} people?
-                </strong>
-                <p id="royal-tree-cap-body">
-                  This view is larger than {NODE_CAP.toLocaleString()} people. It can take a few
-                  seconds to lay out and pans more slowly. Fewer monarchies or a shorter
-                  look-back keeps it light.
-                </p>
-                <div className="royal-tree-cap-actions">
-                  <button type="button" className="royal-tree-cap-cancel" onClick={this.declineCapWarning}>
-                    Cancel
-                  </button>
-                  <button type="button" className="royal-tree-cap-continue" onClick={this.acceptCapWarning} autoFocus>
-                    Show all
-                  </button>
-                </div>
-              </div>
+              <CapWarningDialog
+                  count={this.state.capWarning.count}
+                  cap={NODE_CAP}
+                  onCancel={this.declineCapWarning}
+                  onContinue={this.acceptCapWarning}
+              />
           )}
           {this.state.error && !this.state.loading && (
               <div className="royal-tree-status royal-tree-error">

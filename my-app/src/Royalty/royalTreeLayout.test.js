@@ -3,7 +3,7 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 import cytoscape from 'cytoscape';
 import {
   layoutGraph, toLayoutElements, packComponents, positionsById, clearLayoutCache, parseYear,
-  PERSON_SIZE_STYLE, MARRIAGE_SIZE_STYLE, DAGRE_OPTIONS,
+  PERSON_SIZE_STYLE, MARRIAGE_SIZE_STYLE,
 } from './royalTreeLayout';
 import { convertToChart } from './RoyalTreeUtils';
 
@@ -40,13 +40,20 @@ const PAGE_STYLE = [
   { selector: 'node', style: { ...PERSON_SIZE_STYLE, label: 'data(label)' } },
   { selector: 'node[type = "marriage"]', style: MARRIAGE_SIZE_STYLE },
 ];
+// The size properties the pre-worker page stylesheet had, written out so the
+// fidelity test doesn't just compare the module with itself.
+const OLD_PAGE_STYLE = [
+  { selector: 'node', style: { shape: 'rectangle', width: 80, height: 100, 'border-width': 5, padding: '10px', label: 'data(label)' } },
+  { selector: 'node[type = "marriage"]', style: { width: 5, height: 5, 'border-width': 2 } },
+];
 
 // The pre-worker algorithm: dagre run in place on each bloodline component.
 function referencePositions(elements) {
-  const cy = cytoscape({ headless: true, styleEnabled: true, style: PAGE_STYLE, elements });
+  const cy = cytoscape({ headless: true, styleEnabled: true, style: OLD_PAGE_STYLE, elements });
   const layoutEles = cy.elements().filter(el => el.isNode() || el.data('relation') !== 'succession');
   layoutEles.components().forEach(comp => {
-    comp.layout({ name: 'dagre', ...DAGRE_OPTIONS, animate: false }).run();
+    // Exactly the options the pre-worker RoyalTreePage used.
+    comp.layout({ name: 'dagre', nodeSep: 50, rankSep: 100, animate: false }).run();
   });
   const out = {};
   cy.nodes().forEach(n => { out[n.id()] = { ...n.position() }; });
