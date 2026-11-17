@@ -124,7 +124,10 @@ function StormInfo(props) {
         <div style={embedded ? { color: 'var(--color-text-muted)' } : stormInfoStyles}>
             {/* Header and close button remains the same */}
             <div style={{ marginBottom: "20px" }}>
-                <h3 style={{ float: "left", marginTop: 0, marginBottom: 0, color: "var(--color-text)" }}>{stormInfo["name"]} {stormInfo["season"]}</h3>
+                <h3 style={{ float: "left", marginTop: 0, marginBottom: 0, color: "var(--color-text)" }}>
+                    {stormInfo["name"]} {stormInfo["season"]}
+                    {stormInfo.provisional ? " · Provisional" : ""}
+                </h3>
                 <button onClick={evt => exitStormInfo(evt)} style={{ float: "right" }} aria-label="Close storm details">&times;</button>
             </div>
 
@@ -154,7 +157,10 @@ function StormInfo(props) {
                         {/* Wind Speed Axis */}
                         <YAxis
                             yAxisId="left"
-                            domain={[0, dataMax => Math.ceil(dataMax * 1.1 / 10) * 10]}
+                            domain={[0, dataMax => {
+                                const peak = Number.isFinite(dataMax) ? dataMax : 0;
+                                return Math.max(10, Math.ceil(peak * 1.1 / 10) * 10);
+                            }]}
                             allowDecimals={false}
                             label={{ value: 'Wind Speed (kts)', angle: -90 }}
                         />
@@ -251,7 +257,7 @@ function StormInfo(props) {
                 <button name="forwardSelectedPoint" onClick={evt => onChange(evt)} aria-label="Next track point">{">"}</button>
             </div>
             <div>Date/Time: {pointInfo.date_time}</div>
-            <div>Wind: {pointInfo.wind} Pressure: {pointInfo.pressure}</div>
+            <div>Wind: {pointInfo.wind == null ? "—" : pointInfo.wind} Pressure: {pointInfo.pressure}</div>
         </div>
     );
 }

@@ -43,12 +43,12 @@ What the converter does:
 1. Bulk-reads the NetCDF variables (lat/lon, `iso_time`, `usa_wind`/`wmo_wind`,
    `usa_pres`/`wmo_pres`, the 34/50/64 kt wind radii, `usa_rmw`, and metadata).
 2. Walks each storm's track points, coalescing US-agency values with WMO
-   fallbacks, normalizing status codes, and flagging landfalls.
+   fallbacks, normalizing status codes, and flagging coastline crossings.
 3. Computes **wind-field polygons** from the quadrant radii (NE/SE/SW/NW) and a
    **max-wind-radius diamond** from `usa_rmw`, using `geopy` for nautical-mile
    geodesics.
-4. Aggregates per-storm peak wind, minimum pressure, status list, and the US
-   ATCF id (used later to build RAMMB image URLs).
+4. Aggregates per-storm peak wind, minimum pressure, status list, track type,
+   and the US ATCF id (used later to build RAMMB image URLs).
 5. Writes a compact JSON object keyed by IBTrACS storm id, gzipped at level 9.
 
 ### Output schema (`storms.json.gz`)
@@ -63,10 +63,11 @@ Top level is an object keyed by IBTrACS storm id (e.g. `2005236N23285`):
     "number": 12,
     "season": 2005,
     "id": "2005236N23285",
-    "max_wind": 150,               // kt
+    "max_wind": 150,               // kt; null when the storm reported no wind
     "min_pressure": 902,           // mb (optional)
+    "track_type": "main",          // IBTrACS: main, spur-*, PROVISIONAL, …
     "status_list": ["HU", "TS"],
-    "record_type_list": ["L"],     // "L" = landfall
+    "record_type_list": ["L"],     // "L" = sea-to-land crossing
     "atcf_id": "AL122005",         // optional; drives RAMMB imagery
     "track_points": [
       {
@@ -74,7 +75,8 @@ Top level is an object keyed by IBTrACS storm id (e.g. `2005236N23285`):
         "date_time": "2005-08-25 18:00:00",
         "year": 2005, "month": 8, "hours": 18, "minutes": 0,
         "latitude": 26.1, "longitude": -80.4,
-        "wind": 70, "pressure": 984, "status": "HU", "record_type": "L",
+        "wind": 70, "wind_source": "usa", "pressure": 984,
+        "status": "HU", "record_type": "L",
         "max_wind_radius": 15,                 // nm (optional)
         "max_wind_poly": [[lon,lat], ...],     // optional
         "64_ne_poly": [[lon,lat], ...]         // 34/50/64 kt × NE/SE/SW/NW (optional)
@@ -83,6 +85,24 @@ Top level is an object keyed by IBTrACS storm id (e.g. `2005236N23285`):
   }
 }
 ```
+
+`record_type` `"L"` is a coastline crossing: the USA record is `L`, or
+`landfall == 0` while `dist2land > 0`. A point already over land
+(`landfall == 0` and `dist2land == 0`) is not marked `L`.
+
+`wind` is the USA 1-minute value when that cell is present, otherwise the WMO
+value. `wind_source` is `"usa"` or `"wmo"`. WMO winds keep the reporting
+agency's averaging period, often 10 minutes (BoM, Réunion, Wellington, New
+Delhi). A point with neither source has `wind: null` and no `wind_source`.
+`max_wind` is the peak reported wind, or null when the storm has none. A
+reported 0 stays 0.
+
+`track_type` is copied from IBTrACS. Values containing `spur`
+(`spur-merge`, `spur-split`, `spur-other`, `*_spur`) duplicate another track.
+Heatmap, Grid, Max Wind Grid, and Scatter drop those points. Storm view shows
+them only while **Show spur tracks** is on. `provisional: true` is set when
+`track_type` contains `PROVISIONAL`, and the storm panel appends
+"Provisional" to the name.
 
 ## How the satellite imagery is produced
 
@@ -125,9 +145,12 @@ the next candidate on image load error.
   polygons), **Scatter**, **Heatmap**, **Grid** (point counts per cell), and
   **Max Wind Grid** (max wind per cell).
 - Points and tracks are colored by the **Saffir–Simpson** scale (see
-  [`help-panel.jsx`](help-panel.jsx)).
+  [`help-panel.jsx`](help-panel.jsx)). A point with `wind: null` is gray and
+  is not on that scale. It also fails the wind-range filter, so it stays out
+  of Scatter, Heatmap, Grid, and Max Wind Grid.
 - Filters cover basin, year, month, wind/pressure range, status, landfall, and
-  6-hourly sampling.
+  6-hourly sampling. Storm view has a **Show spur tracks** toggle, off by
+  default.
 - Selecting a point opens a wind/pressure chart plus the IR frame described above.
 
 The map requires `VITE_MAPBOX_TOKEN` (see the root README).

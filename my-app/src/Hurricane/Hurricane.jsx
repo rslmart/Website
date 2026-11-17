@@ -15,6 +15,7 @@ import ControlsFab from "../components/ControlsFab";
 import MobileDrawer from "../components/MobileDrawer";
 import { withViewport } from "../hooks/useViewport";
 import { isolateMapControls } from "../hooks/mapControls";
+import { colorForWind, hasWindInRange, isSpurTrack } from "./trackSemantics";
 
 const HELP_SEEN_KEY = "hurricaneHelpSeen";
 
@@ -118,27 +119,8 @@ const SYSTEM_STATUSES = {
     "Disturbance": "DB"
 };
 
-export const getColorFromWindSpeed = (windspeed) => {
-    if (windspeed >= 137) {
-        return [196, 100, 217];
-    }
-    if (windspeed >= 113) {
-        return [255, 96, 96];
-    }
-    if (windspeed >= 96) {
-        return [255, 143, 32];
-    }
-    if (windspeed >= 83) {
-        return [255, 216, 33];
-    }
-    if (windspeed >= 64) {
-        return [255, 247, 149];
-    }
-    if (windspeed >= 34) {
-        return [0, 250, 244];
-    }
-    return [94, 186, 255];
-};
+// Re-exported so storm-info can colour a point. Null wind is gray, not a category.
+export const getColorFromWindSpeed = colorForWind;
 
 const getLineDataFromStormTrackPoints = (storms) => {
     const line_list = []
@@ -369,6 +351,7 @@ class Hurricane extends Component {
         maxPressure: 1024, // Only 1,186 storms out of 1,936 storms have at leasy one pressure reading
         systemStatus: SYSTEM_STATUSES.None,
         landfall: false,
+        showSpurs: false,
         showMaxWindPoly: false,
         showWindPoly: false,
         only6Hour: false,
@@ -440,6 +423,9 @@ class Hurricane extends Component {
         else if (evt.target.name === "landfall") {
             await this.setState({ landfall: evt.target.checked });
         }
+        else if (evt.target.name === "showSpurs") {
+            await this.setState({ showSpurs: evt.target.checked });
+        }
         else if (evt.target.name === "showMaxWindPoly") {
             await this.setState({ showMaxWindPoly: evt.target.checked });
         }
@@ -484,7 +470,11 @@ class Hurricane extends Component {
         if (this.state.plotType === PLOT_TYPES.STORM) {
             dataSource = this.state.storms;
         } else {
-            dataSource = Object.values(this.state.storms).flatMap(storm => storm["track_points"]);
+            // Spur tracks repeat a main track. Heatmap, Grid, Max Wind Grid
+            // and Scatter never count them. The storm-view toggle does not apply here.
+            dataSource = Object.values(this.state.storms)
+                .filter(storm => !isSpurTrack(storm))
+                .flatMap(storm => storm["track_points"]);
             // For aggregation layers we need to remove none 6 hours points so its unbiased
             if (this.state.plotType === PLOT_TYPES.HEATMAP || this.state.plotType === PLOT_TYPES.GRID) {
                 await this.setState({ only6Hour: true });
@@ -502,8 +492,7 @@ class Hurricane extends Component {
                     && point.year <= this.state.maxYear
                     && point.month >= this.state.minMonth
                     && point.month <= this.state.maxMonth
-                    && point.wind >= this.state.minWind
-                    && point.wind <= this.state.maxWind
+                    && hasWindInRange(point.wind, this.state.minWind, this.state.maxWind)
                     && (this.state.filterByPressure ? point.pressure && point.pressure >= this.state.minPressure : true)
                     && (this.state.filterByPressure ? point.pressure && point.pressure <= this.state.maxPressure : true)
                     && (SYSTEM_STATUSES[this.state.systemStatus] ? point.status === SYSTEM_STATUSES[this.state.systemStatus] : true)
@@ -519,8 +508,8 @@ class Hurricane extends Component {
                     && storm.season <= this.state.maxYear
                     && storm.track_points[0].month >= this.state.minMonth
                     && storm.track_points[storm.track_points.length - 1].month <= this.state.maxMonth
-                    && storm.max_wind >= this.state.minWind
-                    && storm.max_wind <= this.state.maxWind
+                    && (this.state.showSpurs || !isSpurTrack(storm))
+                    && hasWindInRange(storm.max_wind, this.state.minWind, this.state.maxWind)
                     && (this.state.filterByPressure ? storm.min_pressure && storm.min_pressure >= this.state.minPressure : true)
                     && (this.state.filterByPressure ? storm.min_pressure && storm.min_pressure <= this.state.maxPressure : true)
                     && (SYSTEM_STATUSES[this.state.systemStatus] ? storm.status_list.includes(SYSTEM_STATUSES[this.state.systemStatus]) : true)
@@ -682,7 +671,7 @@ class Hurricane extends Component {
                                 <p>Name: {this.state.storms[this.state.hoverInfo.object["id"]]["name"]}</p>
                                 <p>Date: {this.state.hoverInfo.object["date_time"].split(" ")[0]}</p>
                                 <p>Longitude: {this.state.hoverInfo.object["longitude"]}</p>
-                                <p>Wind: {this.state.hoverInfo.object["wind"]}</p>
+                                <p>Wind: {this.state.hoverInfo.object["wind"] == null ? "—" : this.state.hoverInfo.object["wind"]}</p>
                                 {this.state.hoverInfo.object["max_wind_radius"] && <p>Max Wind Radius: {this.state.hoverInfo.object["max_wind_radius"]}</p>}
                             </div>
                             <div className="column" style={{paddingLeft: 10}}>
@@ -754,6 +743,7 @@ class Hurricane extends Component {
                         minPressure={this.state.minPressure}
                         maxPressure={this.state.maxPressure}
                         landfall={this.state.landfall}
+                        showSpurs={this.state.showSpurs}
                         showMaxWindPoly={this.state.showMaxWindPoly}
                         showWindPoly={this.state.showWindPoly}
                         only6Hour={this.state.only6Hour}
@@ -822,6 +812,7 @@ class Hurricane extends Component {
                             minPressure={this.state.minPressure}
                             maxPressure={this.state.maxPressure}
                             landfall={this.state.landfall}
+                            showSpurs={this.state.showSpurs}
                             showMaxWindPoly={this.state.showMaxWindPoly}
                             showWindPoly={this.state.showWindPoly}
                             only6Hour={this.state.only6Hour}
