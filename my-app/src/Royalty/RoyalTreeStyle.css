@@ -104,11 +104,21 @@
     cursor: pointer;
 }
 
-/* Confirm the main container fills the viewport */
+/* Confirm the main container fills the viewport. The reign rail sits above
+   the stage; the graph and its panels fill whatever height is left. */
 .royal-tree-container {
     width: 100%;
-    height: 100vh; /* Full viewport height */
+    height: 100vh;
+    height: 100dvh;
     position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+.royal-tree-stage {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 .royal-tree-status {
@@ -386,4 +396,137 @@
     .royal-tree-focus-bar {
         top: 96px;
     }
+}
+
+/* Succession rail. The track is the graph's light canvas in both themes
+   (#F4F5F2), so lane text and the toggle stay dark and do not follow the
+   site theme. Lane fills are the existing selection hues. Gold is not used
+   here; it still marks the succession arcs. */
+.succession-rail {
+    flex: 0 1 auto;
+    max-height: 25vh;
+    max-height: 25dvh;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: #F4F5F2;
+    color: #1c1c1c;
+    border-bottom: 1px solid #b7b8b2;
+    z-index: 2;
+}
+
+.succession-rail.is-collapsed {
+    max-height: none;
+}
+
+.succession-rail-header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 44px;
+    /* Home and the theme button occupy the top-left. The toggle starts clear of both. */
+    padding: 0 8px 0 120px;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.succession-rail-toggle {
+    flex: 0 0 auto;
+    min-height: 28px;
+    padding: 2px 8px;
+    background: #F4F5F2;
+    color: #1c1c1c;
+    border: 1px solid #8d8e88;
+    border-radius: 4px;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.succession-rail-title {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+#succession-rail-lanes {
+    overflow: auto;
+    min-height: 0;
+    background: #F4F5F2;
+}
+
+.succession-rail-axis,
+.succession-rail-lane {
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    gap: 6px;
+    align-items: center;
+    padding: 0 8px;
+}
+
+.succession-rail-axis {
+    height: 16px;
+    font-size: 10px;
+    color: #3a3a3a;
+}
+
+.succession-rail-axis-track {
+    display: flex;
+    justify-content: space-between;
+}
+
+.succession-rail-name {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.succession-rail-swatch {
+    flex: 0 0 auto;
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+}
+
+.succession-rail-track {
+    position: relative;
+    background: #F4F5F2;
+}
+
+.succession-rail-bar {
+    position: absolute;
+    height: 12px;
+    min-width: 3px;
+    padding: 0;
+    border: 0;
+    border-radius: 2px;
+    cursor: pointer;
+}
+
+.succession-rail-bar.is-open {
+    background-image: repeating-linear-gradient(
+        90deg,
+        transparent,
+        transparent 3px,
+        rgba(28, 28, 28, 0.35) 3px,
+        rgba(28, 28, 28, 0.35) 4px
+    );
+}
+
+.succession-rail-bar.is-gap {
+    min-width: 0;
+    width: 8px;
+    height: 12px;
+    border: 1px dashed #1c1c1c;
+    background: transparent;
+}
+
+.succession-rail-bar.is-active {
+    outline: 2px solid #1c1c1c;
+    z-index: 1;
 }

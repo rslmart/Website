@@ -79,12 +79,21 @@ const STYLES = {
 // A single monarchy's succession walk. Each instance keeps its own position so
 // several dynasties can be stepped through independently, resetting when its
 // monarch list changes (i.e. a new selection).
-function MonarchStepper({ title, monarchs, onZoomTo }) {
+function MonarchStepper({ title, monarchs, onZoomTo, activeId = null }) {
     const [index, setIndex] = useState(0);
+    const listKey = monarchs.map((monarch) => monarch.id).join('\n');
 
     useEffect(() => {
         setIndex(0);
-    }, [monarchs]);
+    }, [listKey]);
+
+    // A bar click or a graph selection moves this stepper when the person is
+    // in the list. It does not zoom again; the page already did.
+    useEffect(() => {
+        if (!activeId) return;
+        const next = monarchs.findIndex((monarch) => monarch.id === activeId);
+        if (next >= 0) setIndex(next);
+    }, [activeId, listKey, monarchs]);
 
     if (!monarchs.length) return null;
 
@@ -137,9 +146,10 @@ MonarchStepper.propTypes = {
         label: PropTypes.string.isRequired,
     })).isRequired,
     onZoomTo: PropTypes.func.isRequired,
+    activeId: PropTypes.string,
 };
 
-function SearchPanel({ people, sharedPeople, monarchOrder, onZoomTo, embedded }) {
+function SearchPanel({ people, sharedPeople, monarchOrder, onZoomTo, embedded, activeId }) {
     const [query, setQuery] = useState('');
     const [open, setOpen] = useState(false);
     const [activeIndex, setActiveIndex] = useState(0);
@@ -286,6 +296,7 @@ function SearchPanel({ people, sharedPeople, monarchOrder, onZoomTo, embedded })
                     title={multiMonarchy ? monarchy.replace(/_/g, ' ') : 'Succession'}
                     monarchs={monarchs}
                     onZoomTo={onZoomTo}
+                    activeId={activeId}
                 />
             ))}
         </div>
@@ -310,11 +321,13 @@ SearchPanel.propTypes = {
     })),
     onZoomTo: PropTypes.func.isRequired,
     embedded: PropTypes.bool,
+    activeId: PropTypes.string,
 };
 
 SearchPanel.defaultProps = {
     monarchOrder: [],
     embedded: false,
+    activeId: null,
 };
 
 export default React.memo(SearchPanel);
