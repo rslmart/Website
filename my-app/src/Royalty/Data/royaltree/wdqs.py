@@ -578,6 +578,212 @@ def merge_person(typed, legacy=None):
     return out
 
 
+_PUBLISHED_TIME = re.compile(
+    r"^([+-])(\d+)-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.0+)?Z$"
+)
+
+
+def published_time(time):
+    """A payload time literal: a sign, then midnight ``T00:00:00Z``.
+
+    ``wikibase:timeValue`` omits the leading ``+``. A clock that is not
+    midnight is left alone (``None``), so this does not invent one.
+    """
+    if not isinstance(time, str) or not time:
+        return None
+    if time[0] not in "+-":
+        time = "+" + time
+    match = _PUBLISHED_TIME.match(time)
+    if not match or (match.group(5), match.group(6), match.group(7)) != ("00", "00", "00"):
+        return None
+    return f"{match.group(1)}{match.group(2)}-{match.group(3)}-{match.group(4)}T00:00:00Z"
+
+
+def _is_precision(value):
+    return type(value) is int
+
+
+def published_date(field):
+    """``{time, precision}`` or a tie, using payload time literals.
+
+    ``None`` means there is no date to store: the field is missing, unknown,
+    ``novalue``, or a literal the payload cannot hold. The caller leaves the
+    existing date.
+    """
+    projected = _project_date(field)
+    if projected is None:
+        return None
+    if projected.get("tie"):
+        values = []
+        for item in projected.get("values") or []:
+            if not isinstance(item, dict) or not _is_precision(item.get("precision")):
+                return None
+            signed = published_time(item.get("time"))
+            if signed is None:
+                return None
+            values.append({"time": signed, "precision": item["precision"]})
+        if len(values) < 2:
+            return None
+        return {"tie": True, "values": values}
+    if not _is_precision(projected.get("precision")):
+        return None
+    signed = published_time(projected.get("time"))
+    if signed is None:
+        return None
+    return {"time": signed, "precision": projected["precision"]}
+
+
+def _stamp(value):
+    """(year, month, day) from a payload time or a projected date. A tie is None."""
+    if isinstance(value, dict):
+        if value.get("tie"):
+            return None
+        value = value.get("time")
+    if not isinstance(value, str):
+        return None
+    literal = value if value[:1] in "+-" else "+" + value
+    match = _TIME.match(literal)
+    if not match:
+        return None
+    return int(match.group(1)), int(match.group(2)), int(match.group(3))
+
+
+def _year_distance(left, right):
+    if left is None or right is None:
+        return None
+    return abs(left[0] - right[0])
+
+
+def _bound_literal(value):
+    """The payload time for one bound, or None to leave the existing bound.
+
+    A tie is not one time. A missing key is handled by the caller, which drops
+    that bound. An unreadable literal is also None, so it is not invented.
+    """
+    if not isinstance(value, dict) or value.get("tie"):
+        return None
+    return published_time(value.get("time")) or None
+
+
+def _apply_bounds(office, fetched):
+    for key in ("start time", "end time"):
+        if key not in fetched:
+            office.pop(key, None)
+            continue
+        literal = _bound_literal(fetched.get(key))
+        if literal:
+            office[key] = literal
+
+
+def _new_office(fetched):
+    office = {"id": fetched["id"]}
+    for key in ("start time", "end time"):
+        literal = _bound_literal(fetched.get(key)) if key in fetched else None
+        if literal:
+            office[key] = literal
+    return office
+
+
+def _match_offices(existing, fetched):
+    """Index pairs of existing and fetched offices with the same id.
+
+    A single existing statement and a single fetched statement pair on id.
+    Several terms pair only when their start years are the same or one year
+    apart, nearest first, so a later reign is not written onto an earlier
+    reign's from/to. Unpaired fetched statements are offices to add.
+    """
+    by_existing = {}
+    for index, office in enumerate(existing):
+        if isinstance(office, dict) and isinstance(office.get("id"), str):
+            by_existing.setdefault(office["id"], []).append(index)
+    by_fetched = {}
+    for index, office in enumerate(fetched):
+        if isinstance(office, dict) and isinstance(office.get("id"), str):
+            by_fetched.setdefault(office["id"], []).append(index)
+    pairs = {}
+    paired_fetched = set()
+    for oid, existing_idx in by_existing.items():
+        fetched_idx = by_fetched.get(oid) or []
+        if len(existing_idx) == 1 and len(fetched_idx) == 1:
+            pairs[existing_idx[0]] = fetched_idx[0]
+            paired_fetched.add(fetched_idx[0])
+            continue
+        candidates = []
+        for ei in existing_idx:
+            for fi in fetched_idx:
+                distance = _year_distance(
+                    _stamp(existing[ei].get("start time")),
+                    _stamp(fetched[fi].get("start time")),
+                )
+                if distance is not None and distance <= 1:
+                    candidates.append((distance, ei, fi))
+        candidates.sort()
+        used_existing, used_fetched = set(), set()
+        for _distance, ei, fi in candidates:
+            if ei in used_existing or fi in used_fetched:
+                continue
+            used_existing.add(ei)
+            used_fetched.add(fi)
+            pairs[ei] = fi
+            paired_fetched.add(fi)
+    return pairs, paired_fetched
+
+
+def merge_published_offices(existing, fetched):
+    """Keep every existing office. Update its start and end. Append the rest.
+
+    ``from``, ``to``, ``label`` and ``end cause`` stay on an office that
+    already has them. An office the fetch does not know is not deleted. A
+    new office may have a start and no end.
+    """
+    kept = [dict(office) if isinstance(office, dict) else office for office in existing or []]
+    fetched = [office for office in fetched or [] if isinstance(office, dict) and office.get("id")]
+    pairs, paired_fetched = _match_offices(kept, fetched)
+    for index, fetched_index in pairs.items():
+        _apply_bounds(kept[index], fetched[fetched_index])
+    for index, office in enumerate(fetched):
+        if index not in paired_fetched:
+            kept.append(_new_office(office))
+    return kept
+
+
+def apply_published(person, typed):
+    """Parents, dates and offices from one typed record, on one published person.
+
+    Mother and father become the single best-rank QID. Preferred already beat
+    normal when the typed record was collapsed. No such QID removes the key:
+    a tie, an unknown or an absent parent is not turned into one. A returned
+    birth or death, including a tie, replaces the stored date. No returned
+    date leaves the stored one. Offices are merged, not replaced. Images and
+    every other field stay.
+    """
+    if not isinstance(person, dict):
+        return person
+    typed = typed or {}
+    for field in ("mother", "father"):
+        qid = link_qid(typed.get(field)) if field in typed else None
+        if qid:
+            person[field] = qid
+        else:
+            person.pop(field, None)
+    for field in _DATE_FIELDS:
+        if field not in typed:
+            continue
+        published = published_date(typed.get(field))
+        if published is not None:
+            person[field] = published
+    if "position held" in typed:
+        merged = merge_published_offices(
+            person.get("position held") or [],
+            _project_positions(typed.get("position held")),
+        )
+        if merged:
+            person["position held"] = merged
+        elif not person.get("position held"):
+            person.pop("position held", None)
+    return person
+
+
 def iter_bindings(result):
     for row in result.get("results", {}).get("bindings", []):
         yield {key: value.get("value") for key, value in row.items() if isinstance(value, dict)}

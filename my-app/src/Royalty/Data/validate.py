@@ -48,13 +48,26 @@ DATE = {"type": "string", "pattern": r"^[+-][0-9]{1,}-[0-9]{2}-[0-9]{2}T00:00:00
 # A string still has to match DATE. An object is checked only when the value
 # is an object: this schema subset applies pattern to strings and properties
 # to objects.
-DATE_VALUE = {
-    "type": ["string", "object"],
-    "pattern": DATE["pattern"],
+_DATE_OBJECT = {
+    "type": "object",
     "required": ["time", "precision"],
     "properties": {
         "time": DATE,
         "precision": {"type": "integer"},
+    },
+    "additionalProperties": False,
+}
+# A birth or death is a time string, one {time, precision}, or an explicit tie.
+# The schema subset has no oneOf, so required is not applied at this level;
+# date_value_ok is what rejects a mix of the two shapes.
+DATE_VALUE = {
+    "type": ["string", "object"],
+    "pattern": DATE["pattern"],
+    "properties": {
+        "time": DATE,
+        "precision": {"type": "integer"},
+        "tie": {"type": "boolean"},
+        "values": {"type": "array", "minItems": 2, "items": _DATE_OBJECT},
     },
     "additionalProperties": False,
 }
@@ -167,6 +180,7 @@ HOUSES_INDEX_SCHEMA = {
 
 _TYPES = {
     "string": str, "integer": int, "array": list, "object": dict, "null": type(None),
+    "boolean": bool,
 }
 
 
@@ -288,10 +302,11 @@ _DATE_RE = re.compile(r"^([+-])([0-9]+)-([0-9]{2})-([0-9]{2})")
 def parse_date(value):
     """(year, month, day) from a Wikidata time or ``{"time", "precision"}``.
 
-    Month or day 0 means unknown. Precision is not a second calendar; the
-    comparison still uses the stored time, at the shared month/day precision.
+    Month or day 0 means unknown. A tie has no single calendar day.
     """
     if isinstance(value, dict):
+        if value.get("tie"):
+            return None
         value = value.get("time")
     if not isinstance(value, str):
         return None
@@ -300,6 +315,46 @@ def parse_date(value):
         return None
     year = int(m.group(2)) * (-1 if m.group(1) == "-" else 1)
     return year, int(m.group(3)), int(m.group(4))
+
+
+def date_value_ok(value):
+    """A payload birth or death: a time string, one ``{time, precision}``, or a tie."""
+    if isinstance(value, str):
+        return _DATE_RE.match(value) is not None and value.endswith("T00:00:00Z")
+    if not isinstance(value, dict):
+        return False
+    if set(value) == {"time", "precision"}:
+        return _DATE_RE.match(value.get("time") or "") is not None and type(value.get("precision")) is int
+    if set(value) == {"tie", "values"} and value.get("tie") is True and isinstance(value.get("values"), list):
+        return len(value["values"]) >= 2 and all(date_value_ok(item) and "tie" not in item
+                                                 for item in value["values"])
+    return False
+
+
+def _precision(value):
+    if isinstance(value, dict) and type(value.get("precision")) is int:
+        return value["precision"]
+    return None
+
+
+def parsed_for_compare(value):
+    """Parsed date coarsened to the precision the payload actually stored.
+
+    Year precision and coarser become a year (``timeValue`` uses 1 January for
+    those). Month precision drops the day. A string keeps month or day 0 as
+    the unknown part. A tie is not one date.
+    """
+    parts = parse_date(value)
+    if parts is None:
+        return None
+    precision = _precision(value)
+    if precision is None:
+        return parts
+    if precision <= 9:
+        return (parts[0], 0, 0)
+    if precision == 10:
+        return (parts[0], parts[1], 0)
+    return parts
 
 
 def date_cmp(a, b):
@@ -336,15 +391,18 @@ def check_person(rep, name, qid, person, people):
         rep.add("self-parent", qid, name)
     if father and father == mother:
         rep.add("father-is-mother", qid, name, f"father and mother are both {father}")
-    birth = parse_date(person.get("date of birth"))
-    death = parse_date(person.get("date of death"))
+    for date_field in ("date of birth", "date of death"):
+        if date_field in person and not date_value_ok(person[date_field]):
+            rep.add("schema-person", f"{qid}:{date_field}", name, "date is not a time, a precision, or a tie")
+    birth = parsed_for_compare(person.get("date of birth"))
+    death = parsed_for_compare(person.get("date of death"))
     if birth and death and date_cmp(birth, death) > 0:
         rep.add("born-after-death", qid, name,
                 f"{person['date of birth']} > {person['date of death']}")
     if birth:
         for role, parent_id in (("father", father), ("mother", mother)):
             parent = people.get(parent_id) if parent_id and parent_id != qid else None
-            pbirth = parse_date(parent.get("date of birth")) if parent else None
+            pbirth = parsed_for_compare(parent.get("date of birth")) if parent else None
             if pbirth and date_cmp(pbirth, birth) >= 0:
                 rep.add("parent-not-older", f"{qid}<{role}:{parent_id}", name,
                         f"{role} born {parent['date of birth']}, "

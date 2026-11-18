@@ -107,6 +107,20 @@ def test_date_precision():
     t = tree()
     t["nodes"]["Q1"]["date of birth"] = century
     assert "schema-person" not in rules(files(T=t))
+    # timeValue writes 1 January for a year. Precision 9 still compares as a year,
+    # so a June death in that year is not "born after death".
+    t["nodes"]["Q1"]["date of birth"] = {"time": "+1000-01-01T00:00:00Z", "precision": 9}
+    t["nodes"]["Q1"]["date of death"] = {"time": "+1000-06-01T00:00:00Z", "precision": 11}
+    assert "born-after-death" not in rules(files(T=t))
+    tie = {"tie": True, "values": [
+        {"time": "+1125-01-01T00:00:00Z", "precision": 9},
+        {"time": "+1200-01-01T00:00:00Z", "precision": 7},
+    ]}
+    assert validate.date_value_ok(tie)
+    t["nodes"]["Q1"]["date of death"] = tie
+    assert "schema-person" not in rules(files(T=t))
+    t["nodes"]["Q1"]["date of death"] = {"tie": True, "time": "+1000-01-01T00:00:00Z", "precision": 9}
+    assert "schema-person" in rules(files(T=t))
 
 
 def test_parent_order_uses_extended_nodes():
