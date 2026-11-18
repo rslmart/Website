@@ -250,6 +250,50 @@ def test_multi_valued_history_keeps_normal_and_preferred():
     assert rec["noble title"][0]["id"] == "Q7"
 
 
+def _office(qid, *, start=None, end=None):
+    qualifiers = {}
+    if start:
+        qualifiers["P580"] = [{"datavalue": {"value": {"time": start}}}]
+    if end:
+        qualifiers["P582"] = [{"datavalue": {"value": {"time": end}}}]
+    return {"mainsnak": {"datavalue": {"value": {"id": qid}}}, "qualifiers": qualifiers}
+
+
+def test_parse_person_keeps_an_open_reign():
+    item = {
+        "id": "Q43274",
+        "labels": {"en": {"value": "Charles III"}},
+        "descriptions": {"en": {"value": ""}},
+        "claims": {"P39": [
+            _office("Q9134365", start="+2022-09-08T00:00:00Z"),
+            _office("Q2", start="+1952-02-06T00:00:00Z", end="+2022-09-08T00:00:00Z"),
+            _office("Q1268572", start="+1973-09-15T00:00:00Z"),
+        ]},
+    }
+    positions = wikidata.parse_person(item)["position held"]
+    uk = next(pos for pos in positions if pos["id"] == "Q9134365")
+    sweden = next(pos for pos in positions if pos["id"] == "Q1268572")
+    closed = next(pos for pos in positions if pos["id"] == "Q2")
+    assert "end time" not in uk and uk["start time"] == "+2022-09-08T00:00:00Z"
+    assert "end time" not in sweden and sweden["start time"] == "+1973-09-15T00:00:00Z"
+    assert closed["end time"] == "+2022-09-08T00:00:00Z"
+    assert [pos["id"] for pos in positions] == ["Q2", "Q9134365", "Q1268572"]
+
+
+def test_page_projection_keeps_charles_and_carl_open(pinned):
+    records = wdqs.parse_typed(pinned["results"], ["Q43274", "Q45068"])
+    charles = wdqs.to_person(records["Q43274"])
+    uk = [pos for pos in charles["position held"] if pos["id"] == "Q9134365"]
+    assert len(uk) == 1 and "end time" not in uk[0]
+    assert uk[0]["start time"] == {"time": "2022-09-08T00:00:00Z", "precision": 11}
+    assert any("end time" in pos for pos in charles["position held"])
+    carl = wdqs.to_person(records["Q45068"])
+    sweden = [pos for pos in carl["position held"] if pos["id"] == "Q1268572"]
+    assert len(sweden) == 1 and "end time" not in sweden[0]
+    assert sweden[0]["start time"]["time"].startswith("1973")
+    assert any("end time" in pos for pos in carl["position held"])
+
+
 def test_parse_person_remains_the_legacy_first_claim_parser(capsys):
     item = {
         "id": "Q462856",

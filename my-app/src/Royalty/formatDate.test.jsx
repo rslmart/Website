@@ -19,6 +19,17 @@ describe('formatDate', () => {
     expect(formatDate({ time: '2022-09-08T00:00:00Z', precision: 11 })).toBe('8 September 2022');
   });
 
+  it('labels the two Ealdgyths from precision when it is present', () => {
+    const century = { time: '1100-01-01T00:00:00Z', precision: 7 };
+    const decade = { time: '0990-01-01T00:00:00Z', precision: 8 };
+    expect(createLabel({
+      label: 'Ealdgyth',
+      'date of birth': century,
+      'date of death': century,
+    })).toBe('Ealdgyth\nc. 12th century-c. 12th century');
+    expect(createLabel({ label: 'Ealdgyth', 'date of birth': decade })).toBe('Ealdgyth\n990s-?');
+  });
+
   it('keeps a bare timestamp as a year', () => {
     expect(formatDate('+1100-01-01T00:00:00Z')).toBe('1100');
     expect(formatDate('+1214-04-25T00:00:00Z')).toBe('1214');

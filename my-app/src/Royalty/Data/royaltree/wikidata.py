@@ -1,7 +1,8 @@
 """Wikidata Action API access (wbgetentities) and the person-record parser.
 
-The parser is GetData's, moved verbatim so records stay byte-compatible with
-the legacy caches (rank/precision handling changes in -wdqs-fetch, not here).
+The parser is GetData's. Rank and date precision live in ``wdqs.py``. An
+office with a start and no end stays on the record. The old loop required an
+end qualifier, which dropped an open reign.
 """
 import json
 import re
@@ -88,26 +89,33 @@ def parse_person(item_data):
             case "P39" | "P97":
               person[p] = []
               for claim in claim_list:
-                if "qualifiers" in claim and 'P582' in claim["qualifiers"]:
-                  # Empress Matilda thanks
-                  id = claim["mainsnak"]["datavalue"]["value"]["id"]
-                  if id in {"Q116"}: # "monarch"
-                    if "P1001" in claim["qualifiers"]:
-                      id = claim["qualifiers"]["P1001"][0]["datavalue"]["value"]["id"]
-                    elif "P642" in claim["qualifiers"]:
-                      id = claim["qualifiers"]["P642"][0]["datavalue"]["value"]["id"]
-                  position = {"id": id}
-                  for qualifier_prop_id in claim["qualifiers"].keys():
-                    qualifier = PROPERTIES.get(qualifier_prop_id, "")
-                    if qualifier_prop_id in {"P580", "P582"}:
-                      position[qualifier] = claim["qualifiers"][qualifier_prop_id][0]["datavalue"]["value"]["time"]
-                    elif qualifier_prop_id in {"P1534", "P642"} and claim["qualifiers"][qualifier_prop_id][0]['snaktype'] == 'value':
-                      position[qualifier] = claim["qualifiers"][qualifier_prop_id][0]["datavalue"]["value"]["id"]
-                    elif qualifier_prop_id in {"P155", "P1365", "P1366","P156"} and claim["qualifiers"][qualifier_prop_id][0]['snaktype'] == 'value':
-                      position[qualifier] = [q["datavalue"]["value"]["id"] for q in claim["qualifiers"][qualifier_prop_id]]
-                  person[p].append(position)
-              # sort this by end time
-              person[p] = sorted(person[p], key=lambda x: x["end time"])
+                qualifiers = claim.get("qualifiers") or {}
+                # A start with no end is an open reign (Charles III from 2022,
+                # Carl XVI Gustaf from 1973). Requiring P582 dropped those.
+                if "P580" not in qualifiers and "P582" not in qualifiers:
+                  continue
+                # Empress Matilda thanks
+                id = claim["mainsnak"]["datavalue"]["value"]["id"]
+                if id in {"Q116"}: # "monarch"
+                  if "P1001" in qualifiers:
+                    id = qualifiers["P1001"][0]["datavalue"]["value"]["id"]
+                  elif "P642" in qualifiers:
+                    id = qualifiers["P642"][0]["datavalue"]["value"]["id"]
+                position = {"id": id}
+                for qualifier_prop_id in qualifiers.keys():
+                  qualifier = PROPERTIES.get(qualifier_prop_id, "")
+                  if qualifier_prop_id in {"P580", "P582"}:
+                    position[qualifier] = qualifiers[qualifier_prop_id][0]["datavalue"]["value"]["time"]
+                  elif qualifier_prop_id in {"P1534", "P642"} and qualifiers[qualifier_prop_id][0]['snaktype'] == 'value':
+                    position[qualifier] = qualifiers[qualifier_prop_id][0]["datavalue"]["value"]["id"]
+                  elif qualifier_prop_id in {"P155", "P1365", "P1366","P156"} and qualifiers[qualifier_prop_id][0]['snaktype'] == 'value':
+                    position[qualifier] = [q["datavalue"]["value"]["id"] for q in qualifiers[qualifier_prop_id]]
+                person[p].append(position)
+              # Closed offices stay in end-time order. An open office has no end.
+              person[p] = sorted(
+                  person[p],
+                  key=lambda x: (x.get("end time") is None, x.get("end time") or ""),
+              )
         except Exception as e:
           print(f"{e} {claim_list[0]}")
 
