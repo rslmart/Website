@@ -134,7 +134,7 @@ const loadMeta = async () => {
     return response.json();
 };
 
-// Sandy and Matthew only. A missing file leaves the map without an overlay.
+// Sandy, Matthew, Hugo, and Melissa. A missing file leaves the map without an overlay.
 const loadGridsatFrames = async () => {
     try {
         const response = await fetch(GRIDSAT_URL);
@@ -298,14 +298,37 @@ const getGridLayerMaxWind = (track_points, settings) => new GridLayer({
     ...settings
 });
 
-// One frame per storm. The image does not change when the selected point does.
-// bounds are the resampled geographic edges from frames.json, unmodified.
-const getGridsatLayer = (stormInfo, frames) => {
-    if (!stormInfo || !frames) return null;
-    const frame = frames.find(item => item.sid === stormInfo.id);
+// Frame for the GridSat hour nearest the selected track point. bounds are the
+// resampled geographic edges from frames.json, unmodified. Other storms have
+// no frames, so the layer is absent unless one of the four is selected.
+const nearestGridsatFrame = (frames, sid, dateTime) => {
+    if (!frames || !sid || !dateTime) return null;
+    const target = Date.parse(dateTime.replace(" ", "T") + "Z");
+    if (Number.isNaN(target)) return null;
+    let best = null;
+    let bestDist = Infinity;
+    let bestWhen = Infinity;
+    for (let i = 0; i < frames.length; i++) {
+        const frame = frames[i];
+        if (frame.sid !== sid) continue;
+        const when = Date.parse(String(frame.trackTime).replace(" ", "T") + "Z");
+        if (Number.isNaN(when)) continue;
+        const dist = Math.abs(when - target);
+        if (dist < bestDist || (dist === bestDist && when < bestWhen)) {
+            best = frame;
+            bestDist = dist;
+            bestWhen = when;
+        }
+    }
+    return best;
+};
+
+const getGridsatLayer = (stormInfo, frames, selectedPoint) => {
+    if (!stormInfo || !selectedPoint) return null;
+    const frame = nearestGridsatFrame(frames, stormInfo.id, selectedPoint.date_time);
     if (!frame) return null;
     return new BitmapLayer({
-        id: "gridsat-frame",
+        id: "gridsat-" + frame.image,
         image: process.env.PUBLIC_URL + "/hurricane/gridsat/" + frame.image,
         bounds: frame.bounds,
         pickable: false,
@@ -316,7 +339,7 @@ const getStormLayers = (storms, setHoverInfo, onChange, showMaxWindPoly, showWin
     const track_points = Object.values(storms).flatMap(storm => storm["track_points"]);
     const selectedPointActual = stormInfo ? stormInfo.track_points[selectedPoint] : null;
     const layers = [];
-    const gridsat = getGridsatLayer(stormInfo, gridsatFrames);
+    const gridsat = getGridsatLayer(stormInfo, gridsatFrames, selectedPointActual);
     if (gridsat) layers.push(gridsat);
     layers.push(
         getScatterplotLayer(track_points, setHoverInfo, onChange, selectedPointActual, scatterplotSettings),

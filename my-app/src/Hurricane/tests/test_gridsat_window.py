@@ -1,8 +1,9 @@
-"""Size of the two committed GridSat frames.
+"""Size of the committed GridSat frames for four full tracks.
 
-Reads public/hurricane/gridsat/frames.json and the two JPEGs. It does not
-download and it does not import the crop script. pytest-socket blocks
-sockets here. A crop, if one has to be run again, is a subprocess:
+Reads public/hurricane/gridsat/frames.json, the JPEGs, and the published
+storm file for the three-hour track times. It does not download and it does
+not import the crop script. pytest-socket blocks sockets here. A crop, if
+one has to be run again, is a subprocess:
 
     uv run --with netCDF4 --with numpy --with pillow --with matplotlib \
         python buildGridsatWindow.py
@@ -10,19 +11,31 @@ sockets here. A crop, if one has to be run again, is a subprocess:
 
 from __future__ import annotations
 
+import gzip
 import json
 import math
 from pathlib import Path
 
 HURRICANE_DIR = Path(__file__).resolve().parents[1]
-FRAMES_PATH = HURRICANE_DIR.parents[1] / "public" / "hurricane" / "gridsat" / "frames.json"
+PUBLIC_HURRICANE = HURRICANE_DIR.parents[1] / "public" / "hurricane"
+FRAMES_PATH = PUBLIC_HURRICANE / "gridsat" / "frames.json"
+STORMS_PATH = PUBLIC_HURRICANE / "storms.json.gz"
 
 # EPSG:3857 sphere. One 0.07° latitude cell is about 8 km on this sphere.
 R_M = 6378137.0
 CELL_DEG = 0.07
 STEP_KM = 200.0
 
-TRACKS = {
+# Sandy, Matthew, Hugo, Melissa. Frame counts are the distinct GridSat hours.
+SIDS = (
+    "2012296N14283",
+    "2016273N13300",
+    "1989254N13340",
+    "2025294N14290",
+)
+
+# The original Sandy and Matthew centers, plus one Hugo frame and one Melissa frame.
+CENTER_CHECKS = {
     "2012296N14283": {
         "track_time": "2012-10-30 09:00:00",
         "lat": 40.0,
@@ -32,6 +45,16 @@ TRACKS = {
         "track_time": "2016-10-03 00:00:00",
         "lat": 14.5,
         "lon": -75.0,
+    },
+    "1989254N13340": {
+        "track_time": "1989-09-21 18:00:00",
+        "lat": 30.2,
+        "lon": -77.5,
+    },
+    "2025294N14290": {
+        "track_time": "2025-10-28 18:00:00",
+        "lat": 18.2,
+        "lon": -78.0,
     },
 }
 
@@ -134,25 +157,82 @@ def jpeg_size(path: Path):
     raise AssertionError(f"no JPEG frame header in {path}")
 
 
+def is_gridsat_hour(date_time: str) -> bool:
+    hour = int(date_time[11:13])
+    minute = int(date_time[14:16])
+    second = int(date_time[17:19])
+    return second == 0 and minute == 0 and hour % 3 == 0
+
+
+def three_hour_points():
+    """Distinct GridSat hours on the four published tracks."""
+    with gzip.open(STORMS_PATH, "rt") as fp:
+        storms = json.load(fp)
+    points = []
+    for sid in SIDS:
+        for point in storms[sid]["track_points"]:
+            if is_gridsat_hour(point["date_time"]):
+                points.append((sid, point))
+    return points
+
+
 def load_frames():
     body = json.loads(FRAMES_PATH.read_text())
     frames = body["frames"]
-    by_sid = {frame["sid"]: frame for frame in frames}
-    assert set(by_sid) == set(TRACKS)
-    return by_sid
+    by_key = {(frame["sid"], frame["trackTime"]): frame for frame in frames}
+    assert len(by_key) == len(frames)
+    return frames, by_key
 
 
-def test_frames_match_the_track_points():
-    frames = load_frames()
-    tol = cell_km()
-    for sid, track in TRACKS.items():
-        frame = frames[sid]
-        assert frame["trackTime"] == track["track_time"]
+def test_every_three_hour_track_time_has_a_frame():
+    frames, by_key = load_frames()
+    points = three_hour_points()
+    assert len(frames) == len(points)
+    counts = {sid: 0 for sid in SIDS}
+    for sid, point in points:
+        counts[sid] += 1
+        frame = by_key[(sid, point["date_time"])]
+        assert frame["sid"] == sid
         assert len(frame["bounds"]) == 4
+        stamp = frame["gridsatTime"].replace("-", "").replace(":", "").replace(" ", "")[:12]
         image = FRAMES_PATH.parent / frame["image"]
-        assert image.name == f"{sid}-{frame['gridsatTime'].replace('-', '').replace(':', '').replace(' ', '')[:12]}.jpg"
+        assert image.name == f"{sid}-{stamp}.jpg"
         width, height = jpeg_size(image)
         assert (width, height) == (301, 301)
+        errors = placement_errors(
+            frame["bounds"], width, height, point["latitude"], point["longitude"]
+        )
+        assert errors["center_km"] <= cell_km(), (
+            f"{sid} {point['date_time']} center {errors['center_km']:.3f} km "
+            f"from the track point"
+        )
+    # 82, 94, 124, and 93 track points include times that are not GridSat hours.
+    assert counts == {
+        "2012296N14283": 79,
+        "2016273N13300": 93,
+        "1989254N13340": 121,
+        "2025294N14290": 89,
+    }
+    sandy_times = {frame["trackTime"] for frame in frames if frame["sid"] == "2012296N14283"}
+    assert "2012-10-24 19:00:00" not in sandy_times
+    assert "2012-10-24 18:00:00" in sandy_times
+    assert "2012-10-24 21:00:00" in sandy_times
+
+
+def test_four_frames_match_their_track_points():
+    """Sandy and Matthew keep their original centers. Hugo and Melissa match one each.
+
+    A 200 km step on these four frames measures 200 km within one 0.07° cell.
+    """
+    _frames, by_key = load_frames()
+    points = {(sid, point["date_time"]): point for sid, point in three_hour_points()}
+    tol = cell_km()
+    for sid, track in CENTER_CHECKS.items():
+        source = points[(sid, track["track_time"])]
+        assert source["latitude"] == track["lat"]
+        assert source["longitude"] == track["lon"]
+        frame = by_key[(sid, track["track_time"])]
+        width, height = jpeg_size(FRAMES_PATH.parent / frame["image"])
         errors = placement_errors(frame["bounds"], width, height, track["lat"], track["lon"])
         assert errors["center_km"] <= tol, (
             f"{sid} center {errors['center_km']:.3f} km from the track point"
@@ -167,20 +247,21 @@ def test_frames_match_the_track_points():
 
 def test_full_grid_and_geostationary_disk_fail():
     """The same measurement rejects the two wrong rectangles."""
-    frames = load_frames()
-    for sid, track in TRACKS.items():
-        width, height = jpeg_size(FRAMES_PATH.parent / frames[sid]["image"])
+    _frames, by_key = load_frames()
+    for sid, track in CENTER_CHECKS.items():
+        frame = by_key[(sid, track["track_time"])]
+        width, height = jpeg_size(FRAMES_PATH.parent / frame["image"])
         assert not placement_ok(FULL_GRIDSAT_BOUNDS, *FULL_GRIDSAT_SIZE, track["lat"], track["lon"])
         assert not placement_ok(FULL_GRIDSAT_BOUNDS, width, height, track["lat"], track["lon"])
         assert not placement_ok(GOES_DISK_BOUNDS, width, height, track["lat"], track["lon"])
 
 
 def test_recorded_errors(capsys):
-    """Print the measured kilometers. The assertions live in the test above."""
-    frames = load_frames()
+    """Print the measured kilometers. The assertions live in the tests above."""
+    _frames, by_key = load_frames()
     lines = []
-    for sid, track in TRACKS.items():
-        frame = frames[sid]
+    for sid, track in CENTER_CHECKS.items():
+        frame = by_key[(sid, track["track_time"])]
         width, height = jpeg_size(FRAMES_PATH.parent / frame["image"])
         errors = placement_errors(frame["bounds"], width, height, track["lat"], track["lon"])
         lines.append(
