@@ -44,6 +44,14 @@ describe('extractYear', () => {
     expect(extractYear('+1650-01-01T00:00:00Z')).toBe(parseYear('+1650-01-01T00:00:00Z'));
     expect(extractYear('-0069-01-01T00:00:00Z')).toBe(parseYear('-0069-01-01T00:00:00Z'));
   });
+
+  it('does not turn century precision into a year', () => {
+    const century = { time: '1100-01-01T00:00:00Z', precision: 7 };
+    const year = { time: '1100-01-01T00:00:00Z', precision: 9 };
+    expect(extractYear(century)).toBeNull();
+    expect(extractYear(year)).toBe(1100);
+    expect(extractYear({ time: '-0043-03-15T00:00:00Z', precision: 11 })).toBe(-43);
+  });
 });
 
 describe('reign lanes', () => {

@@ -1,12 +1,17 @@
 import { formatDate } from './formatDate';
+import { parseYear } from './royalTreeLayout';
 
 // Signed astronomical year for reign bars. The timeline layout reuses this
 // helper. A "+YYYY-..." or "-YYYY-..." timestamp uses the same rule as
-// parseYear in royalTreeLayout.js. An object uses its time field. A missing
-// value, a blank string, or a tie with no single time is null.
+// parseYear in royalTreeLayout.js. An object that carries precision uses
+// parseYear, so a millennium, century or decade stays null while a year or a
+// finer date, including a BCE year, stays that year. An object with a time
+// and no precision still uses that time. A missing value, a blank string, or
+// a tie with no single time is null.
 export function extractYear(value) {
   if (value == null || value === '') return null;
   if (typeof value === 'object') {
+    if (value.precision != null) return parseYear(value);
     if (typeof value.time === 'string') return extractYear(value.time);
     return null;
   }
