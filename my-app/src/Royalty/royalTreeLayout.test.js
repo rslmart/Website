@@ -6,6 +6,7 @@ import {
   PERSON_SIZE_STYLE, MARRIAGE_SIZE_STYLE, MONARCH_SIZE_STYLE, bandWidths, visibleSuccession,
 } from './royalTreeLayout';
 import { convertToChart } from './RoyalTreeUtils';
+import { formatDate } from './formatDate';
 
 // src/test/setup.js mocks Cytoscape for component tests; layout needs the real one.
 vi.unmock('cytoscape');
@@ -79,6 +80,42 @@ describe('royalTreeLayout', () => {
     expect(parseYear('+1650-01-01T00:00:00Z')).toBe(1650);
     expect(parseYear('-0069-01-01T00:00:00Z')).toBe(-69);
     expect(parseYear(undefined)).toBeNull();
+  });
+
+  it('agrees with the label for BCE and does not invent a year from a block', () => {
+    const historical = (astro) => (astro > 0 ? astro : 1 - astro);
+    const yearInLabel = (label) => {
+      const bce = /(\d+) BCE/.exec(label);
+      return bce ? Number(bce[1]) : Number(/(\d+)\s*$/.exec(label)[1]);
+    };
+    const pointed = [
+      '-0043-03-15T00:00:00Z',
+      '+0000-01-01T00:00:00Z',
+      { time: '-0043-03-15T00:00:00Z', precision: 11 },
+      { time: '+0000-00-00T00:00:00Z', precision: 9 },
+      { time: '2022-09-08T00:00:00Z', precision: 11 },
+      { time: '+0500-00-00T00:00:00Z', precision: 5 },
+    ];
+    pointed.forEach((when) => {
+      expect(yearInLabel(formatDate(when))).toBe(historical(parseYear(when)));
+    });
+
+    const century = { time: '1100-01-01T00:00:00Z', precision: 7 };
+    const decade = { time: '0990-01-01T00:00:00Z', precision: 8 };
+    expect(formatDate(century)).toBe('c. 12th century');
+    expect(parseYear(century)).toBeNull();
+    expect(formatDate(decade)).toBe('990s');
+    expect(parseYear(decade)).toBeNull();
+    expect(parseYear({ time: '+0000-00-00T00:00:00Z', precision: 7 })).toBeNull();
+    expect(parseYear({ time: '+0000-00-00T00:00:00Z', precision: 6 })).toBeNull();
+    expect(parseYear({ time: '-0100-01-01T00:00:00Z', precision: 7 })).toBeNull();
+    expect(parseYear({
+      tie: true,
+      values: [
+        { time: '1125-01-01T00:00:00Z', precision: 9 },
+        { time: '1200-01-01T00:00:00Z', precision: 7 },
+      ],
+    })).toBeNull();
   });
 
   it('drops succession edges and person data from layout input', () => {

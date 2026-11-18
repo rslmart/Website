@@ -52,13 +52,28 @@ export const COUPLE_PITCH = 150;
 // their layout is unchanged.
 export const MAX_NETWORK_SIMPLEX_NODES = 1000;
 
-// Parse a Wikidata date string ("+1650-...", "-0069-...") to a signed year.
-export function parseYear(dateStr) {
-  if (!dateStr) return null;
-  const digits = String(dateStr).replace(/^[+-]/, '').split('-')[0];
+// Signed astronomical year, the same number formatDate turns into a label.
+// Year 0 is the year in "1 BCE", and astronomical −43 is the year in "44 BCE"
+// (the label prints 1 − year when the year is not positive).
+// A string is a year, including a 1 January timestamp. A {time, precision}
+// value is a year only at year precision or finer, and at the coarser
+// "c. YEAR" precisions. Millennium, century and decade precision are blocks:
+// 1100 is not a birth year when the label is "c. 12th century", and 990 is
+// not a birth year when the label is "990s". A tie has no single year.
+export function parseYear(value) {
+  if (value == null || value === '') return null;
+  if (typeof value === 'object') {
+    if (value.tie || Array.isArray(value)) return null;
+    const precision = Number(value.precision);
+    if (!Number.isInteger(precision) || (precision >= 6 && precision <= 8)) return null;
+    if (typeof value.time !== 'string') return null;
+    return parseYear(value.time);
+  }
+  const text = String(value);
+  const digits = text.replace(/^[+-]/, '').split('-')[0];
   const year = parseInt(digits, 10);
   if (Number.isNaN(year)) return null;
-  return String(dateStr).startsWith('-') ? -year : year;
+  return text.startsWith('-') ? -year : year;
 }
 
 // Only what layout reads: ids, endpoints, node type (size), birth date
