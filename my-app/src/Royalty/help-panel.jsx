@@ -12,8 +12,13 @@ function HelpPanel({ open, onOpen, onClose, fabPosition = { bottom: 20, left: 20
             fabTitle="How to use this chart"
         >
             <p style={{ marginTop: 8, color: "var(--color-text-muted)" }}>
-                Explore royal genealogies reconstructed from Wikidata. Each node is a person; edges
-                are parent–child links. Pan by dragging the background and scroll or pinch to zoom.
+                The chart opens on England. Circles are people, reconstructed from Wikidata.
+                A small dot is a marriage: the lines into it are the spouses, and the line out
+                of it is their child. When only one parent is on the chart, the line runs
+                straight from that parent to the child. A sibling line is drawn only when two
+                people do not already share a parent on the chart. Gold arrows, while Show
+                succession is on, trace the crown from ruler to ruler. They are not blood
+                relationships. Pan by dragging the background and scroll or pinch to zoom.
                 The zoom buttons, or the keys + − and F, zoom in, zoom out and fit. The fit keeps
                 monarch names readable. The chip at the top names the trees on screen.
             </p>
@@ -42,7 +47,7 @@ function HelpPanel({ open, onOpen, onClose, fabPosition = { bottom: 20, left: 20
 
             <h3 style={sectionTitle}>Search &amp; stepping through people (top-right panel)</h3>
             <ul style={list}>
-                <li style={li}><strong>Search</strong> — type a name; pick a result to zoom to that person.</li>
+                <li style={li}><strong>Search</strong> — type a name. Each result shows birth and death years. Monarchs only limits the list to rulers. Clear empties the box. If nothing matches, the list says No results. Pick a result to zoom to that person.</li>
                 <li style={li}><strong>Shared members</strong> — step through the people that connect the selected monarchies, zooming to each.</li>
                 <li style={li}><strong>Succession</strong> — step through rulers in order; with several monarchies selected each gets its own stepper.</li>
             </ul>
