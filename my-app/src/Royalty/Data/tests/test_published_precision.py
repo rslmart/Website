@@ -52,7 +52,34 @@ CHARLES_CLOSED = [
      "label": "Prince of Wales", "start time": "+1958-07-26T00:00:00Z", "to": ["Q36812"]},
     {"end cause": "accession of Charles III", "end time": "+2022-09-08T00:00:00Z",
      "id": "Q113879628", "label": "Heir Apparent of the United Kingdom",
-     "start time": "+1952-00-00T00:00:00Z"},
+     "start time": "+1952-01-01T00:00:00Z"},
+]
+# Offices the typed positions query added. They have no from/to; the offices
+# above keep theirs. An open reign is a start with no end.
+CHARLES_ADDED = [
+    {"id": "Q116046099", "start time": "+1977-01-01T00:00:00Z"},
+    {"id": "Q1346992", "start time": "+2022-09-08T00:00:00Z"},
+    {"id": "Q14931511", "start time": "+2022-09-08T00:00:00Z"},
+    {"id": "Q14931512", "start time": "+2022-09-08T00:00:00Z"},
+    {"id": "Q14931517", "start time": "+2022-09-08T00:00:00Z"},
+    {"id": "Q16153574", "start time": "+2022-09-08T00:00:00Z"},
+    {"end time": "+1983-01-01T00:00:00Z", "id": "Q23902459",
+     "start time": "+1982-01-01T00:00:00Z"},
+    {"id": "Q26869636", "start time": "+2022-09-08T00:00:00Z"},
+    {"id": "Q26869642", "start time": "+2022-09-08T00:00:00Z"},
+    {"id": "Q26869646", "start time": "+2022-09-08T00:00:00Z"},
+    {"id": "Q26869648", "start time": "+2022-09-08T00:00:00Z"},
+    {"id": "Q26869650", "start time": "+2022-09-08T00:00:00Z"},
+    {"id": "Q26869653", "start time": "+2022-09-08T00:00:00Z"},
+    {"id": "Q280751", "start time": "+2022-09-08T00:00:00Z"},
+    {"id": "Q28841847"},
+    {"id": "Q3052674", "start time": "+2022-09-08T00:00:00Z"},
+    {"id": "Q34517433", "start time": "+2022-09-08T00:00:00Z"},
+    {"id": "Q34517722", "start time": "+2022-09-08T00:00:00Z"},
+    {"id": "Q34517851", "start time": "+2022-09-08T00:00:00Z"},
+    {"id": "Q34518009", "start time": "+2022-09-08T00:00:00Z"},
+    {"id": "Q34518124", "start time": "+2022-09-08T00:00:00Z"},
+    {"id": "Q460057", "start time": "+2022-09-08T00:00:00Z"},
 ]
 CARL_CLOSED = [
     {"end time": "+1973-09-15T00:00:00Z", "from": ["Q52878"], "id": "Q207293",
@@ -113,8 +140,10 @@ def test_published_precision_rows_match_wikidata():
     assert charles[0]["image"] == ["King Charles III (July 2023).jpg"]
     uk = {"id": "Q9134365", "start time": "+2022-09-08T00:00:00Z",
           "label": "monarch of the United Kingdom"}
-    assert charles[0]["position held"] == CHARLES_CLOSED + [uk]
+    assert charles[0]["position held"] == CHARLES_CLOSED + [uk] + CHARLES_ADDED
     assert "end time" not in uk
+    wales = next(office for office in charles[0]["position held"] if office["id"] == "Q180729")
+    assert wales["from"] == ["Q590227"] and wales["to"] == ["Q36812"]
 
     carl = [person for sections in copies["Q45068"].values() for person in sections.values()]
     _same(carl)

@@ -24,10 +24,11 @@ ALLOWLIST = {
         "reason": "Wikidata lists the same item as father and mother. Fix on "
                   "Wikidata; -wdqs-fetch should flag rather than copy these.",
         "subjects": {
-            "Q1230482",    # both Q1528
+            "Q1043073",    # typed refresh 2026-11-19: one best-rank parent on both
+            "Q1044463",    # typed refresh 2026-11-19: one best-rank parent on both
             "Q24883338",   # both Q24239614
             "Q3495067",    # both Q103560123 (seen again in the 2026-11-17 rebuild)
-            "Q96238919",   # both Q96238920
+            # Q1230482 and Q96238919 no longer have the same item on both sides
         },
     },
     # --- Pipeline bugs (fixed later in the chain) ----------------------------
@@ -77,16 +78,17 @@ ALLOWLIST = {
     },
     "born-after-death": {
         "bulk": True,
-        "reason": "Payload dates carry no precision, so a century- or "
-                  "decade-precision birth (e.g. +1000-01-01) can sort after an "
-                  "exact death. Some are real Wikidata errors. -wdqs-fetch "
-                  "adds {time, precision}; re-baseline then.",
+        "reason": "Birth is after death at the stored precision. The 2026-11-19 "
+                  "typed refresh stores {time, precision} and compares at that "
+                  "precision, which dropped the century and decade false "
+                  "positives. What remains conflicts in Wikidata.",
     },
     "parent-not-older": {
         "bulk": True,
-        "reason": "Parent's birth is not before the child's, mostly for the "
-                  "same precision reason as born-after-death (231 are the same "
-                  "year). Re-baseline after -wdqs-fetch.",
+        "reason": "The parent's birth is not before the child's at the stored "
+                  "precision. Re-baselined on 2026-11-19 with the typed dates. "
+                  "What remains conflicts in Wikidata, including a parent and "
+                  "child born in the same year.",
     },
 }
 
