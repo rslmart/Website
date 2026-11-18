@@ -150,33 +150,80 @@ const DEFAULT_VISIBILITY = {
     velocity: false,
 };
 
-// Convert each sampled velocity point into an arrow (shaft + two barbs) drawn
-// as short great-ish line segments. Azimuth is degrees clockwise from north;
-// length scales with speed (mm/yr). Cosmetic, so a simple planar offset is fine.
-const buildVelocityArrows = (points) => {
-    const SCALE = 0.05; // degrees of latitude per mm/yr
-    const BARB_FRAC = 0.3;
-    const BARB_ANGLE = (25 * Math.PI) / 180;
+// Screen size, so an arrow stays readable at the default zoom and when zoomed
+// in. Slower than the floor and faster than the cap share those lengths.
+export const VELOCITY_ARROW_MIN_PX = 16;
+export const VELOCITY_ARROW_MAX_PX = 48;
+export const VELOCITY_ARROW_OFFSET_PX = 12;
+// 0.8 px per mm/yr: a 30 mm/yr arrow is 24 px and anything past 60 mm/yr caps.
+const VELOCITY_ARROW_PX_PER_MM_YR = 0.8;
+const VELOCITY_BARB_FRAC = 0.3;
+const VELOCITY_BARB_ANGLE = (25 * Math.PI) / 180;
+
+export function velocityArrowLengthPx(speed) {
+    const px = Math.abs(Number(speed) || 0) * VELOCITY_ARROW_PX_PER_MM_YR;
+    return Math.min(VELOCITY_ARROW_MAX_PX, Math.max(VELOCITY_ARROW_MIN_PX, px));
+}
+
+export function mercatorLatitudeDegreesPerPixel(zoom) {
+    return 360 / (MERCATOR_TILE_SIZE * 2 ** zoom);
+}
+
+// "Pacific relative to Australia": the left plate of plateBound, then the right.
+export function velocityReference(plateBound, plates) {
+    const parts = String(plateBound ?? '').split(/[-\\/]/);
+    // A plain object: this module imports Map from react-map-gl.
+    const names = {};
+    for (const feature of plates?.features ?? []) {
+        const code = feature?.properties?.Code;
+        const name = feature?.properties?.PlateName;
+        if (code && name) names[code] = name;
+    }
+    const label = (code) => names[code] || code;
+    if (parts.length < 2 || parts[0] === '' || parts[1] === '') return String(plateBound ?? '');
+    return `${label(parts[0])} relative to ${label(parts[1])}`;
+}
+
+// Shaft plus two barbs. The whole arrow is shifted to the left of the step
+// (left of stepAzimuth, looking from the step start toward its end), which is
+// the left plate's side. Length is in pixels at `zoom`.
+export function buildVelocityArrows(points, zoom = DESKTOP_ZOOM, plates) {
+    const z = Number.isFinite(zoom) ? zoom : DESKTOP_ZOOM;
+    const degPerPxLat = mercatorLatitudeDegreesPerPixel(z);
     const segments = [];
-    points.forEach((p) => {
-        const lenDeg = p.speed * SCALE;
-        const az = (p.azimuthDeg * Math.PI) / 180;
+    for (const p of points ?? []) {
         const cosLat = Math.max(Math.cos((p.lat * Math.PI) / 180), 0.2);
-        const dLat = Math.cos(az) * lenDeg;
-        const dLon = (Math.sin(az) * lenDeg) / cosLat;
-        const from = [p.lon, p.lat];
-        const tip = [p.lon + dLon, p.lat + dLat];
-        segments.push({from, to: tip});
-        // Barbs point back from the tip at +/- BARB_ANGLE off the reverse heading.
-        const barbLen = lenDeg * BARB_FRAC;
-        [az + Math.PI - BARB_ANGLE, az + Math.PI + BARB_ANGLE].forEach((bAz) => {
-            const bLat = Math.cos(bAz) * barbLen;
-            const bLon = (Math.sin(bAz) * barbLen) / cosLat;
-            segments.push({from: tip, to: [tip[0] + bLon, tip[1] + bLat]});
-        });
-    });
+        let lon = p.lon;
+        let lat = p.lat;
+        if (Number.isFinite(p.stepAzimuth)) {
+            const left = ((p.stepAzimuth - 90) * Math.PI) / 180;
+            const offDeg = VELOCITY_ARROW_OFFSET_PX * degPerPxLat;
+            lat += Math.cos(left) * offDeg;
+            lon += (Math.sin(left) * offDeg) / cosLat;
+        }
+        const lenDeg = velocityArrowLengthPx(p.speed) * degPerPxLat;
+        const az = (p.azimuthDeg * Math.PI) / 180;
+        const from = [lon, lat];
+        const tip = [lon + (Math.sin(az) * lenDeg) / cosLat, lat + Math.cos(az) * lenDeg];
+        const meta = {
+            plateBound: p.plateBound,
+            reference: velocityReference(p.plateBound, plates),
+            speed: p.speed,
+            divergence: p.divergence,
+            rightLateral: p.rightLateral,
+        };
+        segments.push({from, to: tip, ...meta});
+        const barbLen = lenDeg * VELOCITY_BARB_FRAC;
+        for (const bAz of [az + Math.PI - VELOCITY_BARB_ANGLE, az + Math.PI + VELOCITY_BARB_ANGLE]) {
+            segments.push({
+                from: tip,
+                to: [tip[0] + (Math.sin(bAz) * barbLen) / cosLat, tip[1] + Math.cos(bAz) * barbLen],
+                ...meta,
+            });
+        }
+    }
     return segments;
-};
+}
 
 function tooltipModel(info) {
     const object = info?.object;
@@ -192,6 +239,13 @@ function tooltipModel(info) {
     if (layer.id === 'plates') {
         const p = object.properties;
         return {title: p.PlateName, lines: [p.Code]};
+    }
+    if (layer.id === 'velocity') {
+        const speed = object.speed;
+        return {
+            title: object.reference || object.plateBound,
+            lines: Number.isFinite(speed) ? [`Relative velocity: ${speed} mm/yr`] : [],
+        };
     }
     return null;
 }
@@ -293,8 +347,8 @@ function Tectonics() {
     }, [visibleBoundaries, theme]);
 
     const velocityArrows = useMemo(
-        () => (data ? buildVelocityArrows(data.velocity) : []),
-        [data]
+        () => (data ? buildVelocityArrows(data.velocity, viewState.zoom, data.plates) : []),
+        [data, viewState.zoom],
     );
 
     const layers = useMemo(() => {
@@ -354,7 +408,7 @@ function Tectonics() {
                     getWidth: 1.2,
                     widthUnits: 'pixels',
                     wrapLongitude: true,
-                    pickable: false,
+                    pickable: true,
                 })
             );
         }
