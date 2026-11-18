@@ -35,7 +35,7 @@ function HelpPanel({ open, onOpen, onClose, fabPosition = { bottom: 20, left: 20
             <h3 style={sectionTitle}>Succession &amp; connections</h3>
             <ul style={list}>
                 <li style={li}><strong>Show succession</strong> — overlays gold arrows tracing how the crown passed from ruler to ruler (independent of bloodline). The arrows stay on until this box is cleared, and hiding them does not move the tree.</li>
-                <li style={li}><strong>Reigns</strong> — the strip above the tree has one lane per selected monarchy. Click a bar to zoom to that ruler. It starts open on a wide screen and closed on a narrow one; the button opens and closes it.</li>
+                <li style={li}><strong>Reigns</strong> — the strip above the tree has one lane per selected monarchy. A bar’s colour is that ruler’s dynasty, and the outline separates neighbouring reigns. A dashed mark is a ruler whose reign years are not in the data. Click a bar to zoom to that ruler. It starts open on a wide screen and closed on a narrow one; the button opens and closes it.</li>
                 <li style={li}><strong>Connections</strong> (when 2+ are selected) — <em>Look back</em> sets how many generations to search for shared ancestors; <em>Include siblings</em> adds lateral links. More of either finds more connections but adds more nodes.</li>
                 <li style={li}><strong>Ranks to show</strong> (houses) — houses have hundreds of members, so only monarchs and nobles at the chosen ranks (default Duke and above) are drawn; the ancestors needed to connect them are added automatically.</li>
             </ul>

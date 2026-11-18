@@ -12,6 +12,7 @@ import SearchPanel from './SearchPanel';
 import SuccessionRail from './SuccessionRail';
 import {
   buildReignLanes,
+  dynastyColor,
   formatReignYear,
   laneCoverage,
   railCollapsedForWidth,
@@ -91,6 +92,51 @@ describe('reign lanes', () => {
     expect(open.openEnded).toBe(true);
     expect(open.end).toBeNull();
     expect(lane.bars.find((bar) => bar.id === 'Q2').missing).toBe(false);
+  });
+
+  it('spaces the undated Frankish kings between Clovis I and Theuderic III', () => {
+    const france = loadMonarchy('France');
+    const [lane] = buildReignLanes([france], ['France']);
+    const clovis = lane.bars.find((bar) => bar.label === 'Clovis I');
+    const theuderic = lane.bars.find((bar) => bar.label === 'Theuderic III');
+    const between = lane.bars.filter((bar) => bar.order > clovis.order && bar.order < theuderic.order && bar.missing);
+    expect(between.length).toBeGreaterThan(8);
+    const years = between.map((bar) => bar.markerYear);
+    expect(new Set(years).size).toBe(years.length);
+    expect(Math.min(...years)).toBeGreaterThan(clovis.end);
+    expect(Math.max(...years)).toBeLessThan(theuderic.start);
+    const clovisBar = lane.bars.find((bar) => bar.label === 'Clovis I');
+    const pepin = lane.bars.find((bar) => bar.label === 'Pepin the Short');
+    expect(clovisBar.family).toBe('Merovingian dynasty');
+    expect(dynastyColor(clovisBar.family, '#000')).not.toBe(dynastyColor(pepin.family, '#000'));
+  });
+
+  it('draws a dated office the neighbour score drops when the title is on the allow-list', () => {
+    const laneFor = (name) => buildReignLanes([loadMonarchy(name)], [name])[0];
+    const segment = (lane, label, start) => lane.monarchs.find((monarch) => monarch.label === label)
+      .segments.find((part) => part.start === start);
+
+    expect(segment(laneFor('Bavaria'), 'Eberhard, Duke of Bavaria', 937)).toMatchObject({ end: 938 });
+    expect(segment(laneFor('Austria'), 'Ottokar II of Bohemia', 1253)).toMatchObject({ end: 1278 });
+    expect(segment(laneFor('Poland'), 'Bolesław II the Generous', 1076)).toMatchObject({ end: 1079 });
+    expect(segment(laneFor('Germany'), 'Otto II', 973)).toMatchObject({ end: 983 });
+    expect(segment(laneFor('Holy_Roman_Empire'), 'Charles the Bald', 875)).toMatchObject({ end: 877 });
+
+    // Rudolf's 1306 bar is his King of Bohemia office. King of Poland is the same years and is not an Austria title.
+    expect(segment(laneFor('Austria'), 'Rudolf I of Bohemia', 1306)).toMatchObject({ end: 1307 });
+    const [excluded] = buildReignLanes([{
+      monarchList: ['Q1'],
+      nodes: {
+        Q1: {
+          label: 'Only the excluded titles',
+          'position held': [
+            { label: 'King of Poland', 'start time': '+1306-01-01T00:00:00Z', 'end time': '+1307-01-01T00:00:00Z' },
+            { label: 'Holy Roman Emperor', 'start time': '+1452-01-01T00:00:00Z', 'end time': '+1493-01-01T00:00:00Z' },
+          ],
+        },
+      },
+    }], ['Austria']);
+    expect(excluded.monarchs[0].segments).toEqual([]);
   });
 
   it('puts James VI and I on the shared 1603 x in both lanes', () => {

@@ -66,19 +66,42 @@ function mergeTouching(parts) {
   return merged;
 }
 
-export function reignSegments(person, index, monarchs) {
+// Titles the neighbour score drops even though the office is already dated.
+// Matching is the trimmed label, case-insensitive, and only on that monarchy.
+// A label is not kept just because someone else with that title scores 6.
+const KEPT_TITLES = {
+  bavaria: ['duke of bavaria'],
+  austria: ['king of bohemia', 'king of the romans'],
+  poland: ['king of poland'],
+  germany: ['holy roman emperor', 'king of the romans'],
+  'holy roman empire': ['holy roman emperor', 'king of the romans'],
+};
+
+function monarchyKey(name) {
+  return String(name || '').replace(/_/g, ' ').trim().toLowerCase();
+}
+
+function keptTitle(monarchy, label) {
+  const titles = KEPT_TITLES[monarchyKey(monarchy)];
+  if (!titles) return false;
+  return titles.includes(String(label || '').trim().toLowerCase());
+}
+
+export function reignSegments(person, index, monarchs, monarchy) {
   const positions = Array.isArray(person?.['position held']) ? person['position held'] : [];
   const candidates = [];
   positions.forEach((position) => {
     const start = extractYear(position?.['start time']);
     if (start == null) return;
+    const label = position?.label || '';
     const end = extractYear(position?.['end time']);
     candidates.push({
       start,
       end,
+      label,
       openEnded: end == null,
       score: scorePosition(position, index, monarchs),
-      crown: CROWN_OFFICE.test(String(position?.label || '')),
+      crown: CROWN_OFFICE.test(String(label)),
     });
   });
   const strong = candidates.filter((part) => part.score >= STRONG_SCORE);
@@ -90,19 +113,52 @@ export function reignSegments(person, index, monarchs) {
     ));
     if (continues) kept.push(part);
   });
+  candidates.forEach((part) => {
+    if (!keptTitle(monarchy, part.label)) return;
+    if (kept.some((bar) => overlaps(part, bar))) return;
+    kept.push(part);
+  });
   return mergeTouching(kept);
 }
 
-function markerYear(monarchs, index) {
-  for (let i = index - 1; i >= 0; i -= 1) {
-    const ends = monarchs[i].segments.map((part) => part.end).filter((year) => year != null);
-    if (ends.length) return Math.max(...ends);
+const DYNASTY_COLORS = [
+  '#166534', '#1D4ED8', '#B45309', '#7C3AED', '#BE123C', '#0F766E', '#A16207', '#4338CA',
+];
+
+export function dynastyColor(family, fallback) {
+  const name = typeof family === 'string' ? family.trim() : '';
+  if (!name) return fallback;
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) hash = (hash + name.charCodeAt(i) * (i + 3)) >>> 0;
+  return DYNASTY_COLORS[hash % DYNASTY_COLORS.length];
+}
+
+// Undated monarchs have no reign to draw. A run of them is spaced between the
+// neighbouring dated reigns so the empty years read as missing dates, not as
+// a claim that nobody ruled.
+function placeUndated(bars) {
+  let index = 0;
+  while (index < bars.length) {
+    if (!bars[index].missing) {
+      index += 1;
+      continue;
+    }
+    let end = index;
+    while (end < bars.length && bars[end].missing) end += 1;
+    const run = bars.slice(index, end);
+    const previous = bars.slice(0, index).reverse().find((bar) => !bar.missing && (bar.end != null || bar.start != null));
+    const next = bars.slice(end).find((bar) => !bar.missing && bar.start != null);
+    const from = previous ? (previous.end ?? previous.start) : (next ? next.start : null);
+    const to = next ? next.start : from;
+    if (from != null) {
+      const span = to == null ? 0 : to - from;
+      run.forEach((bar, offset) => {
+        bar.markerYear = span === 0 ? from : from + ((offset + 1) / (run.length + 1)) * span;
+      });
+    }
+    index = end;
   }
-  for (let i = index + 1; i < monarchs.length; i += 1) {
-    const starts = monarchs[i].segments.map((part) => part.start).filter((year) => year != null);
-    if (starts.length) return Math.min(...starts);
-  }
-  return null;
+  return bars;
 }
 
 function assignRows(bars) {
@@ -130,8 +186,9 @@ function buildLane(name, index, payload) {
     return {
       id,
       label: person.label || id,
+      family: typeof person.family === 'string' ? person.family : '',
       order,
-      segments: reignSegments(person, order, ids),
+      segments: reignSegments(person, order, ids, name),
     };
   });
   const bars = [];
@@ -143,9 +200,10 @@ function buildLane(name, index, payload) {
         order,
         start: null,
         end: null,
+        family: monarch.family,
         openEnded: false,
         missing: true,
-        markerYear: markerYear(monarchs, order),
+        markerYear: null,
         row: 0,
       });
       return;
@@ -157,6 +215,7 @@ function buildLane(name, index, payload) {
         order,
         start: segment.start,
         end: segment.end,
+        family: monarch.family,
         openEnded: segment.openEnded,
         missing: false,
         markerYear: null,
@@ -170,7 +229,7 @@ function buildLane(name, index, payload) {
     color: monarchyColors(index).male,
     monarchs,
     bars,
-    rowCount: assignRows(bars),
+    rowCount: assignRows(placeUndated(bars) || bars),
   };
 }
 

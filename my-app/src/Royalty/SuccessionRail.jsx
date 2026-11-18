@@ -1,6 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import { formatReignYear } from './reignBars';
+import { dynastyColor, formatReignYear } from './reignBars';
 import './RoyalTreeStyle.css';
 
 function barLabel(bar) {
@@ -88,7 +88,8 @@ function SuccessionRail({
                       left: `${layout.left}%`,
                       width: bar.missing ? '8px' : `${layout.width}%`,
                       top: 2 + bar.row * 16,
-                      backgroundColor: bar.missing ? 'transparent' : lane.color,
+                      backgroundColor: bar.missing ? 'transparent' : dynastyColor(bar.family, lane.color),
+                      borderColor: bar.missing ? dynastyColor(bar.family, '#1c1c1c') : undefined,
                     }}
                     title={barLabel(bar)}
                     aria-label={barLabel(bar)}
