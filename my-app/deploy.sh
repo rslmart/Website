@@ -117,6 +117,7 @@ echo "Uploading remaining files (short cache)..."
 aws s3 sync "$BUILD_DIR" "s3://$S3_BUCKET" \
     --exclude "assets/*" \
     --exclude "index.html" \
+    --exclude "snow/snow-update.log" \
     --cache-control "public, max-age=3600" \
     "${DRY_RUN_ARG[@]}" "${AWS_ARGS[@]}" --region "$AWS_REGION"
 

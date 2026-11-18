@@ -22,8 +22,10 @@ log records the error unless the run is a dry run.
 import argparse
 import datetime
 import hashlib
+import html
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -34,6 +36,16 @@ SOURCE_URL = (
     "https://wsdot.com/Travel/Real-time/Service/api/MountainPass/SnowFallData"
 )
 USER_AGENT = "makoa-snow-updater/1.0 (+https://makoa.link/Snow)"
+WEEKLY_NINO_URL = "https://www.cpc.ncep.noaa.gov/data/indices/wksst9120.for"
+ENSO_DISCUSSION_URL = (
+    "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso_advisory/ensodisc.shtml"
+)
+_WEEK_MONTHS = {
+    name: index for index, name in enumerate(
+        ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"],
+        start=1,
+    )
+}
 DEFAULT_OBJECT_KEY = "snow/pass_snowfall_data.json"
 ACCUMULATED_TOLERANCE = 0.05
 METADATA_KEYS = ("generatedAt", "lastDate")
@@ -76,6 +88,91 @@ def current_season(today=None):
     """
     today = today or datetime.date.today()
     return today.year if today.month >= 10 else today.year - 1
+
+
+def _enso_phase(anomaly):
+    if anomaly >= 0.5:
+        return "El Nino"
+    if anomaly <= -0.5:
+        return "La Nina"
+    return "Neutral"
+
+
+def parse_weekly_nino34(text):
+    """Last week in the CPC table: (date, Niño 3.4 SSTA).
+
+    A negative anomaly is glued to the SST (``25.7-0.9``). Niño 3.4 is the
+    third pair.
+    """
+    last = None
+    for line in text.splitlines():
+        line = line.strip()
+        if len(line) < 9 or not line[:2].isdigit():
+            continue
+        numbers = re.findall(r"-?\d+\.\d", line[9:])
+        if len(numbers) < 6:
+            continue
+        last = (line[:9], float(numbers[5]))
+    if last is None:
+        raise SnowError("weekly Niño table has no Niño 3.4 row")
+    return last
+
+
+def _week_date(token):
+    try:
+        return datetime.date(int(token[5:9]), _WEEK_MONTHS[token[2:5]], int(token[:2]))
+    except (KeyError, ValueError) as err:
+        raise SnowError(f"unreadable Niño week {token}") from err
+
+
+def parse_enso_discussion(page):
+    """Official alert status, issue date, and the synopsis sentence."""
+    text = html.unescape(re.sub(r"<[^>]+>", " ", page))
+    text = re.sub(r"\s+", " ", text)
+    match = re.search(
+        r"(\d{1,2} \w+ \d{4})\s+ENSO Alert System Status:\s*(.+?)\s+Synopsis:\s*(.+?\.)",
+        text,
+    )
+    if not match:
+        raise SnowError("ENSO discussion has no alert status")
+    issued = datetime.datetime.strptime(match.group(1), "%d %B %Y").date()
+    return {
+        "issued": issued.isoformat(),
+        "status": match.group(2).strip(),
+        "summary": match.group(3).strip(),
+    }
+
+
+def current_enso(weekly_text, discussion_html):
+    token, anomaly = parse_weekly_nino34(weekly_text)
+    week = _week_date(token)
+    status = parse_enso_discussion(discussion_html)
+    return {
+        "season": str(current_season(week)),
+        "phase": _enso_phase(anomaly),
+        "status": status["status"],
+        "anomaly": anomaly,
+        "week": week.isoformat(),
+        "issued": status["issued"],
+        "summary": status["summary"],
+        "source": "NOAA CPC weekly Niño 3.4 and ENSO Diagnostic Discussion",
+    }
+
+
+def _read_url(url):
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return response.read().decode("utf-8", errors="replace")
+    except urllib.error.URLError as err:
+        raise SnowError(f"could not read {url}: {err}") from err
+
+
+def refresh_enso(directory):
+    """Write enso.json beside the snowfall file. A failure does not wipe it."""
+    payload = current_enso(_read_url(WEEKLY_NINO_URL), _read_url(ENSO_DISCUSSION_URL))
+    write_text(Path(directory) / "enso.json", json.dumps(payload, indent=2) + "\n")
+    return payload
 
 
 def now():
@@ -566,6 +663,15 @@ def main(argv=None):
             _write_outputs(args, document, meta)
         else:
             _write_missing_meta(args, document)
+        if args.output:
+            try:
+                enso = refresh_enso(args.output.parent)
+                log.append(
+                    f"enso {enso['season']} {enso['status']} {enso['anomaly']} week {enso['week']}"
+                )
+            except Exception as err:
+                # The snowfall file is already written. A NOAA miss stays in the log.
+                log.append(f"enso not updated: {err}")
         write_text(_log_path(args), "\n".join(log) + "\n")
     except SnowError as err:
         message = str(err)

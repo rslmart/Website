@@ -14,6 +14,8 @@ import {
     isSeasonComplete,
     months,
     pickExtremeSeasons,
+    latestOniSeason,
+    previousSeasonWithData,
     resolveSeason,
 } from './snowStats.js';
 
@@ -36,6 +38,19 @@ const fullSeason = (perDay, febDays = 28) => [
     month('Feb', febDays, perDay, perDay * 92),
     month('Mar', 31, perDay, perDay * (92 + febDays)),
 ];
+
+test('previousSeasonWithData is the prior year only when it has readings', () => {
+    const pass = { '2024': fullSeason(1), '2025': [], '2026': fullSeason(2) };
+    assert.equal(previousSeasonWithData(pass, '2026'), null);
+    assert.equal(previousSeasonWithData(pass, '2025'), '2024');
+    assert.equal(previousSeasonWithData(pass, 'nope'), null);
+});
+
+test('latestOniSeason skips a snowfall year that has no anomaly yet', () => {
+    const oni = { '2024': -0.46, '2025': -0.39 };
+    assert.equal(latestOniSeason(oni, ['2024', '2025', '2026']), '2025');
+    assert.equal(latestOniSeason(oni, ['2026']), null);
+});
 
 test('resolveSeason falls back to the newest season with data', () => {
     const stevens = { 2004: fullSeason(1), 2025: fullSeason(1), 2026: [] };
@@ -95,14 +110,18 @@ test('averages omit Feb 29 and days with fewer than 3 seasons', () => {
 
 test('real data: every pass/season switch works and averages have no spikes', () => {
     const data = JSON.parse(readFileSync(new URL('../../public/snow/pass_snowfall_data.json', import.meta.url)));
-    const allSeasons = new Set(Object.values(data).flatMap(Object.keys));
-    for (const pass of Object.keys(data)) {
-        const [chartData, peaks] = convertData(pass, data);
-        const { highestSeason, lowestSeason } = pickExtremeSeasons(data[pass], peaks);
+    const passes = Object.fromEntries(Object.entries(data).filter(([, value]) => (
+        value && typeof value === 'object' && !Array.isArray(value)
+        && Object.values(value).every(season => Array.isArray(season))
+    )));
+    const allSeasons = new Set(Object.values(passes).flatMap(Object.keys));
+    for (const pass of Object.keys(passes)) {
+        const [chartData, peaks] = convertData(pass, passes);
+        const { highestSeason, lowestSeason } = pickExtremeSeasons(passes[pass], peaks);
         assert.ok(highestSeason && lowestSeason, pass);
         for (const requested of allSeasons) {
-            const season = resolveSeason(data[pass], requested);
-            assert.ok(season in data[pass], `${pass} ${requested}`);
+            const season = resolveSeason(passes[pass], requested);
+            assert.ok(season in passes[pass], `${pass} ${requested}`);
             buildChartRows(chartData, [season, highestSeason, lowestSeason, AVERAGE_SEASON]);
         }
         const avg = chartData[AVERAGE_SEASON];

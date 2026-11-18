@@ -242,6 +242,25 @@ export const resolveSeason = (passData, requestedSeason) =>
         ? requestedSeason
         : newestSeasonWithData(passData);
 
+// The season before the one on the chart, when this pass recorded it.
+export const previousSeasonWithData = (passData, season) => {
+    const year = Number(season);
+    if (!Number.isInteger(year)) return null;
+    const key = String(year - 1);
+    return seasonHasData((passData || {})[key]) ? key : null;
+};
+
+// Newest season in this list that has an ONI anomaly. The current snowfall
+// season can start before that winter's DJF value exists.
+export const latestOniSeason = (oniMap, seasonKeys) => {
+    const known = (seasonKeys || []).filter((season) => {
+        const anom = oniMap?.[season];
+        return anom !== undefined && anom !== null && anom !== '';
+    });
+    if (!known.length) return null;
+    return known.sort().at(-1);
+};
+
 // Merges the chosen series into one row per calendar day for Recharts.
 export const buildChartRows = (chartData, seasons) => {
     const finalData = [];

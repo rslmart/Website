@@ -800,3 +800,26 @@ def test_without_upload_does_not_call_aws(tmp_path, monkeypatch):
     _stub(monkeypatch, {(pass_id, 2026): _current_body() for _name, pass_id, _year in snow.PASSES})
     assert snow.main(_local_argv(tmp_path, source)) == 0
     assert (tmp_path / "out.json").exists()
+
+
+def test_current_enso_uses_the_latest_weekly_nino34_and_the_advisory():
+    weekly = """
+ 20JAN2021     24.6-0.4     25.7-0.2     25.9-0.7     27.1-1.1
+ 04NOV2026     27.0 5.6     29.5 4.4     30.1 3.3     30.1 1.5
+ 11NOV2026     27.1 5.4     29.4 4.3     29.9 3.2     29.9 1.3
+"""
+    glued = " 27JAN2021     24.6-0.4     25.7-0.2     25.9-0.7     27.1-1.1\n"
+    assert snow.parse_weekly_nino34(glued) == ("27JAN2021", -0.7)
+    page = (
+        "issued by CLIMATE PREDICTION CENTER/NCEP/NWS 12 November 2026 "
+        "ENSO Alert System Status: El Ni&ntilde;o Advisory "
+        "Synopsis: El Ni&ntilde;o continues to strengthen."
+    )
+    record = snow.current_enso(weekly, page)
+    assert record["season"] == "2026"
+    assert record["phase"] == "El Nino"
+    assert record["anomaly"] == 3.2
+    assert record["week"] == "2026-11-11"
+    assert record["issued"] == "2026-11-12"
+    assert record["status"] == "El Niño Advisory"
+    assert record["summary"].startswith("El Niño continues")

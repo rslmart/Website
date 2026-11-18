@@ -18,6 +18,7 @@ import {
     buildChartRows,
     convertData,
     pickExtremeSeasons,
+    previousSeasonWithData,
     resolveSeason,
     seasonHasData,
 } from './snowStats';
@@ -40,6 +41,7 @@ Done:
 // Runtime data location (deployed under public/, overwritten daily by the
 // Lambda in src/Snow/lambda). Mirrors the Royalty page's fetch pattern.
 const SNOW_DATA_URL = process.env.PUBLIC_URL + '/snow/pass_snowfall_data.json';
+const ENSO_URL = process.env.PUBLIC_URL + '/snow/enso.json';
 
 // ENSO classification from an ONI DJF anomaly (standard +/-0.5 thresholds).
 const ensoPhase = (anom) => {
@@ -63,6 +65,13 @@ const formatOni = (anom) => (anom === undefined || anom === null)
     ? '?'
     : `${anom > 0 ? '+' : ''}${anom.toFixed(2)}`;
 
+const formatWeek = (iso) => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+    if (!match) return '';
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${Number(match[3])} ${months[Number(match[2]) - 1]} ${match[1]}`;
+};
+
 // Human-readable label for a season including the ONI number, e.g.
 // "La Nina, moderate (ONI -1.31)" or "Neutral (ONI -0.37)".
 const describeEnso = (season) => {
@@ -73,11 +82,26 @@ const describeEnso = (season) => {
     return `${phase}, ${ensoStrength(anom)} (ONI ${formatOni(anom)})`;
 }
 
+// The current-status badge. This is the latest weekly Niño 3.4 and the CPC
+// alert, not a finished ONI from an earlier winter.
+const describeLiveEnso = (enso) => {
+    if (!enso || enso.anomaly == null || enso.anomaly === '') return null;
+    const anomaly = Number(enso.anomaly);
+    if (!Number.isFinite(anomaly)) return null;
+    const phase = enso.phase || ensoPhase(anomaly);
+    const number = `Niño 3.4 ${formatOni(anomaly)}`;
+    const status = enso.status || phase;
+    if (!phase || phase === 'Neutral') return `${status} (${number})`;
+    const strength = ensoStrength(anomaly);
+    return strength ? `${status}, ${strength} (${number})` : `${status} (${number})`;
+}
+
 // Series strokes, measured 2026-11-17 against the page background and the
 // low-confidence band in both themes. Each pair is at least 3:1. Average
 // keeps --chart-reference, which already clears that bar per theme.
 const SERIES_COLOR = {
     current: '#8855CC',
+    previous: '#0F766E',
     highest: '#1E8A45',
     lowest: '#C25A16',
     laNina: '#2A7CC0',
@@ -157,8 +181,10 @@ class Snow extends Component {
         this.state = {
             snowFallData: null,
             loadError: null,
+            currentEnso: null,
             passName: "Stevens_Pass_US-2",
             currentSeason: "",
+            previousSeason: "",
             highestSeason: "",
             lowestSeason: "",
             data: [],
@@ -220,6 +246,14 @@ class Snow extends Component {
 
     loadData = () => {
         this.setState({ loadError: null });
+        fetch(ENSO_URL)
+            .then(res => (res.ok ? res.json() : null))
+            .then(currentEnso => {
+                if (this.mounted && currentEnso && currentEnso.anomaly != null) {
+                    this.setState({ currentEnso });
+                }
+            })
+            .catch(() => {});
         fetch(SNOW_DATA_URL)
             .then(res => {
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -250,11 +284,13 @@ class Snow extends Component {
         // Snoqualmie 2000 -> Stevens, whose data starts in 2004) fall back to
         // the pass's newest season with data.
         const currentSeason = resolveSeason(passData, requestedSeason);
+        const previousSeason = previousSeasonWithData(passData, currentSeason);
         const { highestSeason, lowestSeason }
             = pickExtremeSeasons(passData, highestPerYear_accumulatedSnowFall);
 
         const seasons = [
             currentSeason,
+            previousSeason,
             highestSeason,
             lowestSeason,
             AVERAGE_SEASON,
@@ -265,6 +301,7 @@ class Snow extends Component {
         this.setState({
             passName: passName,
             currentSeason: currentSeason || '',
+            previousSeason: previousSeason || '',
             highestSeason: highestSeason || '',
             lowestSeason: lowestSeason || '',
             data: buildChartRows(chartData, seasons),
@@ -272,10 +309,13 @@ class Snow extends Component {
     }
 
     lineSeries() {
-        const { currentSeason, highestSeason, lowestSeason } = this.state;
+        const { currentSeason, previousSeason, highestSeason, lowestSeason } = this.state;
         const specs = [];
         if (currentSeason) {
             specs.push({ id: 'current', season: currentSeason, role: 'this season', color: SERIES_COLOR.current });
+        }
+        if (previousSeason) {
+            specs.push({ id: 'previous', season: previousSeason, role: 'last year', color: SERIES_COLOR.previous });
         }
         if (highestSeason) {
             specs.push({ id: 'highest', season: highestSeason, role: 'highest', color: SERIES_COLOR.highest });
@@ -458,13 +498,24 @@ class Snow extends Component {
         );
     }
 
+    liveSeasonText(season) {
+        const live = this.state.currentEnso;
+        if (live && String(live.season) === String(season)) {
+            const text = describeLiveEnso(live);
+            if (text) return `${seasonRange(season)} season: ${text}`;
+        }
+        const past = describeEnso(season);
+        if (past === 'Unknown') return `${seasonRange(season)} season`;
+        return `${seasonRange(season)} season: ${past}`;
+    }
+
     renderHeading() {
         return (
             <div className="snow-heading">
                 <p className="snow-kicker">WA Snowfall</p>
                 <h1 className="snow-title">{passNames[this.state.passName]}</h1>
                 <p className="snow-season-line">
-                    {seasonRange(this.state.currentSeason)} season: {describeEnso(this.state.currentSeason)}
+                    {this.liveSeasonText(this.state.currentSeason)}
                 </p>
             </div>
         );
@@ -517,15 +568,18 @@ class Snow extends Component {
             );
         }
 
-        // Current ENSO status = the most recent season's ONI classification.
-        const latestSeason = Object.keys(this.state.snowFallData[this.state.passName]).sort().pop();
-        const currentEnsoPhase = ensoPhase(oni[latestSeason]) || 'Unknown';
+        // Current status is the latest weekly Niño 3.4 and the CPC alert for
+        // this winter. It is not last winter's finished ONI.
+        const live = this.state.currentEnso;
+        const liveText = describeLiveEnso(live);
+        const latestSeason = live && live.season;
+        const currentEnsoPhase = (live && live.phase) || 'Unknown';
 
         const seasonOptions = Object.keys(this.state.snowFallData[this.state.passName])
             .filter(season => seasonHasData(this.state.snowFallData[this.state.passName][season]));
         const ensoBadge = (
             <span className="enso-badge" data-phase={currentEnsoPhase}>
-                {describeEnso(latestSeason)}
+                {liveText || 'Unavailable'}
             </span>
         );
 
@@ -561,7 +615,9 @@ class Snow extends Component {
                         <div className="snow-enso">
                             <span className="snow-enso-caption">Current ENSO status</span>
                             {ensoBadge}
-                            <span className="snow-enso-winter">{seasonRange(latestSeason)} winter</span>
+                            <span className="snow-enso-winter">
+                                {latestSeason ? `${seasonRange(latestSeason)} · week of ${formatWeek(live.week)}` : 'This winter'}
+                            </span>
                         </div>
                         <div className="snow-selects">
                             {this.renderLabeledSelect({
@@ -608,7 +664,9 @@ class Snow extends Component {
                         <div className="mobile-drawer-section">Current ENSO status</div>
                         <div className="snow-enso">
                             {ensoBadge}
-                            <span className="snow-enso-winter">{seasonRange(latestSeason)} winter</span>
+                            <span className="snow-enso-winter">
+                                {latestSeason ? `${seasonRange(latestSeason)} · week of ${formatWeek(live.week)}` : 'This winter'}
+                            </span>
                         </div>
                         {this.renderLabeledSelect({
                             id: 'snow-pass',
