@@ -11,6 +11,7 @@ import {
     Legend
 } from 'recharts';
 import { getColorFromWindSpeed } from "./Hurricane";
+import { formatKnots, formatMillibars } from "./trackSemantics";
 
 const pad = (n) => String(n).padStart(2, "0");
 
@@ -223,7 +224,7 @@ function StormInfo(props) {
                                 return Math.max(10, Math.ceil(peak * 1.1 / 10) * 10);
                             }]}
                             allowDecimals={false}
-                            label={{ value: 'Wind Speed (kts)', angle: -90 }}
+                            label={{ value: 'Wind (kt)', angle: -90 }}
                         />
 
                         {/* Pressure Axis */}
@@ -293,7 +294,7 @@ function StormInfo(props) {
                                     {payload?.map((entry, index) => (
                                         <p key={index} style={{ color: 'var(--color-text)' }}>
                                             <span aria-hidden="true" style={{ display: 'inline-block', width: 8, height: 8, marginRight: 6, borderRadius: 2, background: entry.color }} />
-                                            {entry.name}: {Math.round(entry.value)}{entry.name === 'Wind Speed' ? ' kts' : ' mb'}
+                                            {entry.name}: {Math.round(entry.value)}{entry.name === 'Wind Speed' ? ' kt' : ' mb'}
                                         </p>
                                     ))}
                                 </div>
@@ -330,7 +331,7 @@ function StormInfo(props) {
                 >{">"}</button>
             </div>
             <div>Date/Time: {pointInfo.date_time}</div>
-            <div>Wind: {pointInfo.wind == null ? "—" : pointInfo.wind} Pressure: {pointInfo.pressure}</div>
+            <div>Wind: {formatKnots(pointInfo.wind)} Pressure: {formatMillibars(pointInfo.pressure)}</div>
         </>
     );
 

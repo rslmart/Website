@@ -152,12 +152,13 @@ the next candidate on image load error.
 - Five plot modes render via deck.gl: **Storm** (tracks + points + optional wind
   polygons), **Scatter**, **Heatmap**, **Grid** (point counts per cell), and
   **Max Wind Grid** (max wind per cell).
-- Points and tracks are colored by the **Saffir–Simpson** scale (see
-  [`help-panel.jsx`](help-panel.jsx)). A point with `wind: null` is gray and
+- Points and tracks are colored by the **Saffir–Simpson** scale. The same
+  bins are drawn on the map (`category-legend.jsx`) and in
+  [`help-panel.jsx`](help-panel.jsx). A point with `wind: null` is gray and
   is not on that scale. It also fails the wind-range filter, so it stays out
   of Scatter, Heatmap, Grid, and Max Wind Grid.
-- Filters cover basin, year, month, wind/pressure range, status, landfall, and
-  6-hourly sampling. Storm view has a **Show spur tracks** toggle, off by
+- Filters cover basin, year, month, wind/pressure range, and status.
+  Scatter mode can keep only the 6-hour fixes. Storm view has a **Show spur tracks** toggle, off by
   default.
 - Selecting a point opens a wind/pressure chart plus the IR frame described above.
 
