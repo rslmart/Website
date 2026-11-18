@@ -17,6 +17,11 @@ const SOURCES = [
         href: "https://rammb-data.cira.colostate.edu/tc_realtime/",
     },
     {
+        label: "Infrared map frames (GridSat-B1)",
+        name: "Knapp and coauthors, 2011, doi:10.1175/2011BAMS3039.1; dataset doi:10.7289/V59P2ZKR",
+        href: "https://doi.org/10.7289/V59P2ZKR",
+    },
+    {
         label: "Basemap",
         name: "Mapbox / OpenStreetMap",
         href: "https://www.mapbox.com/about/maps/",

@@ -16,6 +16,7 @@ basemap.
 | Storm tracks | **NOAA IBTrACS v04r01** (International Best Track Archive for Climate Stewardship) | positions, wind, pressure, wind-radii for every track point |
 | Historical IR (1978–2015) | **NOAA NCEI HURSAT-B1 v06** | pre-rendered infrared frames |
 | Recent IR (2016+) | **RAMMB / CIRA TC Real-Time** | infrared frames pulled live |
+| Map frames (Sandy, Matthew) | **NOAA GridSat-B1** — Knapp and coauthors, 2011, doi:10.1175/2011BAMS3039.1; dataset doi:10.7289/V59P2ZKR | one georeferenced frame under the track |
 
 Attribution links shown in the UI live in [`sources-panel.jsx`](sources-panel.jsx).
 IBTrACS is the sole track source.
@@ -142,6 +143,39 @@ from `atcf_id` (e.g. `AL052019` → `2019al05`) and builds URLs under
 
 In both cases the component tries a series of nearby timestamps and falls back to
 the next candidate on image load error.
+
+### GridSat-B1 map frames (`data/buildGridsatWindow.py`)
+
+Two storms also draw one infrared frame on the map, under the track, while
+that storm is selected. Stepping to another track point does not change the
+image. No other storm has a frame. The panel GIF is unchanged.
+
+The frames are GridSat-B1 `irwin_cdr` (Knapp and coauthors, 2011,
+*Bulletin of the American Meteorological Society*,
+doi:10.1175/2011BAMS3039.1; dataset doi:10.7289/V59P2ZKR):
+
+- Hurricane Sandy `2012296N14283`, track time 2012-10-30 09:00:00, file
+  `GRIDSAT-B1.2012.10.30.09.v02r01.nc`.
+- Hurricane Matthew `2016273N13300`, track time 2016-10-03 00:00:00, file
+  `GRIDSAT-B1.2016.10.03.00.v02r01.nc`.
+
+Each crop is 301 by 301 cells of the file's 0.07° grid, about 1,100 km from
+the center. The window is resampled onto EPSG:3857 and colored like the
+HURSAT JPEGs (190–300 K, `turbo_r`). `public/hurricane/gridsat/frames.json`
+stores the SID, the track time, the GridSat file time, and the resampled
+geographic bounds. The map's `BitmapLayer` uses those bounds unchanged.
+
+1978–1979 and times after the latest public file are outside this slice.
+On the 2026-11-18 check the latest public file was
+`GRIDSAT-B1.2026.10.31.21.v02r01.nc`.
+
+```bash
+cd src/Hurricane/data
+uv run --with netCDF4 --with numpy --with pillow --with matplotlib \
+    python buildGridsatWindow.py
+```
+
+The global NetCDF is not kept. This does not upload to S3.
 
 ## How the frontend uses it
 

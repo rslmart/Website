@@ -1,7 +1,7 @@
 import React, {Component} from 'react';
 import DeckGL from '@deck.gl/react';
 import {GridLayer, HeatmapLayer} from '@deck.gl/aggregation-layers';
-import {LineLayer, PolygonLayer, ScatterplotLayer} from '@deck.gl/layers';
+import {BitmapLayer, LineLayer, PolygonLayer, ScatterplotLayer} from '@deck.gl/layers';
 import {WebMercatorViewport} from '@deck.gl/core';
 import {AttributionControl, Map} from 'react-map-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -103,6 +103,7 @@ export const BASINS = {
 // Fetched and gunzipped at runtime so the ~185MB dataset never enters the JS bundle.
 const STORMS_URL = process.env.PUBLIC_URL + "/hurricane/storms.json.gz";
 const META_URL = process.env.PUBLIC_URL + "/hurricane/meta.json";
+const GRIDSAT_URL = process.env.PUBLIC_URL + "/hurricane/gridsat/frames.json";
 
 const loadStorms = async () => {
     const response = await fetch(STORMS_URL);
@@ -131,6 +132,18 @@ const loadMeta = async () => {
         throw new Error(`Failed to load storm metadata (${response.status})`);
     }
     return response.json();
+};
+
+// Sandy and Matthew only. A missing file leaves the map without an overlay.
+const loadGridsatFrames = async () => {
+    try {
+        const response = await fetch(GRIDSAT_URL);
+        if (!response.ok) return [];
+        const body = await response.json();
+        return Array.isArray(body.frames) ? body.frames : [];
+    } catch (e) {
+        return [];
+    }
 };
 
 const SYSTEM_STATUSES = {
@@ -285,13 +298,30 @@ const getGridLayerMaxWind = (track_points, settings) => new GridLayer({
     ...settings
 });
 
-const getStormLayers = (storms, setHoverInfo, onChange, showMaxWindPoly, showWindPoly, stormInfo, selectedPoint, scatterplotSettings, lineSettings) => {
+// One frame per storm. The image does not change when the selected point does.
+// bounds are the resampled geographic edges from frames.json, unmodified.
+const getGridsatLayer = (stormInfo, frames) => {
+    if (!stormInfo || !frames) return null;
+    const frame = frames.find(item => item.sid === stormInfo.id);
+    if (!frame) return null;
+    return new BitmapLayer({
+        id: "gridsat-frame",
+        image: process.env.PUBLIC_URL + "/hurricane/gridsat/" + frame.image,
+        bounds: frame.bounds,
+        pickable: false,
+    });
+};
+
+const getStormLayers = (storms, setHoverInfo, onChange, showMaxWindPoly, showWindPoly, stormInfo, selectedPoint, scatterplotSettings, lineSettings, gridsatFrames) => {
     const track_points = Object.values(storms).flatMap(storm => storm["track_points"]);
     const selectedPointActual = stormInfo ? stormInfo.track_points[selectedPoint] : null;
-    const layers = [
+    const layers = [];
+    const gridsat = getGridsatLayer(stormInfo, gridsatFrames);
+    if (gridsat) layers.push(gridsat);
+    layers.push(
         getScatterplotLayer(track_points, setHoverInfo, onChange, selectedPointActual, scatterplotSettings),
         getStormLineLayer(storms, lineSettings)
-    ];
+    );
     if (showMaxWindPoly) {
         layers.push(
             getMaxWindAreaLayer(track_points.filter(track_point => track_point.max_wind_poly))
@@ -395,6 +425,7 @@ class Hurricane extends Component {
         showWindPoly: false,
         only6Hour: false,
         hoverInfo: {},
+        gridsatFrames: [],
         stormInfo: null,
         stormSheetCollapsed: false,
         selectedPoint: 0,
@@ -567,7 +598,7 @@ class Hurricane extends Component {
         let layers;
         if (view.plotType === PLOT_TYPES.STORM) {
             layers = getStormLayers(data, hoverInfo => this.setState({hoverInfo}), this.onChange,
-                view.showMaxWindPoly, view.showWindPoly, view.stormInfo, view.selectedPoint, view.scatterplotSettings, view.lineSettings);
+                view.showMaxWindPoly, view.showWindPoly, view.stormInfo, view.selectedPoint, view.scatterplotSettings, view.lineSettings, view.gridsatFrames);
         } else if (view.plotType === PLOT_TYPES.HEATMAP) {
             layers = getHeatmapLayer(data, view.heatmapSettings);
         } else if (view.plotType === PLOT_TYPES.GRID) {
@@ -652,7 +683,9 @@ class Hurricane extends Component {
         window.addEventListener('keydown', this.handleKeyDown);
         this.updateDimensions();
         try {
-            const [storms, meta] = await Promise.all([loadStorms(), loadMeta()]);
+            const [storms, meta, gridsatFrames] = await Promise.all([
+                loadStorms(), loadMeta(), loadGridsatFrames()
+            ]);
             // Default and maximum season come from the storm file. Run the
             // initial filter only after that state is committed.
             this.setState({
@@ -664,6 +697,7 @@ class Hurricane extends Component {
                 seasonMin: meta.minSeason,
                 seasonMax: meta.maxSeason,
                 dataThrough: meta.dataThrough,
+                gridsatFrames,
                 loading: false,
             }, () => {
                 this.onChange({target: {name: PLOT_TYPES.STORM}});
