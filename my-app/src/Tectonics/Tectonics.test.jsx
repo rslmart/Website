@@ -126,6 +126,65 @@ describe("Tectonics plates layer and credit", () => {
     });
 });
 
+describe("Tectonics columnar boundaries", () => {
+    const plates = {
+        type: "FeatureCollection",
+        features: [
+            {
+                type: "Feature",
+                properties: { Code: "PA", PlateName: "Pacific" },
+                geometry: { type: "Polygon", coordinates: [[[170, 0], [180, 0], [180, 10], [170, 10], [170, 0]]] },
+            },
+        ],
+    };
+    const empty = { type: "FeatureCollection", features: [] };
+
+    beforeEach(() => {
+        const files = {
+            "plates.json.gz": plates,
+            "boundaries.json.gz": {
+                seq: [1],
+                stepClass: ["OSR"],
+                plateBound: ["PA-AU"],
+                velocity: [70],
+                azimuth: [12],
+                divergence: [1.5],
+                rightLateral: [-0.5],
+                coordinates: [[[10, 1], [11, 2]]],
+            },
+            "orogens.json.gz": empty,
+            "velocity.json.gz": [],
+        };
+        server.use(
+            http.get("*/tectonics/:file", ({ params }) =>
+                files[params.file] ? HttpResponse.json(files[params.file]) : new HttpResponse(null, { status: 404 })
+            )
+        );
+    });
+
+    it("expands a columnar boundaries file into one feature per step", async () => {
+        render(
+            <MemoryRouter>
+                <Tectonics />
+            </MemoryRouter>
+        );
+        await waitFor(() => expect(screen.getByTestId("mock-deckgl").dataset.layerIds).toContain("boundaries"));
+        const layer = lastDeckProps.current.layers.flat(Infinity).find((item) => item?.id === "boundaries");
+        expect(layer.props.data.features).toHaveLength(1);
+        expect(layer.props.data.features[0]).toMatchObject({
+            properties: {
+                seq: 1,
+                stepClass: "OSR",
+                plateBound: "PA-AU",
+                velocity: 70,
+                divergence: 1.5,
+                rightLateral: -0.5,
+            },
+            geometry: { type: "LineString", coordinates: [[10, 1], [11, 2]] },
+        });
+    });
+});
+
 describe("Tectonics phone portrait longitude", () => {
     it.each([
         [320, 700],

@@ -18,6 +18,7 @@ import {
     categoryForStepClass,
     colorForStepClass,
 } from './constants';
+import {fromColumnar} from './boundaries.mjs';
 
 // PB2002 data prepared by src/Tectonics/data/build.mjs and served gzipped from
 // public/. Fetched and gunzipped at runtime, matching the Hurricane page.
@@ -245,14 +246,15 @@ function Tectonics() {
         let cancelled = false;
         (async () => {
             try {
-                const [plates, boundaries, orogens, velocity] = await Promise.all([
+                const [plates, boundaryFile, orogens, velocity] = await Promise.all([
                     loadGz('plates.json.gz'),
                     loadGz('boundaries.json.gz'),
                     loadGz('orogens.json.gz'),
                     loadGz('velocity.json.gz'),
                 ]);
                 if (cancelled) return;
-                setData({plates, boundaries, orogens, velocity});
+                // boundaries.json.gz is columnar. A FeatureCollection is left as-is.
+                setData({plates, boundaries: fromColumnar(boundaryFile), orogens, velocity});
                 setLoading(false);
             } catch (error) {
                 console.error(error);
