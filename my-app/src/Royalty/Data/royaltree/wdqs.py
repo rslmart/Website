@@ -747,25 +747,58 @@ def merge_published_offices(existing, fetched):
     return kept
 
 
+def _parent_ids(field):
+    """Non-deprecated parent QIDs on a typed field.
+
+    The facts query already drops deprecated statements. A tie keeps every
+    best-rank QID. One parent is the single value. Unknown and novalue
+    contribute none.
+    """
+    if isinstance(field, str) and _QID.match(field):
+        return [field]
+    if not isinstance(field, dict):
+        return []
+    if field.get("tie"):
+        ids = []
+        for value in field.get("values") or []:
+            if isinstance(value, dict) and isinstance(value.get("id"), str) and _QID.match(value["id"]):
+                ids.append(value["id"])
+        return ids
+    qid = link_qid(field)
+    return [qid] if qid else []
+
+
+def _apply_parent(person, typed, field):
+    """Write one parent key, or leave a tie's existing key in place.
+
+    One non-deprecated parent replaces the key. Two or more are a tie: the
+    page stores one QID, so the published key stays. No non-deprecated parent
+    removes the key.
+    """
+    ids = _parent_ids(typed.get(field)) if field in typed else []
+    if len(ids) >= 2:
+        return
+    if len(ids) == 1:
+        person[field] = ids[0]
+        return
+    person.pop(field, None)
+
+
 def apply_published(person, typed):
     """Parents, dates and offices from one typed record, on one published person.
 
     Mother and father become the single best-rank QID. Preferred already beat
-    normal when the typed record was collapsed. No such QID removes the key:
-    a tie, an unknown or an absent parent is not turned into one. A returned
-    birth or death, including a tie, replaces the stored date. No returned
-    date leaves the stored one. Offices are merged, not replaced. Images and
-    every other field stay.
+    normal when the typed record was collapsed. A tie of two non-deprecated
+    parents leaves the existing key. The key is removed only when the typed
+    record has no non-deprecated parent. A returned birth or death, including
+    a tie, replaces the stored date. No returned date leaves the stored one.
+    Offices are merged, not replaced. Images and every other field stay.
     """
     if not isinstance(person, dict):
         return person
     typed = typed or {}
     for field in ("mother", "father"):
-        qid = link_qid(typed.get(field)) if field in typed else None
-        if qid:
-            person[field] = qid
-        else:
-            person.pop(field, None)
+        _apply_parent(person, typed, field)
     for field in _DATE_FIELDS:
         if field not in typed:
             continue

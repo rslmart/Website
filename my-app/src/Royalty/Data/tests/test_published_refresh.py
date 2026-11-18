@@ -62,7 +62,7 @@ def _person():
     }
 
 
-def test_apply_published_sets_one_parent_and_drops_a_missing_one():
+def test_apply_published_sets_one_parent_and_keeps_a_tie():
     person = _person()
     typed = {
         "id": "Q1",
@@ -71,7 +71,7 @@ def test_apply_published_sets_one_parent_and_drops_a_missing_one():
     }
     wdqs.apply_published(person, typed)
     assert person["mother"] == "Q96088549"
-    assert "father" not in person
+    assert person["father"] == "Qdad"
     assert person["image"] == ["portrait.jpg"]
     assert person["noble title"][0]["label"] == "duke"
     assert person["date of birth"] == "+1000-00-00T00:00:00Z"
