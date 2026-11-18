@@ -1,4 +1,12 @@
 {
+    "generatedAt": "2026-11-18T00:51:09Z",
+    "lastDate": {
+        "Blewett_Pass_US-97": "2026-03-25",
+        "Sherman_Pass_SR-20": "2026-11-10",
+        "Stevens_Pass_US-2": "2026-10-29",
+        "Snoqualmie_Pass_I-90": "2026-11-17",
+        "White_Pass_US-12": "2026-11-17"
+    },
     "Blewett_Pass_US-97": {
         "2005": [
             {
@@ -34507,6 +34515,64 @@
                     }
                 ]
             }
+        ],
+        "2026": [
+            {
+                "displayOrder": 1,
+                "year": 2026,
+                "monthNum": 10,
+                "month": "Oct",
+                "avgNewSnowfallInches": 1.25,
+                "avgTotalSnowfallInches": 3,
+                "dailySnowFall": [
+                    {
+                        "day": 27,
+                        "newDailySnowFall": 2.0,
+                        "totalSnowFall": 2,
+                        "accumulatedSnowFall": 2
+                    },
+                    {
+                        "day": 28,
+                        "newDailySnowFall": 1.0,
+                        "totalSnowFall": 3,
+                        "accumulatedSnowFall": 3
+                    },
+                    {
+                        "day": 29,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 3,
+                        "accumulatedSnowFall": 3
+                    }
+                ]
+            },
+            {
+                "displayOrder": 2,
+                "year": 2026,
+                "monthNum": 11,
+                "month": "Nov",
+                "avgNewSnowfallInches": 0.665492,
+                "avgTotalSnowfallInches": 11,
+                "dailySnowFall": [
+                    {
+                        "day": 5,
+                        "newDailySnowFall": 1.0,
+                        "totalSnowFall": 4,
+                        "accumulatedSnowFall": 4
+                    },
+                    {
+                        "day": 6,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 4
+                    },
+                    {
+                        "day": 10,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 1,
+                        "accumulatedSnowFall": 4
+                    }
+                ]
+            }
         ]
     },
     "Stevens_Pass_US-2": {
@@ -59084,6 +59150,30 @@
                         "newDailySnowFall": 2.0,
                         "totalSnowFall": 54,
                         "accumulatedSnowFall": 305
+                    }
+                ]
+            }
+        ],
+        "2026": [
+            {
+                "displayOrder": 1,
+                "year": 2026,
+                "monthNum": 10,
+                "month": "Oct",
+                "avgNewSnowfallInches": 0.47826,
+                "avgTotalSnowfallInches": 0,
+                "dailySnowFall": [
+                    {
+                        "day": 28,
+                        "newDailySnowFall": 5.0,
+                        "totalSnowFall": 5,
+                        "accumulatedSnowFall": 5
+                    },
+                    {
+                        "day": 29,
+                        "newDailySnowFall": 1.5,
+                        "totalSnowFall": 4,
+                        "accumulatedSnowFall": 6
                     }
                 ]
             }
@@ -101007,6 +101097,316 @@
                     }
                 ]
             }
+        ],
+        "2026": [
+            {
+                "displayOrder": 1,
+                "year": 2026,
+                "monthNum": 10,
+                "month": "Oct",
+                "avgNewSnowfallInches": 0.090322,
+                "avgTotalSnowfallInches": 0,
+                "dailySnowFall": [
+                    {
+                        "day": 1,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 2,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 3,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 4,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 5,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 6,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 7,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 8,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 9,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 10,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 11,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 12,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 13,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 14,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 15,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 16,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 17,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 18,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 19,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 20,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 21,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 22,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 23,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 24,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 25,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 26,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 27,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 28,
+                        "newDailySnowFall": 2.0,
+                        "totalSnowFall": 2,
+                        "accumulatedSnowFall": 2
+                    },
+                    {
+                        "day": 29,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 1,
+                        "accumulatedSnowFall": 2
+                    },
+                    {
+                        "day": 30,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 2
+                    },
+                    {
+                        "day": 31,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 2
+                    }
+                ]
+            },
+            {
+                "displayOrder": 2,
+                "year": 2026,
+                "monthNum": 11,
+                "month": "Nov",
+                "avgNewSnowfallInches": 1.05,
+                "avgTotalSnowfallInches": 4,
+                "dailySnowFall": [
+                    {
+                        "day": 1,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 2
+                    },
+                    {
+                        "day": 2,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 2
+                    },
+                    {
+                        "day": 3,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 2
+                    },
+                    {
+                        "day": 4,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 2
+                    },
+                    {
+                        "day": 5,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 2
+                    },
+                    {
+                        "day": 6,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 2
+                    },
+                    {
+                        "day": 7,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 2
+                    },
+                    {
+                        "day": 8,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 2
+                    },
+                    {
+                        "day": 9,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 2
+                    },
+                    {
+                        "day": 10,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 2
+                    },
+                    {
+                        "day": 11,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 2
+                    },
+                    {
+                        "day": 12,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 2
+                    },
+                    {
+                        "day": 13,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 2
+                    },
+                    {
+                        "day": 14,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 2
+                    },
+                    {
+                        "day": 15,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 2
+                    },
+                    {
+                        "day": 16,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 2
+                    },
+                    {
+                        "day": 17,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 2
+                    }
+                ]
+            }
         ]
     },
     "White_Pass_US-12": {
@@ -123854,6 +124254,124 @@
                         "newDailySnowFall": 8.0,
                         "totalSnowFall": 11,
                         "accumulatedSnowFall": 226
+                    }
+                ]
+            }
+        ],
+        "2026": [
+            {
+                "displayOrder": 1,
+                "year": 2026,
+                "monthNum": 10,
+                "month": "Oct",
+                "avgNewSnowfallInches": 0.382352,
+                "avgTotalSnowfallInches": 0,
+                "dailySnowFall": [
+                    {
+                        "day": 18,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 19,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 20,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 25,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 26,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 27,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 0
+                    },
+                    {
+                        "day": 28,
+                        "newDailySnowFall": 2.0,
+                        "totalSnowFall": 2,
+                        "accumulatedSnowFall": 2
+                    }
+                ]
+            },
+            {
+                "displayOrder": 2,
+                "year": 2026,
+                "monthNum": 11,
+                "month": "Nov",
+                "avgNewSnowfallInches": 1.134615,
+                "avgTotalSnowfallInches": 5,
+                "dailySnowFall": [
+                    {
+                        "day": 1,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 1,
+                        "accumulatedSnowFall": 2
+                    },
+                    {
+                        "day": 2,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 1,
+                        "accumulatedSnowFall": 2
+                    },
+                    {
+                        "day": 8,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 2
+                    },
+                    {
+                        "day": 9,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 2
+                    },
+                    {
+                        "day": 10,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 2
+                    },
+                    {
+                        "day": 11,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 2
+                    },
+                    {
+                        "day": 15,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 2
+                    },
+                    {
+                        "day": 16,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 2
+                    },
+                    {
+                        "day": 17,
+                        "newDailySnowFall": 0.0,
+                        "totalSnowFall": 0,
+                        "accumulatedSnowFall": 2
                     }
                 ]
             }
