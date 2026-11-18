@@ -1,5 +1,23 @@
 import { formatDate } from './formatDate';
 
+// Signed astronomical year for reign bars. The timeline layout reuses this
+// helper. A "+YYYY-..." or "-YYYY-..." timestamp uses the same rule as
+// parseYear in royalTreeLayout.js. An object uses its time field. A missing
+// value, a blank string, or a tie with no single time is null.
+export function extractYear(value) {
+  if (value == null || value === '') return null;
+  if (typeof value === 'object') {
+    if (typeof value.time === 'string') return extractYear(value.time);
+    return null;
+  }
+  const text = String(value).trim();
+  if (!text) return null;
+  const body = text.replace(/^[+-]/, '').split('-')[0];
+  const year = parseInt(body, 10);
+  if (Number.isNaN(year)) return null;
+  return text.startsWith('-') ? -year : year;
+}
+
 function getMarriageName(father, mother) {
   return [father, mother].sort().join('');
 }

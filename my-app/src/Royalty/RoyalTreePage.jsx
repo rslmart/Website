@@ -10,6 +10,8 @@ import ControlsFab from "../components/ControlsFab";
 import MobileDrawer from "../components/MobileDrawer";
 import { withViewport } from "../hooks/useViewport";
 import { convertToChart, mergeMonarchies, DEFAULT_BRIDGE_OPTIONS, DEFAULT_VISIBLE_RANKS } from './RoyalTreeUtils';
+import SuccessionRail from './SuccessionRail';
+import { buildReignLanes, railCollapsedForWidth, sharedDomain } from './reignBars';
 import {
   DEFAULT_FOCUS_DOWN,
   DEFAULT_FOCUS_UP,
@@ -31,7 +33,6 @@ import {
   EDGE_LABEL_FONT,
   MONARCH_LABEL_FONT,
   NON_MONARCH_FONT,
-  SHEET_FRACTION,
   ZOOM_STEP,
   defaultZoomLevel,
   monarchShortLabel,
@@ -191,8 +192,19 @@ class RoyalTree extends Component {
       layingOut: 0,
       capWarning: null,
       error: null,
+      viewportWidth: typeof window !== 'undefined' ? window.innerWidth : 1440,
+      railManualCollapsed: null,
+      railHighlightId: null,
     };
   }
+
+  isRailCollapsed(state = this.state) {
+    return railCollapsedForWidth(state.viewportWidth, state.railManualCollapsed);
+  }
+
+  toggleRail = () => {
+    this.setState((state) => ({ railManualCollapsed: !this.isRailCollapsed(state) }));
+  };
 
   bindGraphEvents = (cyInstance) => {
     cyInstance.on('mouseover', 'node', (evt) => {
@@ -220,8 +232,10 @@ class RoyalTree extends Component {
     cyInstance.on('tap', 'node', (evt) => {
       const node = evt.target;
       if (node.data('type') !== 'marriage') {
-        this.setState({ showNodeToolTip: true, tooltipData: node.data(), tooltipPinned: true });
-        this.panNodeAboveSheet(node);
+        this.setState(
+          { showNodeToolTip: true, tooltipData: node.data(), tooltipPinned: true, railHighlightId: node.id() },
+          () => this.panNodeAboveSheet(node),
+        );
       }
       this.highlightSharedLineage(node);
     });
@@ -848,14 +862,35 @@ class RoyalTree extends Component {
     }, () => this.positionFocusBadges());
   };
 
-  // Keep the selected person in the band above the phone sheet.
+  // Keep the selected person in the band between the reign rail and the phone
+  // sheet. The rail is outside the canvas, so the top of the canvas is already
+  // below it. The sheet covers the bottom of the viewport.
   panNodeAboveSheet = (node) => {
     const cy = this.cy;
     if (!cy || !node || node.empty()) return;
     if (!(this.props.viewport && this.props.viewport.isMobile)) return;
-    const pos = node.renderedPosition();
-    const y = cy.height() * (1 - SHEET_FRACTION) / 2;
-    cy.panBy({ x: cy.width() / 2 - pos.x, y: y - pos.y });
+    const stage = cy.container().getBoundingClientRect();
+    const sheet = document.querySelector('.royal-tree-container .mobile-sheet');
+    const sheetTop = sheet ? sheet.getBoundingClientRect().top : stage.bottom;
+    const bandTop = 4;
+    const bandBottom = Math.min(cy.height() - 4, sheetTop - stage.top - 4);
+    if (bandBottom - bandTop < 40) return;
+    let box = node.renderedBoundingBox({ includeLabels: true });
+    const bandHeight = bandBottom - bandTop;
+    const nodeHeight = box.y2 - box.y1;
+    if (nodeHeight > bandHeight - 8) {
+      const level = Math.max(cy.zoom() * ((bandHeight - 8) / nodeHeight), 0.2);
+      cy.zoom({
+        level,
+        renderedPosition: { x: (box.x1 + box.x2) / 2, y: (box.y1 + box.y2) / 2 },
+      });
+      box = node.renderedBoundingBox({ includeLabels: true });
+    }
+    const midX = (box.x1 + box.x2) / 2;
+    let dy = (bandTop + bandBottom) / 2 - (box.y1 + box.y2) / 2;
+    if (box.y1 + dy < bandTop) dy += bandTop - (box.y1 + dy);
+    if (box.y2 + dy > bandBottom) dy -= (box.y2 + dy) - bandBottom;
+    cy.panBy({ x: cy.width() / 2 - midX, y: dy });
   };
 
   onGraphKeyDown = (event) => {
@@ -978,9 +1013,15 @@ class RoyalTree extends Component {
   };
 
   zoomToNode = (id) => {
-    if (!this.cy) return;
+    if (!this.cy) {
+      this.setState({ railHighlightId: id });
+      return;
+    }
     const node = this.cy.getElementById(id);
-    if (!node || node.empty()) return;
+    if (!node || node.empty()) {
+      this.setState({ railHighlightId: id });
+      return;
+    }
 
     this.cy.nodes().removeClass('searched');
     node.removeClass('faded').addClass('searched');
@@ -994,7 +1035,7 @@ class RoyalTree extends Component {
     );
 
     // Surface the person's details so the zoom target is confirmed.
-    this.setState({ showNodeToolTip: true, tooltipPinned: true, tooltipData: node.data() });
+    this.setState({ showNodeToolTip: true, tooltipPinned: true, tooltipData: node.data(), railHighlightId: id });
   };
 
   convertToCytoscapeFormat = (chartData) => {
@@ -1054,6 +1095,24 @@ class RoyalTree extends Component {
     }
   }
 
+  componentDidUpdate(prevProps, prevState) {
+    if (this.isRailCollapsed(prevState) === this.isRailCollapsed()) return;
+    const cy = this.cy;
+    if (!cy) return;
+    const zoom = cy.zoom();
+    const pan = { ...cy.pan() };
+    cy.resize();
+    if (this.state.focusedPersonId) {
+      this.drawFocus();
+      return;
+    }
+    cy.viewport({ zoom, pan });
+    if (this.state.showNodeToolTip && this.state.tooltipData?.id) {
+      const node = cy.getElementById(this.state.tooltipData.id);
+      this.panNodeAboveSheet(node);
+    }
+  }
+
   componentWillUnmount() {
     this.unmounted = true;
     window.removeEventListener('resize', this.handleResize);
@@ -1067,6 +1126,8 @@ class RoyalTree extends Component {
   // Resize the canvas and keep the zoom. A phone rotation used to call
   // cy.fit(), which threw away the visitor's zoom.
   handleResize = () => {
+    const width = window.innerWidth;
+    if (width !== this.state.viewportWidth) this.setState({ viewportWidth: width });
     const cy = this.cy;
     if (!cy) return;
     const zoom = cy.zoom();
@@ -1316,9 +1377,23 @@ class RoyalTree extends Component {
 
   render() {
     const isMobile = this.props.viewport && this.props.viewport.isMobile;
+    const lanes = buildReignLanes(this.loadedPayloads, this.loadedSelected);
+    const domain = sharedDomain(lanes, new Date().getFullYear());
+    const railCollapsed = this.isRailCollapsed();
     return (
         <div className="royal-tree-container" style={{ position: 'relative' }}>
           <HomeButton />
+          {lanes.length > 0 && (
+            <SuccessionRail
+              lanes={lanes}
+              domain={domain}
+              collapsed={railCollapsed}
+              highlightId={this.state.railHighlightId}
+              onToggle={this.toggleRail}
+              onSelect={this.zoomToNode}
+            />
+          )}
+          <div className="royal-tree-stage">
           <div
               ref={this.containerRef}
               className="cytoscape-container"
@@ -1429,6 +1504,7 @@ class RoyalTree extends Component {
                     sharedPeople={this.state.sharedList}
                     monarchOrder={this.state.monarchOrder}
                     onZoomTo={this.zoomToNode}
+                    activeId={this.state.railHighlightId}
                 />
               </div>
           )}
@@ -1468,6 +1544,7 @@ class RoyalTree extends Component {
                     sharedPeople={this.state.sharedList}
                     monarchOrder={this.state.monarchOrder}
                     onZoomTo={(id) => { this.setState({ controlsDrawerOpen: false }); this.zoomToNode(id); }}
+                    activeId={this.state.railHighlightId}
                 />
                 <div className="mobile-drawer-section">Monarchies</div>
                 <FilterPanel
@@ -1502,6 +1579,7 @@ class RoyalTree extends Component {
             <a href="https://www.wikipedia.org" target="_blank" rel="noopener noreferrer">Wikipedia</a>
             {' '}· Images from{' '}
             <a href="https://commons.wikimedia.org" target="_blank" rel="noopener noreferrer">Wikimedia Commons</a>
+          </div>
           </div>
         </div>
     );
