@@ -32,6 +32,27 @@ export function createLabel(person) {
   return `${person.label}\n${birth}-${death}`;
 }
 
+// Birth–death text for a search result. Both sides unknown is blank, so the
+// list does not fill up with "?–?" rows.
+export function searchDates(person) {
+  const birth = formatDate(person?.['date of birth']);
+  const death = formatDate(person?.['date of death']);
+  if (birth === '?' && death === '?') return '';
+  return `${birth}–${death}`;
+}
+
+// Search zoom uses this. prefers-reduced-motion jumps to the person instead
+// of running the Cytoscape animation.
+export function prefersReducedMotion() {
+  return typeof window !== 'undefined'
+      && typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+export function zoomAnimationMs(ms = 500) {
+  return prefersReducedMotion() ? 0 : ms;
+}
+
 // Border color used to flag people who appear in more than one of the selected
 // monarchies (i.e. the points where two dynasties connect).
 const SHARED_NODE_COLOR = '#ff8c00';
@@ -391,10 +412,19 @@ function usefulChainNodes(closure, pool, frontier, includeSiblings) {
   return useful;
 }
 
-function personListFrom(entries) {
+function personListFrom(entries, monarchIds) {
+  const monarchs = monarchIds || new Set();
   return entries
       .filter(([, person]) => person && person.label)
-      .map(([qid, person]) => ({ id: person.id || qid, label: person.label }))
+      .map(([qid, person]) => {
+        const id = person.id || qid;
+        return {
+          id,
+          label: person.label,
+          dates: searchDates(person),
+          monarch: monarchs.has(id) || monarchs.has(qid),
+        };
+      })
       .sort((a, b) => a.label.localeCompare(b.label));
 }
 
@@ -600,7 +630,7 @@ export function mergeMonarchies(
     successionEdges,
     membership: membershipOut,
     memberFlag,
-    peopleList: personListFrom(Object.entries(data)),
-    sharedList: personListFrom(Array.from(sharedNodes).map(qid => [qid, data[qid]])),
+    peopleList: personListFrom(Object.entries(data), new Set(highlightedNodes)),
+    sharedList: personListFrom(Array.from(sharedNodes).map(qid => [qid, data[qid]]), new Set(highlightedNodes)),
   };
 }

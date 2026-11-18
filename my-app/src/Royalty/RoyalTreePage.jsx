@@ -9,7 +9,7 @@ import HomeButton from "../components/HomeButton";
 import ControlsFab from "../components/ControlsFab";
 import MobileDrawer from "../components/MobileDrawer";
 import { withViewport } from "../hooks/useViewport";
-import { convertToChart, mergeMonarchies, DEFAULT_BRIDGE_OPTIONS, DEFAULT_VISIBLE_RANKS } from './RoyalTreeUtils';
+import { convertToChart, mergeMonarchies, DEFAULT_BRIDGE_OPTIONS, DEFAULT_VISIBLE_RANKS, zoomAnimationMs } from './RoyalTreeUtils';
 import SuccessionRail from './SuccessionRail';
 import { buildReignLanes, railCollapsedForWidth, sharedDomain } from './reignBars';
 import {
@@ -1039,13 +1039,20 @@ class RoyalTree extends Component {
     this.cy.nodes().removeClass('searched');
     node.removeClass('faded').addClass('searched');
 
-    this.cy.animate(
-        { center: { eles: node }, zoom: 1.3 },
-        {
-          duration: 500,
-          complete: () => this.panNodeAboveSheet(node),
-        }
-    );
+    const duration = zoomAnimationMs(500);
+    if (duration === 0) {
+      this.cy.zoom(1.3);
+      this.cy.center(node);
+      this.panNodeAboveSheet(node);
+    } else {
+      this.cy.animate(
+          { center: { eles: node }, zoom: 1.3 },
+          {
+            duration,
+            complete: () => this.panNodeAboveSheet(node),
+          }
+      );
+    }
 
     // Surface the person's details so the zoom target is confirmed.
     this.setState({ showNodeToolTip: true, tooltipPinned: true, tooltipData: node.data(), railHighlightId: id });

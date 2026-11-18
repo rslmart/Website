@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import './RoyalTreeStyle.css';
 
@@ -21,7 +21,8 @@ const STYLES = {
         top: "100%",
         left: 0,
         right: 0,
-        marginTop: 2,
+        margin: "2px 0 0",
+        padding: 0,
         background: "var(--color-surface)",
         color: "var(--color-text)",
         border: "1px solid var(--color-border-strong)",
@@ -30,11 +31,46 @@ const STYLES = {
         maxHeight: 240,
         overflowY: "auto",
         zIndex: 1002,
+        listStyle: "none",
     },
     option: {
         padding: "6px 8px",
         fontSize: 14,
         cursor: "pointer",
+        listStyle: "none",
+    },
+    dates: {
+        display: "block",
+        marginTop: 2,
+        fontSize: 12,
+        color: "var(--color-text-muted)",
+    },
+    clear: {
+        position: "absolute",
+        top: "50%",
+        right: 4,
+        transform: "translateY(-50%)",
+        border: "1px solid var(--color-border-strong)",
+        borderRadius: "var(--radius-sm)",
+        background: "var(--color-bg)",
+        color: "var(--color-text)",
+        fontSize: 12,
+        lineHeight: 1.2,
+        padding: "2px 6px",
+        cursor: "pointer",
+    },
+    filter: {
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        marginBottom: 6,
+        fontSize: 13,
+        color: "var(--color-text)",
+    },
+    empty: {
+        padding: "6px 8px",
+        fontSize: 14,
+        color: "var(--color-text-muted)",
     },
     sharedNav: {
         marginTop: 12,
@@ -153,16 +189,21 @@ function SearchPanel({ people, sharedPeople, monarchOrder, onZoomTo, embedded, a
     const [query, setQuery] = useState('');
     const [open, setOpen] = useState(false);
     const [activeIndex, setActiveIndex] = useState(0);
+    const [monarchsOnly, setMonarchsOnly] = useState(false);
     const [sharedIndex, setSharedIndex] = useState(0);
     const wrapRef = useRef(null);
+    const inputRef = useRef(null);
+    const listId = useId();
+    const emptyId = useId();
 
     const matches = useMemo(() => {
         const q = query.trim().toLowerCase();
         if (!q) return [];
         return people
             .filter(p => p.label.toLowerCase().includes(q))
+            .filter(p => !monarchsOnly || p.monarch)
             .slice(0, MAX_RESULTS);
-    }, [query, people]);
+    }, [query, people, monarchsOnly]);
 
     // Reset the shared stepper whenever the selection changes.
     useEffect(() => {
@@ -186,7 +227,18 @@ function SearchPanel({ people, sharedPeople, monarchOrder, onZoomTo, embedded, a
         onZoomTo(person.id);
     };
 
+    const clearSearch = () => {
+        setQuery('');
+        setOpen(false);
+        setActiveIndex(0);
+        inputRef.current?.focus();
+    };
+
     const onKeyDown = (e) => {
+        if (e.key === 'Escape') {
+            setOpen(false);
+            return;
+        }
         if (!open || matches.length === 0) return;
         if (e.key === 'ArrowDown') {
             e.preventDefault();
@@ -197,10 +249,13 @@ function SearchPanel({ people, sharedPeople, monarchOrder, onZoomTo, embedded, a
         } else if (e.key === 'Enter') {
             e.preventDefault();
             selectMatch(matches[activeIndex] || matches[0]);
-        } else if (e.key === 'Escape') {
-            setOpen(false);
         }
     };
+
+    const trimmed = query.trim();
+    const showList = open && matches.length > 0;
+    const showEmpty = open && trimmed.length > 0 && matches.length === 0;
+    const activeOptionId = showList ? `${listId}-opt-${activeIndex}` : undefined;
 
     const hasShared = sharedPeople.length > 0;
     const stepShared = (delta) => {
@@ -220,10 +275,30 @@ function SearchPanel({ people, sharedPeople, monarchOrder, onZoomTo, embedded, a
             className={embedded ? undefined : "control-panel"}
             style={embedded ? undefined : { marginBottom: 10, zIndex: 1003 }}
         >
-            <div style={STYLES.searchWrap} ref={wrapRef}>
+            <div ref={wrapRef}>
+            <label style={STYLES.filter}>
                 <input
+                    type="checkbox"
+                    checked={monarchsOnly}
+                    onChange={(e) => {
+                        setMonarchsOnly(e.target.checked);
+                        setActiveIndex(0);
+                        if (query.trim()) setOpen(true);
+                    }}
+                />
+                Monarchs only
+            </label>
+            <div style={STYLES.searchWrap}>
+                <input
+                    ref={inputRef}
                     type="text"
-                    style={STYLES.input}
+                    role="combobox"
+                    aria-autocomplete="list"
+                    aria-expanded={showList || showEmpty}
+                    aria-controls={showList ? listId : (showEmpty ? emptyId : undefined)}
+                    aria-activedescendant={activeOptionId}
+                    aria-label="Search for a person"
+                    style={{ ...STYLES.input, paddingRight: query ? 64 : 8 }}
                     placeholder="Search for a person…"
                     value={query}
                     onChange={(e) => {
@@ -234,11 +309,24 @@ function SearchPanel({ people, sharedPeople, monarchOrder, onZoomTo, embedded, a
                     onFocus={() => query && setOpen(true)}
                     onKeyDown={onKeyDown}
                 />
-                {open && matches.length > 0 && (
-                    <div style={STYLES.dropdown}>
+                {query && (
+                    <button
+                        type="button"
+                        style={STYLES.clear}
+                        onClick={clearSearch}
+                        aria-label="Clear search"
+                    >
+                        Clear
+                    </button>
+                )}
+                {showList && (
+                    <ul role="listbox" id={listId} aria-label="Search results" style={STYLES.dropdown}>
                         {matches.map((person, idx) => (
-                            <div
+                            <li
                                 key={person.id}
+                                id={`${listId}-opt-${idx}`}
+                                role="option"
+                                aria-selected={idx === activeIndex}
                                 style={{
                                     ...STYLES.option,
                                     background: idx === activeIndex ? 'var(--color-primary-soft)' : 'var(--color-surface)',
@@ -250,10 +338,17 @@ function SearchPanel({ people, sharedPeople, monarchOrder, onZoomTo, embedded, a
                                 }}
                             >
                                 {person.label}
-                            </div>
+                                {person.dates ? <span style={STYLES.dates}>{person.dates}</span> : null}
+                            </li>
                         ))}
+                    </ul>
+                )}
+                {showEmpty && (
+                    <div id={emptyId} role="status" style={{ ...STYLES.dropdown, ...STYLES.empty }}>
+                        No results
                     </div>
                 )}
+            </div>
             </div>
 
             {hasShared && (
@@ -307,6 +402,8 @@ SearchPanel.propTypes = {
     people: PropTypes.arrayOf(PropTypes.shape({
         id: PropTypes.string.isRequired,
         label: PropTypes.string.isRequired,
+        dates: PropTypes.string,
+        monarch: PropTypes.bool,
     })).isRequired,
     sharedPeople: PropTypes.arrayOf(PropTypes.shape({
         id: PropTypes.string.isRequired,
