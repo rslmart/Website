@@ -47,8 +47,12 @@ export function defaultZoomLevel(fittedZoom) {
   return Math.max(fitted, DEFAULT_MIN_ZOOM);
 }
 
-function yearOf(value) {
+// A string is a year. An object that carries precision goes through parseYear,
+// so millennium, century and decade stay null. A time with no precision is
+// still that year, including a BCE year.
+export function yearOf(value) {
   if (typeof value === 'string') return parseYear(value);
+  if (value && typeof value === 'object' && value.precision != null) return parseYear(value);
   if (value && typeof value.time === 'string') return parseYear(value.time);
   return null;
 }
@@ -61,7 +65,8 @@ function formatReignYear(year) {
 // A crown office (monarch, king, queen, emperor) beats a longer lesser title,
 // so Richard III is 1483–1485 and not his years as Duke of Gloucester.
 // Years only, so a day-precision reign stays "1066–1087".
-// parseYear still receives a string (the time field when the value is an object).
+// An object with precision is passed through whole, so a century does not
+// become the year on its timestamp.
 const CROWN_OFFICE = /monarch|king|queen|emperor|empress|kaiser|tsar|sultan|shah|pharaoh/i;
 
 export function reignYears(person) {

@@ -11,6 +11,7 @@ import {
   defaultZoomLevel,
   monarchShortLabel,
   reignYears,
+  yearOf,
   zoomTier,
 } from './zoomTier';
 
@@ -65,5 +66,23 @@ describe('zoom tiers', () => {
     })).toBe('1483–1485');
 
     expect(monarchShortLabel({ label: 'Someone\nwith a date line' })).toBe('♔ Someone');
+  });
+
+  it('does not turn century precision into a reign year', () => {
+    const century = { time: '1100-01-01T00:00:00Z', precision: 7 };
+    const year = { time: '1100-01-01T00:00:00Z', precision: 9 };
+    expect(yearOf(century)).toBeNull();
+    expect(yearOf(year)).toBe(1100);
+    expect(yearOf({ time: '-0043-03-15T00:00:00Z', precision: 11 })).toBe(-43);
+    expect(reignYears({
+      'position held': [{ label: 'king', 'start time': century, 'end time': year }],
+    })).toBe('');
+    expect(reignYears({
+      'position held': [{
+        label: 'king',
+        'start time': year,
+        'end time': { time: '1135-01-01T00:00:00Z', precision: 9 },
+      }],
+    })).toBe('1100–1135');
   });
 });
