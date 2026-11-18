@@ -131,13 +131,16 @@ describe("satellite imagery states", () => {
         renderStorm(early);
         expect(screen.getByRole("status")).toHaveTextContent("No imagery");
         expect(screen.queryByRole("img")).not.toBeInTheDocument();
-        expect(screen.getByText(/Wind:/)).toHaveTextContent("—");
+        expect(screen.getByText(/Wind:/)).toHaveTextContent("Wind: —");
+        expect(screen.getByText(/Pressure:/)).toHaveTextContent("Pressure: —");
         expect(screen.getByRole("heading")).toHaveTextContent("Provisional");
     });
 
     it("shows a loading state, then no imagery once every frame fails", () => {
         renderStorm(modern);
         expect(screen.getByRole("status")).toHaveTextContent("Loading imagery…");
+        expect(screen.getByText(/Wind:/)).toHaveTextContent("65 kt");
+        expect(screen.getByText(/Pressure:/)).toHaveTextContent("990 mb");
         let steps = 0;
         while (screen.queryByText("No imagery") == null && steps < 30) {
             const img = document.querySelector("img");

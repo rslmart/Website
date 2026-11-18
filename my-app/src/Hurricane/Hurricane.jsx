@@ -15,7 +15,8 @@ import ControlsFab from "../components/ControlsFab";
 import MobileDrawer from "../components/MobileDrawer";
 import { withViewport } from "../hooks/useViewport";
 import { isolateMapControls } from "../hooks/mapControls";
-import { colorForWind, hasWindInRange, isSpurTrack } from "./trackSemantics";
+import CategoryLegend from "./category-legend";
+import { colorForWind, formatKnots, formatMillibars, hasWindInRange, isSpurTrack, statusName } from "./trackSemantics";
 
 const HELP_SEEN_KEY = "hurricaneHelpSeen";
 
@@ -216,12 +217,14 @@ const getWindAreaLayer = (track_points, key, selectedPoint) => new PolygonLayer(
     getPolygon: point => point[key],
     getFillColor: d => {
         let color = [0,0,0,0];
+        // Same bins as the category legend. 64 kt is Cat 1, 50 kt is a
+        // tropical storm, and the 34 kt ring uses the depression colour.
         if (key.startsWith("64")) {
-            color = [255, 247, 149, 40];
+            color = [...colorForWind(64), 40];
         } else if (key.startsWith("50")) {
-            color = [0, 250, 244, 30];
+            color = [...colorForWind(50), 30];
         } else {
-            color = [94, 186, 255, 20];
+            color = [...colorForWind(0), 20];
         }
         if (selectedPoint && d.date_time === selectedPoint.date_time) {
             color[3] = color[3]*4;
@@ -680,7 +683,7 @@ class Hurricane extends Component {
     getToolTip = (object) => {
         if (!object) { return; }
         if (this.state.plotType === "Max Wind Grid") {
-            return `Max Wind: ${object.colorValue}`
+            return `Max Wind: ${formatKnots(object.colorValue)}`
         }
         if (this.state.plotType === "Grid") {
             return `# of track points: ${object.colorValue}`
@@ -759,15 +762,15 @@ class Hurricane extends Component {
                                 <p>Name: {this.state.storms[this.state.hoverInfo.object["id"]]["name"]}</p>
                                 <p>Date: {this.state.hoverInfo.object["date_time"].split(" ")[0]}</p>
                                 <p>Longitude: {this.state.hoverInfo.object["longitude"]}</p>
-                                <p>Wind: {this.state.hoverInfo.object["wind"] == null ? "—" : this.state.hoverInfo.object["wind"]}</p>
+                                <p>Wind: {formatKnots(this.state.hoverInfo.object["wind"])}</p>
                                 {this.state.hoverInfo.object["max_wind_radius"] && <p>Max Wind Radius: {this.state.hoverInfo.object["max_wind_radius"]}</p>}
                             </div>
                             <div className="column" style={{paddingLeft: 10}}>
                                 <p>Season: {this.state.storms[this.state.hoverInfo.object["id"]]["season"]}</p>
                                 <p>Time: {this.state.hoverInfo.object["date_time"].split(" ")[1]}</p>
                                 <p>Latitude: {this.state.hoverInfo.object["latitude"]}</p>
-                                <p>Status: {this.state.hoverInfo.object["status"]}</p>
-                                {this.state.hoverInfo.object["pressure"] && <p>Pressure: {this.state.hoverInfo.object["pressure"]}</p>}
+                                <p>Status: {statusName(this.state.hoverInfo.object["status"])}</p>
+                                {this.state.hoverInfo.object["pressure"] && <p>Pressure: {formatMillibars(this.state.hoverInfo.object["pressure"])}</p>}
                             </div>
                         </div>
                     )}
@@ -935,6 +938,7 @@ class Hurricane extends Component {
                         <SourcesPanel embedded dataThrough={this.state.dataThrough} />
                     </MobileDrawer>
                 )}
+                <CategoryLegend isMobile={!!isMobile} />
                 <HelpPanel
                     open={this.state.helpOpen}
                     onOpen={() => this.setState({ helpOpen: true })}

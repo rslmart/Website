@@ -124,7 +124,7 @@ function FilterPanel(props) {
                         {filterByPressure &&
                             (<div>
                                 <div key={'minPressure'} className="input">
-                                    <label>Min Pressure: {minPressure}</label>
+                                    <label>Min Pressure: {minPressure} mb</label>
                                     <input
                                         name="minPressure"
                                         type="range"
@@ -137,7 +137,7 @@ function FilterPanel(props) {
                                 </div>
 
                                 <div key={'maxPressure'} className="input">
-                                    <label>Max Pressure: {maxPressure}</label>
+                                    <label>Max Pressure: {maxPressure} mb</label>
                                     <input
                                         name="maxPressure"
                                         type="range"
@@ -152,7 +152,7 @@ function FilterPanel(props) {
                         }
 
                         <div key={'minWind'} className="input">
-                            <label>Min Wind: {minWind}</label>
+                            <label>Min Wind: {minWind} kt</label>
                             <input
                                 name="minWind"
                                 type="range"
@@ -165,7 +165,7 @@ function FilterPanel(props) {
                         </div>
 
                         <div key={'maxWind'} className="input">
-                            <label>Max Wind: {maxWind}</label>
+                            <label>Max Wind: {maxWind} kt</label>
                             <input
                                 name="maxWind"
                                 type="range"
