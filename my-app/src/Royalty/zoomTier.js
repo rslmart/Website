@@ -13,8 +13,8 @@ export const MIN_ONSCREEN_LABEL_PX = 10;
 export const DEFAULT_MIN_ZOOM = MIN_ONSCREEN_LABEL_PX / MONARCH_LABEL_FONT;
 
 // Overview is everything below ZOOM_MID, including the default zoom.
-// Mid shows monarch portraits and full monarch labels.
-// Detail shows every label, every portrait and the house names on edges.
+// Portraits are not tiered: a node with an image shows it at every zoom.
+// Mid shows full monarch labels. Detail shows every label and the house names on edges.
 export const ZOOM_MID = 1;
 export const ZOOM_DETAIL = 1.6;
 

@@ -366,10 +366,10 @@ class RoyalTree extends Component {
           }
         },
         {
-          // Portraits appear at mid for monarchs and at detail for everyone
-          // who has one. The selector requires `image`, so nodes without a
-          // portrait are not given an empty image mapping.
-          selector: 'node[image].lod-mid, node[image].lod-detail',
+          // Portraits stay visible at every zoom, including the default fit.
+          // The selector requires `image`, so nodes without a portrait are
+          // not given an empty image mapping.
+          selector: 'node[image]',
           style: {
             'background-image': 'data(image)',
             'background-fit': 'none',
@@ -663,8 +663,8 @@ class RoyalTree extends Component {
     else if (!on && has) ele.removeClass(name);
   };
 
-  // Labels and portraits for the current tier, limited to the viewport so the
-  // switch does not restyle every element on a large graph.
+  // Labels for the current tier, limited to the viewport so the switch does
+  // not restyle every element on a large graph. Portraits are not part of this.
   syncVisibleClasses = () => {
     const cy = this.cy;
     if (!cy) return;
