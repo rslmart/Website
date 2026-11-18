@@ -1,19 +1,23 @@
-"""Crop two GridSat-B1 windows and resample them onto Web Mercator.
+"""Crop GridSat-B1 windows for four full tracks and resample them onto Web Mercator.
 
-Sandy 2012296N14283 at 2012-10-30 09:00 UTC and Matthew 2016273N13300 at
-2016-10-03 00:00 UTC. Each window is 301 by 301 cells of the file's 0.07°
-grid, about 1,100 km from the center. The output pixels are evenly spaced
-in EPSG:3857 and the stored bounds are centered on the source-grid cell in
-that projection, so a deck.gl BitmapLayer can draw the JPEG with those
-bounds unchanged.
+Sandy 2012296N14283, Matthew 2016273N13300, Hugo 1989254N13340, and Melissa
+2025294N14290. One JPEG per distinct GridSat hour on the track (00, 03, 06,
+09, 12, 15, 18, 21 UTC). Two track points in the same hour share that image.
+A point at any other time is not its own file. Each window is 301 by 301
+cells of the file's 0.07° grid, about 1,100 km from the center. The output
+pixels are evenly spaced in EPSG:3857 and the stored bounds are centered on
+the source-grid cell in that projection, so a deck.gl BitmapLayer can draw
+the JPEG with those bounds unchanged.
 
-The global NetCDF is not kept. Run with:
+The global NetCDF is deleted after its crop is written. A JPEG already on
+disk is left in place, so a rerun continues at the next missing frame. Run with:
 
     uv run --with netCDF4 --with numpy --with pillow --with matplotlib \
         python buildGridsatWindow.py
 """
 
 import argparse
+import gzip
 import json
 import math
 import os
@@ -22,6 +26,7 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.join(HERE, "..", "..", "..", "public", "hurricane", "gridsat")
+STORMS_PATH = os.path.join(HERE, "..", "..", "..", "public", "hurricane", "storms.json.gz")
 
 # NCEI HTTPS access, then the NOAA Open Data bucket that holds the same
 # GRIDSAT-B1.YYYY.MM.DD.HH.v02r01.nc objects when that access path 404s.
@@ -41,24 +46,21 @@ CENTER = WINDOW // 2  # pixel 150 of a 301-pixel image
 # EPSG:3857 sphere.
 R_M = 6378137.0
 
-STORMS = (
-    {
-        "sid": "2012296N14283",
-        "track_time": "2012-10-30 09:00:00",
-        "lat": 40.0,
-        "lon": -77.0,
-        "name": "GRIDSAT-B1.2012.10.30.09.v02r01.nc",
-        "year": 2012,
-    },
-    {
-        "sid": "2016273N13300",
-        "track_time": "2016-10-03 00:00:00",
-        "lat": 14.5,
-        "lon": -75.0,
-        "name": "GRIDSAT-B1.2016.10.03.00.v02r01.nc",
-        "year": 2016,
-    },
+# Full tracks, in the order the manifest is written.
+SIDS = (
+    "2012296N14283",  # Sandy, 2012
+    "2016273N13300",  # Matthew, 2016
+    "1989254N13340",  # Hugo, 1989
+    "2025294N14290",  # Melissa, 2025
 )
+
+# Printed at the end. One center error per storm, from these track times.
+CENTER_TIMES = {
+    "2012296N14283": "2012-10-30 09:00:00",
+    "2016273N13300": "2016-10-03 00:00:00",
+    "1989254N13340": "1989-09-21 18:00:00",
+    "2025294N14290": "2025-10-28 18:00:00",
+}
 
 
 def _imaging():
@@ -81,8 +83,9 @@ def inv_merc_y(y):
 
 def _curl(url, dest):
     cmd = [
-        "curl", "-fsSL", "--retry", "2", "--retry-delay", "2",
-        "--max-time", "180", "-A", "gridsat-window/1.0", "-o", dest, url,
+        "curl", "-fsSL", "--retry", "4", "--retry-delay", "2",
+        "--retry-connrefused", "--max-time", "600",
+        "-A", "gridsat-window/1.0", "-o", dest, url,
     ]
     subprocess.run(cmd, check=True)
 
@@ -97,8 +100,99 @@ def download(storm, dest):
         _curl(access, dest)
         return access
     except subprocess.CalledProcessError:
+        if os.path.exists(dest):
+            os.remove(dest)
         _curl(nodd, dest)
         return nodd
+
+
+def is_gridsat_hour(date_time):
+    """True for 00, 03, 06, 09, 12, 15, 18, and 21 UTC exactly."""
+    hour = int(date_time[11:13])
+    minute = int(date_time[14:16])
+    second = int(date_time[17:19])
+    return second == 0 and minute == 0 and hour % 3 == 0
+
+
+def load_targets(storms_path):
+    """One target per distinct GridSat hour on the four tracks.
+
+    Track points at any other time are not files. Two points that share a
+    GridSat hour share one image, centered on the first of those points.
+    """
+    with gzip.open(storms_path, "rt") as fp:
+        storms = json.load(fp)
+    targets = []
+    seen = set()
+    for sid in SIDS:
+        for point in storms[sid]["track_points"]:
+            when = point["date_time"]
+            if not is_gridsat_hour(when):
+                continue
+            name = (
+                "GRIDSAT-B1."
+                + when[0:4] + "." + when[5:7] + "." + when[8:10] + "."
+                + when[11:13] + ".v02r01.nc"
+            )
+            key = (sid, name)
+            if key in seen:
+                continue
+            seen.add(key)
+            targets.append({
+                "sid": sid,
+                "track_time": when,
+                "lat": float(point["latitude"]),
+                "lon": float(point["longitude"]),
+                "name": name,
+                "year": int(when[0:4]),
+            })
+    return targets
+
+
+def haversine_km(lat1, lon1, lat2, lon2):
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    dphi = phi2 - phi1
+    dlmb = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2.0) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlmb / 2.0) ** 2
+    return 2.0 * R_M * math.asin(math.sqrt(a)) / 1000.0
+
+
+def bounds_center_km(bounds, lat, lon):
+    """Distance from the Web Mercator center of the stored bounds to the track point."""
+    west, south, east, north = bounds
+    lon_c = (west + east) / 2.0
+    lat_c = inv_merc_y((merc_y(south) + merc_y(north)) / 2.0)
+    return haversine_km(lat_c, lon_c, lat, lon)
+
+
+def jpeg_ready(path):
+    if not os.path.isfile(path) or os.path.getsize(path) < 2000:
+        return False
+    with open(path, "rb") as fp:
+        head = fp.read(2)
+        fp.seek(-2, os.SEEK_END)
+        tail = fp.read(2)
+    return head == b"\xff\xd8" and tail == b"\xff\xd9"
+
+
+def load_manifest(path):
+    if not os.path.isfile(path):
+        return {}
+    with open(path) as fp:
+        body = json.load(fp)
+    index = {}
+    for frame in body.get("frames", []):
+        index[(frame["sid"], frame["trackTime"])] = frame
+    return index
+
+
+def write_manifest(path, frames):
+    tmp = path + ".part"
+    with open(tmp, "w") as fp:
+        json.dump({"frames": frames}, fp, indent=2)
+        fp.write("\n")
+    os.replace(tmp, path)
 
 
 def file_time(nc, ds):
@@ -238,7 +332,9 @@ def colorize(kelvin):
 def write_jpeg(rgb, path):
     _np, _nc, _mpl, Image = _imaging()
     img = Image.fromarray(rgb, "RGB")
-    img.save(path, format="JPEG", quality=82)
+    tmp = path + ".part"
+    img.save(tmp, format="JPEG", quality=82)
+    os.replace(tmp, path)
 
 
 def build_one(storm, nc_path):
@@ -264,42 +360,89 @@ def build_one(storm, nc_path):
     }
 
 
+def crop_storm(storm, source_dir):
+    """Download one global file, crop it, and delete the NetCDF."""
+    if source_dir:
+        nc_path = os.path.join(source_dir, storm["name"])
+        return build_one(storm, nc_path)
+    with tempfile.TemporaryDirectory(prefix="gridsat_") as tmp:
+        nc_path = os.path.join(tmp, storm["name"])
+        download(storm, nc_path)
+        frame = build_one(storm, nc_path)
+        os.remove(nc_path)
+        return frame
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--source-dir",
         help="Directory of already downloaded NetCDF files. Skips the download.",
     )
+    parser.add_argument("--storms", default=STORMS_PATH)
     parser.add_argument("--out", default=OUT_DIR)
     args = parser.parse_args()
     os.makedirs(args.out, exist_ok=True)
-    frames = []
-    for storm in STORMS:
-        if args.source_dir:
-            nc_path = os.path.join(args.source_dir, storm["name"])
-            frame = build_one(storm, nc_path)
-        else:
-            with tempfile.TemporaryDirectory(prefix="gridsat_") as tmp:
-                nc_path = os.path.join(tmp, storm["name"])
-                download(storm, nc_path)
-                frame = build_one(storm, nc_path)
-        rgb = frame.pop("rgb")
-        lat_c = frame.pop("lat_c")
-        lon_c = frame.pop("lon_c")
-        center_k = frame.pop("center_k")
-        write_jpeg(rgb, os.path.join(args.out, frame["image"]))
-        frames.append(frame)
-        print(
-            f"{frame['sid']} gridsat {frame['gridsatTime']} "
-            f"cell {lat_c:.5f},{lon_c:.5f} "
-            f"bounds {frame['bounds']} center {center_k:.1f} K"
-        )
-    manifest = {"frames": frames}
+    targets = load_targets(args.storms)
     dest = os.path.join(args.out, "frames.json")
-    with open(dest, "w") as fp:
-        json.dump(manifest, fp, indent=2)
-        fp.write("\n")
-    print(f"wrote {dest}")
+    saved = load_manifest(dest)
+    frames = []
+    errors = {}
+    total = len(targets)
+    for index, storm in enumerate(targets, start=1):
+        image = f"{storm['sid']}-{stamp_of(storm['track_time'])}.jpg"
+        image_path = os.path.join(args.out, image)
+        prev = saved.get((storm["sid"], storm["track_time"]))
+        if prev and prev.get("image") == image and jpeg_ready(image_path):
+            frame = {
+                "sid": prev["sid"],
+                "trackTime": prev["trackTime"],
+                "gridsatTime": prev["gridsatTime"],
+                "image": prev["image"],
+                "bounds": prev["bounds"],
+            }
+            print(
+                f"{index}/{total} keep {frame['image']}",
+                flush=True,
+            )
+        else:
+            built = crop_storm(storm, args.source_dir)
+            rgb = built.pop("rgb")
+            lat_c = built.pop("lat_c")
+            lon_c = built.pop("lon_c")
+            center_k = built.pop("center_k")
+            if built["image"] != image:
+                raise SystemExit(
+                    f"{storm['name']} grid time {built['gridsatTime']} "
+                    f"does not match track time {storm['track_time']}"
+                )
+            write_jpeg(rgb, image_path)
+            center_km = haversine_km(lat_c, lon_c, storm["lat"], storm["lon"])
+            frame = built
+            print(
+                f"{index}/{total} {frame['sid']} gridsat {frame['gridsatTime']} "
+                f"cell {lat_c:.5f},{lon_c:.5f} "
+                f"center {center_km:.3f} km {center_k:.1f} K",
+                flush=True,
+            )
+        if storm["track_time"] == CENTER_TIMES.get(storm["sid"]):
+            errors[storm["sid"]] = bounds_center_km(frame["bounds"], storm["lat"], storm["lon"])
+        frames.append(frame)
+        done = {(item["sid"], item["trackTime"]) for item in frames}
+        merged = list(frames)
+        for key, prev in saved.items():
+            if key not in done:
+                merged.append(prev)
+        write_manifest(dest, merged)
+    counts = {}
+    for frame in frames:
+        counts[frame["sid"]] = counts.get(frame["sid"], 0) + 1
+    print("counts " + " ".join(f"{sid}={counts.get(sid, 0)}" for sid in SIDS), flush=True)
+    for sid, when in CENTER_TIMES.items():
+        if sid in errors:
+            print(f"center {sid} {when} {errors[sid]:.3f} km", flush=True)
+    write_manifest(dest, frames)
+    print(f"wrote {dest}", flush=True)
 
 
 if __name__ == "__main__":
