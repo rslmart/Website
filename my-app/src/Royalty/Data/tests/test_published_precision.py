@@ -93,7 +93,7 @@ def test_published_precision_rows_match_wikidata():
     assert wdqs.format_date(birth) == "c. 12th century"
     assert wdqs.format_date(death) == "c. 12th century"
     assert "position held" not in ealdgyth[0]
-    assert ealdgyth[0]["father"] == "Q271362" and ealdgyth[0]["mother"] == "Q21155612"
+    assert ealdgyth[0]["father"] == "Q271362" and ealdgyth[0]["mother"] == "Q96088549"
 
     older = [person for sections in copies["Q3495067"].values() for person in sections.values()]
     _same(older)
