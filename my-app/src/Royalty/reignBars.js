@@ -8,9 +8,10 @@
 // A lower-scoring bar that overlaps it is a different office (James's Scottish
 // reign on the England lane) and is dropped. A crown office that only continues
 // a kept bar forward (Stephen's restored years) is kept. Touching spans merge.
-// An office with a start and no end stays open. When no bar was kept, the open
-// crown with the latest start is kept; a closed office, or an open office that
-// is not a crown, stays dropped. Nothing here edits the payload.
+// An office with a start and no end stays open. When no bar was kept, and the
+// person has no death date, the open crown with the latest start is kept. A
+// closed office, or an open office that is not a crown, stays dropped. A dead
+// person's missing end is not an open reign. Nothing here edits the payload.
 
 import { extractYear, monarchyColors } from './RoyalTreeUtils';
 
@@ -89,6 +90,13 @@ function keptTitle(monarchy, label) {
   return titles.includes(String(label || '').trim().toLowerCase());
 }
 
+function hasDeathDate(person) {
+  const death = person?.['date of death'];
+  if (death == null || death === '') return false;
+  if (typeof death === 'object') return Boolean(death.time || death.tie);
+  return String(death).trim() !== '';
+}
+
 export function reignSegments(person, index, monarchs, monarchy) {
   const positions = Array.isArray(person?.['position held']) ? person['position held'] : [];
   const candidates = [];
@@ -120,7 +128,7 @@ export function reignSegments(person, index, monarchs, monarchy) {
     if (kept.some((bar) => overlaps(part, bar))) return;
     kept.push(part);
   });
-  if (!kept.length) {
+  if (!kept.length && !hasDeathDate(person)) {
     const openCrown = candidates
       .filter((part) => part.openEnded && part.crown)
       .sort((a, b) => b.start - a.start)[0];

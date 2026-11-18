@@ -95,4 +95,18 @@ describe('reignSegments open crown', () => {
     expect(openGovernor).toEqual([]);
     expect(latestOpenCrown).toEqual([{ start: 2022, end: null, openEnded: true }]);
   });
+
+  it('does not keep an open crown for a person who has a death date', () => {
+    const segments = reignSegments({
+      'date of death': '-1043-01-01T00:00:00Z',
+      'position held': [
+        office({
+          label: 'monarch',
+          start: '-1046-01-01T00:00:00Z',
+        }),
+      ],
+    }, 1, monarchs, 'Zhou');
+
+    expect(segments).toEqual([]);
+  });
 });
