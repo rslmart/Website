@@ -109,8 +109,8 @@ color (unknown classes fall back to grey).
 
 ### Subduction polarity
 
-Bird (2003), section 8, “Digital Data Formats,” paragraph [122], page 43 of the
-PDF (labeled “43 of 52”), *Geochemistry, Geophysics, Geosystems* 4(3), 1027,
+Bird (2003), section 8, “Digital Data Formats,” paragraph [122], page 44 of the
+PDF (labeled “44 of 52”), *Geochemistry, Geophysics, Geosystems* 4(3), 1027,
 [doi:10.1029/2001GC000252](https://doi.org/10.1029/2001GC000252). Checked
 2026-11-18 against the PDF at
 [eps.mcgill.ca](https://www.eps.mcgill.ca/~courses/c350/ProbSets/Bird_2003_G3.pdf)
