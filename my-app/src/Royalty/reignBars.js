@@ -8,7 +8,9 @@
 // A lower-scoring bar that overlaps it is a different office (James's Scottish
 // reign on the England lane) and is dropped. A crown office that only continues
 // a kept bar forward (Stephen's restored years) is kept. Touching spans merge.
-// An office with a start and no end stays open. Nothing here edits the payload.
+// An office with a start and no end stays open. When no bar was kept, the open
+// crown with the latest start is kept; a closed office, or an open office that
+// is not a crown, stays dropped. Nothing here edits the payload.
 
 import { extractYear, monarchyColors } from './RoyalTreeUtils';
 
@@ -118,6 +120,12 @@ export function reignSegments(person, index, monarchs, monarchy) {
     if (kept.some((bar) => overlaps(part, bar))) return;
     kept.push(part);
   });
+  if (!kept.length) {
+    const openCrown = candidates
+      .filter((part) => part.openEnded && part.crown)
+      .sort((a, b) => b.start - a.start)[0];
+    if (openCrown) kept.push(openCrown);
+  }
   return mergeTouching(kept);
 }
 
