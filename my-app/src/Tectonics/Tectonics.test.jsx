@@ -16,6 +16,13 @@ import Tectonics, {
     defaultViewState,
     longitudeSpanDegrees,
     mapboxTokenFailed,
+    VELOCITY_ARROW_MAX_PX,
+    VELOCITY_ARROW_MIN_PX,
+    VELOCITY_ARROW_OFFSET_PX,
+    buildVelocityArrows,
+    mercatorLatitudeDegreesPerPixel,
+    velocityArrowLengthPx,
+    velocityReference,
 } from "./Tectonics";
 
 // Visible longitude from the same Web Mercator viewport deck.gl draws with.
@@ -296,6 +303,134 @@ describe("Tectonics phone overlays and token message", () => {
             </MemoryRouter>
         );
         expect(screen.getByRole("status")).toHaveTextContent(MAPBOX_TOKEN_MESSAGE);
+    });
+});
+
+function shaftPixels(segment, lat, zoom) {
+    const degPerPx = mercatorLatitudeDegreesPerPixel(zoom);
+    const cosLat = Math.max(Math.cos((lat * Math.PI) / 180), 0.2);
+    const dLat = segment.to[1] - segment.from[1];
+    const dLon = segment.to[0] - segment.from[0];
+    return Math.hypot(dLat, dLon * cosLat) / degPerPx;
+}
+
+describe("velocity arrows", () => {
+    const plates = {
+        type: "FeatureCollection",
+        features: [
+            {
+                type: "Feature",
+                properties: { Code: "PA", PlateName: "Pacific" },
+                geometry: { type: "Polygon", coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
+            },
+            {
+                type: "Feature",
+                properties: { Code: "AU", PlateName: "Australia" },
+                geometry: { type: "Polygon", coordinates: [[[2, 0], [3, 0], [3, 1], [2, 0]]] },
+            },
+        ],
+    };
+    const point = {
+        lon: 10,
+        lat: 0,
+        azimuthDeg: 0,
+        speed: 70,
+        plateBound: "PA-AU",
+        divergence: 1.5,
+        rightLateral: -0.5,
+        stepAzimuth: 90,
+    };
+
+    it("names the left plate relative to the right", () => {
+        expect(velocityReference("PA-AU", plates)).toBe("Pacific relative to Australia");
+        expect(velocityReference("NA/PA", plates)).toBe("NA relative to Pacific");
+        expect(velocityReference("AU\\PA", plates)).toBe("Australia relative to Pacific");
+    });
+
+    it("keeps the shaft legible at zoom 1.6 and 5 and offsets it onto the left plate", () => {
+        for (const zoom of [1.6, 5]) {
+            for (const speed of [5, 40, 80, 200]) {
+                const shaft = buildVelocityArrows([{ ...point, speed }], zoom, plates)[0];
+                const px = shaftPixels(shaft, point.lat, zoom);
+                expect(px).toBeGreaterThanOrEqual(VELOCITY_ARROW_MIN_PX - 0.01);
+                expect(px).toBeLessThanOrEqual(VELOCITY_ARROW_MAX_PX + 0.01);
+                expect(px).toBeCloseTo(velocityArrowLengthPx(speed), 5);
+            }
+        }
+        const atWorld = buildVelocityArrows([point], 1.6, plates)[0];
+        const atRidge = buildVelocityArrows([point], 5, plates)[0];
+        expect(shaftPixels(atWorld, point.lat, 1.6)).toBeCloseTo(shaftPixels(atRidge, point.lat, 5), 5);
+        // Step bearing 90° is due east, so the left plate is to the north.
+        expect(atWorld.from[1]).toBeGreaterThan(point.lat);
+        expect(atWorld.from[0]).toBeCloseTo(point.lon, 5);
+        const degPerPx = mercatorLatitudeDegreesPerPixel(1.6);
+        expect((atWorld.from[1] - point.lat) / degPerPx).toBeCloseTo(VELOCITY_ARROW_OFFSET_PX, 5);
+        const west = buildVelocityArrows([{ ...point, stepAzimuth: 0 }], 1.6, plates)[0];
+        expect(west.from[0]).toBeLessThan(point.lon);
+        expect(atWorld.reference).toBe("Pacific relative to Australia");
+    });
+});
+
+describe("Tectonics velocity tooltip", () => {
+    const plates = {
+        type: "FeatureCollection",
+        features: [
+            {
+                type: "Feature",
+                properties: { Code: "PA", PlateName: "Pacific" },
+                geometry: { type: "Polygon", coordinates: [[[170, 0], [180, 0], [180, 10], [170, 10], [170, 0]]] },
+            },
+            {
+                type: "Feature",
+                properties: { Code: "AU", PlateName: "Australia" },
+                geometry: { type: "Polygon", coordinates: [[[150, -40], [160, -40], [160, -30], [150, -30], [150, -40]]] },
+            },
+        ],
+    };
+    const empty = { type: "FeatureCollection", features: [] };
+
+    beforeEach(() => {
+        const files = {
+            "plates.json.gz": plates,
+            "boundaries.json.gz": empty,
+            "orogens.json.gz": empty,
+            "velocity.json.gz": [{
+                lon: 10,
+                lat: 0,
+                azimuthDeg: 0,
+                speed: 70,
+                plateBound: "PA-AU",
+                divergence: 1.5,
+                rightLateral: -0.5,
+                stepAzimuth: 90,
+            }],
+        };
+        server.use(
+            http.get("*/tectonics/:file", ({ params }) =>
+                files[params.file] ? HttpResponse.json(files[params.file]) : new HttpResponse(null, { status: 404 })
+            )
+        );
+    });
+
+    it("says which plate moves relative to which", async () => {
+        render(
+            <MemoryRouter>
+                <Tectonics />
+            </MemoryRouter>
+        );
+        await waitFor(() => expect(screen.getByTestId("mock-deckgl").dataset.layerIds).toContain("plates"));
+        act(() => {
+            screen.getByRole("checkbox", { name: /Velocity vectors/ }).click();
+        });
+        await waitFor(() => expect(screen.getByTestId("mock-deckgl").dataset.layerIds).toContain("velocity"));
+        const layer = lastDeckProps.current.layers.flat(Infinity).find((item) => item?.id === "velocity");
+        expect(layer.props.pickable).toBe(true);
+        const tip = lastDeckProps.current.getTooltip({
+            object: layer.props.data[0],
+            layer: { id: "velocity" },
+        });
+        expect(tip.html).toContain("Pacific relative to Australia");
+        expect(tip.html).toContain("70 mm/yr");
     });
 });
 

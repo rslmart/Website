@@ -70,9 +70,12 @@ Transformations:
   `rightLateral`, `coordinates`). Row `i` is SEQNUM `seq0 + i`. The loader in
   `Tectonics.jsx` expands that back into a FeatureCollection. `divergence` is
   Bird's `VELOCITYDI` (convergence negative) and `rightLateral` is `VELOCITYRI`.
-- **Velocity** → every 6th deduplicated step with speed > 0, placed at the
-  step's start point and emitted as a plain array of
-  `{ lon, lat, azimuthDeg, speed }` → `velocity.json.gz`.
+- **Velocity** → step midpoints sampled about every 250 km along each plate
+  pair (`/` and `\` count as the same pair as `-`). A pair shorter than that
+  still gets one arrow. Each point is
+  `{ lon, lat, azimuthDeg, speed, plateBound, divergence, rightLateral, stepAzimuth }`
+  → `velocity.json.gz`. `stepAzimuth` is the step bearing, clockwise from north,
+  so the page can sit the arrow on the left plate's side.
 
 ### Steps and the antimeridian
 
@@ -108,8 +111,10 @@ color (unknown classes fall back to grey).
 - deck.gl layers render bottom-to-top: filled **plates** (clickable), **orogens**,
   **velocity** arrows (off by default), and **boundaries** colored by category
   (always on top).
-- Velocity arrows are drawn as a shaft plus two barbs; length scales with speed,
-  direction from the azimuth.
+- Velocity arrows are a shaft plus two barbs, drawn on the left plate's side of
+  the step. Length scales with speed in pixels and is capped, so the arrow stays
+  legible at the default zoom and when zoomed in. Hovering one names the left
+  plate relative to the right.
 - The legend panel toggles boundary categories and overlay layers; clicking a
   plate opens an info panel with its name and code; hovering shows boundary type,
   the plate pair, and velocity.
@@ -139,7 +144,7 @@ console.log({plates:L("plates.json.gz").features.length,
   orogens:L("orogens.json.gz").features.length, steps:b.stepClass.length,
   seq0:b.seq0, wide, velocity:L("velocity.json.gz").length,
   boundaryGzip:fs.statSync("public/tectonics/boundaries.json.gz").size})'
-# { plates: 54, orogens: 13, steps: 5819, seq0: 1, wide: 0, velocity: 970, boundaryGzip: 87541 }
+# { plates: 54, orogens: 13, steps: 5819, seq0: 1, wide: 0, velocity: 988, boundaryGzip: 87541 }
 ```
 
 Then confirm the page with `npm run dev` and `npm run build`, and commit the

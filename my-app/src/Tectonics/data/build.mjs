@@ -21,7 +21,9 @@
 //                         (seq0, stepClass, plateBound, velocity, azimuth,
 //                         divergence, rightLateral, coordinates)
 //   - orogens.json.gz     13 orogeny polygons
-//   - velocity.json.gz    sampled arrow points { lon, lat, azimuthDeg, speed }
+//   - velocity.json.gz    step midpoints about every 250 km along each plate pair
+//                         { lon, lat, azimuthDeg, speed, plateBound, divergence,
+//                         rightLateral, stepAzimuth }
 //   - meta.json           source, version, generatedAt, dataThrough, commit, licence
 //
 // STEPCLASS is Bird's boundary-type code (SUB, OSR, OTF, CRB, CTF, CCB, OCB).
@@ -59,8 +61,10 @@ export const SOURCES = [
     {name: 'orogens', url: `${RAW}/GeoJSON/PB2002_orogens.json`, kind: 'json'},
 ];
 
-// Keep every Nth step as a velocity arrow so the map is not overwhelmed.
-const VELOCITY_SAMPLE = 6;
+// One arrow about this far along each plate pair, measured with Bird's
+// step lengths. Short pairs still get a single midpoint.
+export const VELOCITY_SPACING_KM = 250;
+const EARTH_RADIUS_KM = 6371.0088;
 const COORD_PRECISION = 3;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -128,12 +132,24 @@ const CSV_COLUMNS = [
     'VelocityDivergent',
     'VelocityRightLateral',
     'StepClass',
+    'StepLength(km)',
+    'AzimuthCenter',
 ];
 
 function finiteNumber(value, label) {
     const number = Number(value);
     if (!Number.isFinite(number)) {
         throw new Error(`PB2002 step is missing a finite ${label}`);
+    }
+    return number;
+}
+
+// Absent on the test fixture, which then uses a great-circle length and bearing.
+function optionalNumber(value) {
+    if (value == null || value === '') return undefined;
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+        throw new Error(`PB2002 step has a non-finite number: ${value}`);
     }
     return number;
 }
@@ -159,6 +175,8 @@ function normalizeStep(raw) {
         STARTLAT: finiteNumber(raw.STARTLAT ?? raw.StartLat, 'STARTLAT'),
         FINALLONG: finiteNumber(raw.FINALLONG ?? raw.FinalLong, 'FINALLONG'),
         FINALLAT: finiteNumber(raw.FINALLAT ?? raw.FinalLat, 'FINALLAT'),
+        STEPLENGTH: optionalNumber(raw.STEPLENGTH ?? raw['StepLength(km)']),
+        AZIMUTH: optionalNumber(raw.AZIMUTH ?? raw.AzimuthCenter),
     };
 }
 
@@ -267,20 +285,141 @@ export function buildBoundaries(rawSteps) {
     return {type: 'FeatureCollection', features};
 }
 
+function toRad(degrees) {
+    return (degrees * Math.PI) / 180;
+}
+
+// Short path. Steps that cross ±180 have a raw longitude difference past 180.
+function unwrapLongitude(startLon, endLon) {
+    let delta = endLon - startLon;
+    if (delta > 180) delta -= 360;
+    if (delta < -180) delta += 360;
+    return delta;
+}
+
+function haversineKm(lon1, lat1, lon2, lat2) {
+    const phi1 = toRad(lat1);
+    const phi2 = toRad(lat2);
+    const dPhi = toRad(lat2 - lat1);
+    const dLambda = toRad(unwrapLongitude(lon1, lon2));
+    const h = Math.sin(dPhi / 2) ** 2
+        + Math.cos(phi1) * Math.cos(phi2) * Math.sin(dLambda / 2) ** 2;
+    return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+// '/' and '\' are subduction polarity on the same plate pair as '-'.
+export function platePairKey(plateBound) {
+    return String(plateBound).replace(/[\\/]/g, '-');
+}
+
+function stepLengthKm(step) {
+    if (Number.isFinite(step.STEPLENGTH) && step.STEPLENGTH >= 0) return step.STEPLENGTH;
+    return haversineKm(step.STARTLONG, step.STARTLAT, step.FINALLONG, step.FINALLAT);
+}
+
+// Midpoint of the step, including the short path across ±180.
+export function stepMidpoint(step) {
+    let lon = (step.STARTLONG + step.FINALLONG) / 2;
+    if (Math.abs(step.FINALLONG - step.STARTLONG) > 180) {
+        lon = lon > 0 ? lon - 180 : lon + 180;
+    }
+    return [lon, (step.STARTLAT + step.FINALLAT) / 2];
+}
+
+// Degrees clockwise from north, start toward end. Bird's AzimuthCenter when present.
+function stepBearingDeg(step) {
+    if (Number.isFinite(step.AZIMUTH)) return (step.AZIMUTH % 360 + 360) % 360;
+    const dLon = unwrapLongitude(step.STARTLONG, step.FINALLONG);
+    const lat = toRad((step.STARTLAT + step.FINALLAT) / 2);
+    const dLat = step.FINALLAT - step.STARTLAT;
+    const bearing = (Math.atan2(dLon * Math.cos(lat), dLat) * 180) / Math.PI;
+    return (bearing + 360) % 360;
+}
+
+function roundBearing(degrees) {
+    const rounded = round((degrees % 360 + 360) % 360);
+    return rounded === 360 ? 0 : rounded;
+}
+
+// Step midpoints, centred along each plate pair so the leftover distance is
+// split at the two ends. A pair shorter than the spacing still gets one arrow.
 export function buildVelocity(rawSteps) {
+    const groups = new Map();
+    for (const feature of prepareSteps(rawSteps).features) {
+        const step = feature.properties;
+        const key = platePairKey(step.PLATEBOUND);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(step);
+    }
     const points = [];
-    prepareSteps(rawSteps).features.forEach((feature, i) => {
-        if (i % VELOCITY_SAMPLE !== 0) return;
-        const p = feature.properties;
-        if (!p.VELOCITYLE || p.VELOCITYLE <= 0) return;
-        points.push({
-            lon: round(p.STARTLONG),
-            lat: round(p.STARTLAT),
-            azimuthDeg: round(p.VELOCITYAZ),
-            speed: round(p.VELOCITYLE),
-        });
-    });
+    for (const list of groups.values()) {
+        const lengths = list.map(stepLengthKm);
+        const total = lengths.reduce((sum, length) => sum + length, 0);
+        let next = total < VELOCITY_SPACING_KM
+            ? total / 2
+            : (total % VELOCITY_SPACING_KM) / 2 + VELOCITY_SPACING_KM / 2;
+        let acc = 0;
+        for (let i = 0; i < list.length; i++) {
+            const step = list[i];
+            acc += lengths[i];
+            if (acc < next) continue;
+            const [lon, lat] = stepMidpoint(step);
+            points.push({
+                lon: round(lon),
+                lat: round(lat),
+                azimuthDeg: round(step.VELOCITYAZ),
+                speed: round(step.VELOCITYLE),
+                divergence: round(step.VELOCITYDI),
+                rightLateral: round(step.VELOCITYRI),
+                plateBound: step.PLATEBOUND,
+                stepAzimuth: roundBearing(stepBearingDeg(step)),
+            });
+            while (next <= acc) next += VELOCITY_SPACING_KM;
+        }
+    }
     return points;
+}
+
+function distanceKm(lon1, lat1, lon2, lat2) {
+    return haversineKm(lon1, lat1, lon2, lat2);
+}
+
+// Population coefficient of variation of nearest-neighbour distances.
+export function measureArrowSpacing(points, steps) {
+    const nearest = points.map((point, index) => {
+        let best = Infinity;
+        for (let other = 0; other < points.length; other++) {
+            if (other === index) continue;
+            best = Math.min(best, distanceKm(point.lon, point.lat, points[other].lon, points[other].lat));
+        }
+        return best;
+    });
+    const mean = nearest.reduce((sum, value) => sum + value, 0) / nearest.length;
+    const cv = Math.sqrt(nearest.reduce((sum, value) => sum + (value - mean) ** 2, 0) / nearest.length) / mean;
+    const gaps = steps.map((step) => {
+        const [lon, lat] = stepMidpoint(step);
+        let best = Infinity;
+        for (const point of points) {
+            best = Math.min(best, distanceKm(lon, lat, point.lon, point.lat));
+        }
+        return best;
+    });
+    const pairs = new Set(steps.map((step) => platePairKey(step.PLATEBOUND)));
+    const covered = new Set(points.map((point) => platePairKey(point.plateBound)));
+    const sortedNearest = [...nearest].sort((a, b) => a - b);
+    const sortedGaps = [...gaps].sort((a, b) => a - b);
+    const pick = (sorted, quantile) => sorted[Math.min(sorted.length - 1, Math.floor(quantile * sorted.length))];
+    return {
+        arrows: points.length,
+        pairs: pairs.size,
+        missingPairs: [...pairs].filter((pair) => !covered.has(pair)),
+        nnMin: sortedNearest[0],
+        nnMedian: pick(sortedNearest, 0.5),
+        nnMax: sortedNearest[sortedNearest.length - 1],
+        cv,
+        gapMax: sortedGaps[sortedGaps.length - 1],
+        gapMedian: pick(sortedGaps, 0.5),
+    };
 }
 
 function assertBoundarySpans(boundaries) {

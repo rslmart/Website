@@ -19,6 +19,9 @@ import {
     buildPlates,
     buildVelocity,
     invokedAsProgram,
+    measureArrowSpacing,
+    platePairKey,
+    VELOCITY_SPACING_KM,
 } from "./build.mjs";
 
 const dataDir = fileURLToPath(new URL(".", import.meta.url));
@@ -174,11 +177,75 @@ describe("build output", () => {
         expect(fromColumnar(columnar)).toEqual(gapped);
     });
 
-    it("samples every 6th step and drops non-positive speeds", () => {
-        expect(velocity).toEqual([
-            {lon: 10.112, lat: -20.222, azimuthDeg: 12.345, speed: 25.457},
-            {lon: -40.5, lat: 12.25, azimuthDeg: 180.1, speed: 15.555},
-        ]);
+    it("samples a step midpoint on every plate pair, including a zero speed", () => {
+        const pairs = new Set(fixture.steps.features.map((feature) => platePairKey(feature.properties.PLATEBOUND)));
+        expect(VELOCITY_SPACING_KM).toBe(250);
+        // Every fixture pair is far shorter than 250 km, so each gets one arrow.
+        expect(velocity).toHaveLength(pairs.size);
+        expect(velocity.map((point) => platePairKey(point.plateBound)).sort()).toEqual([...pairs].sort());
+        expect(velocity.find((point) => point.plateBound === "PA-NA")).toEqual({
+            lon: 10.333,
+            lat: -20.278,
+            azimuthDeg: 12.345,
+            speed: 25.457,
+            divergence: 1.25,
+            rightLateral: -3.5,
+            plateBound: "PA-NA",
+            stepAzimuth: expect.any(Number),
+        });
+        const crossing = velocity.find((point) => point.plateBound === "KE-AU");
+        expect(crossing.lon).toBe(179.85);
+        expect(crossing.lat).toBe(5.375);
+        expect(velocity.filter((point) => platePairKey(point.plateBound) === "AF-AN")).toHaveLength(1);
+        expect(velocity.find((point) => point.plateBound === "PS-AU").speed).toBe(0);
+        for (const point of velocity) {
+            expect(point).toEqual(expect.objectContaining({
+                divergence: expect.any(Number),
+                rightLateral: expect.any(Number),
+                plateBound: expect.any(String),
+                stepAzimuth: expect.any(Number),
+            }));
+        }
+    });
+
+    it("places one arrow about every 250 km, and still one on a short pair", () => {
+        const alongEquator = (seq, lon, plate = "PA-NA") => ({
+            type: "Feature",
+            properties: {
+                SEQNUM: seq,
+                STEPCLASS: "OSR",
+                PLATEBOUND: plate,
+                VELOCITYLE: 50,
+                VELOCITYAZ: 0,
+                VELOCITYDI: 50,
+                VELOCITYRI: 1,
+                STARTLONG: lon,
+                STARTLAT: 0,
+                FINALLONG: lon + 0.9,
+                FINALLAT: 0,
+                STEPLENGTH: 100,
+                AZIMUTH: 90,
+            },
+        });
+        const chain = Array.from({length: 10}, (_, i) => alongEquator(i + 1, i));
+        const sampled = buildVelocity({type: "FeatureCollection", features: chain});
+        expect(sampled).toHaveLength(4);
+        expect(sampled.every((point) => point.plateBound === "PA-NA")).toBe(true);
+        expect(sampled.every((point) => point.divergence === 50 && point.rightLateral === 1)).toBe(true);
+        expect(sampled.every((point) => point.stepAzimuth === 90)).toBe(true);
+        const short = buildVelocity({
+            type: "FeatureCollection",
+            features: [alongEquator(1, 0, "AF-AN")],
+        });
+        expect(short).toHaveLength(1);
+        expect(short[0].lon).toBeCloseTo(0.45, 5);
+        // Polarity slashes are the same pair, so two short pieces share one arrow.
+        const joined = buildVelocity({
+            type: "FeatureCollection",
+            features: [alongEquator(1, 0, "NA/PA"), alongEquator(2, 2, "NA-PA")],
+        });
+        expect(joined).toHaveLength(1);
+        expect(platePairKey(joined[0].plateBound)).toBe("NA-PA");
     });
 
     it("keeps one feature when a SEQNUM is repeated", () => {
@@ -360,6 +427,39 @@ describe("published PB2002 boundaries", () => {
             expect(feature.properties).toEqual(expect.objectContaining({
                 divergence: expect.any(Number),
                 rightLateral: expect.any(Number),
+            }));
+        }
+    });
+
+    it("spaces published velocity arrows across all 161 plate pairs", () => {
+        const velocity = readGzipJson(publishedDir, "velocity.json.gz");
+        const steps = boundaries.features.map((feature) => {
+            const lines = feature.geometry.type === "LineString"
+                ? [feature.geometry.coordinates]
+                : feature.geometry.coordinates;
+            const start = lines[0][0];
+            const endLine = lines[lines.length - 1];
+            const end = endLine[endLine.length - 1];
+            return {
+                STARTLONG: start[0],
+                STARTLAT: start[1],
+                FINALLONG: end[0],
+                FINALLAT: end[1],
+                PLATEBOUND: feature.properties.plateBound,
+            };
+        });
+        const spacing = measureArrowSpacing(velocity, steps);
+        expect(spacing.pairs).toBe(161);
+        expect(spacing.missingPairs).toEqual([]);
+        expect(spacing.cv).toBeLessThanOrEqual(0.25);
+        expect(spacing.nnMin).toBeGreaterThanOrEqual(50);
+        expect(spacing.gapMax).toBeLessThanOrEqual(300);
+        for (const point of velocity) {
+            expect(point).toEqual(expect.objectContaining({
+                plateBound: expect.any(String),
+                divergence: expect.any(Number),
+                rightLateral: expect.any(Number),
+                stepAzimuth: expect.any(Number),
             }));
         }
     });
