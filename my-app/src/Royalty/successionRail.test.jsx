@@ -71,8 +71,9 @@ describe('reign lanes', () => {
       'Edgar Ætheling',
       'Henry the Young King',
       'Louis VIII of France',
-      'Charles III',
     ]);
+    const charles = englandLane.monarchs.find((monarch) => monarch.label === 'Charles III');
+    expect(charles.segments).toEqual([{ start: 2022, end: null, openEnded: true }]);
     const openPayload = {
       monarchList: ['Q1', 'Q2'],
       nodes: {
