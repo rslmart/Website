@@ -147,6 +147,21 @@ const SYSTEM_STATUSES = {
 // Re-exported so storm-info can colour a point. Null wind is gray, not a category.
 export const getColorFromWindSpeed = colorForWind;
 
+// Deck.gl fill colours are four components. A 3-long white selected point is
+// easy to mis-pack, and dimming by writing color[3] mutates the shared RGB array.
+export function scatterFillColor(wind, role) {
+    const [red, green, blue] = colorForWind(wind);
+    if (role === "selected") return [255, 255, 255, 255];
+    if (role === "dimmed") return [red, green, blue, 128];
+    return [red, green, blue, 255];
+}
+
+export function scatterStrokeColor(wind, selected) {
+    if (!selected) return [0, 0, 0, 0];
+    const [red, green, blue] = colorForWind(wind);
+    return [red, green, blue, 255];
+}
+
 const getLineDataFromStormTrackPoints = (storms) => {
     const line_list = []
     storms.forEach(storm => {
@@ -219,20 +234,11 @@ const getWindAreaLayer = (track_points, key, selectedPoint) => new PolygonLayer(
 const getScatterplotLayer = (track_points, setHoverInfo, onChange, selectedPoint, settings) => new ScatterplotLayer({
     id: 'scatterplot-layer',
     getPosition: d => [d.longitude, d.latitude],
-    getFillColor: d => {
-        let color = getColorFromWindSpeed(d.wind);
-        if (selectedPoint) {
-            d.date_time === selectedPoint.date_time ? color = [255,255,255] : color[3] = 128;
-        }
-        return color
-    },
-    getLineColor: d => {
-        let color = [0,0,0,0];
-        if (selectedPoint && d.date_time === selectedPoint.date_time) {
-            color = getColorFromWindSpeed(d.wind);
-        }
-        return color
-    },
+    getFillColor: d => scatterFillColor(
+        d.wind,
+        !selectedPoint ? "plain" : d.date_time === selectedPoint.date_time ? "selected" : "dimmed"
+    ),
+    getLineColor: d => scatterStrokeColor(d.wind, !!(selectedPoint && d.date_time === selectedPoint.date_time)),
     radiusUnits: 'pixels',
     lineWidthUnits: 'pixels',
     data: track_points,
@@ -412,9 +418,8 @@ class Hurricane extends Component {
         this.setState({ helpOpen: false });
     };
 
-    exitStormInfo = async (evt) => {
-        await this.setState({ stormInfo: null, selectedPoint: 0, stormSheetCollapsed: false });
-        this.onChange(evt);
+    exitStormInfo = () => {
+        this.onChange({ target: { name: "exitStorm" } });
     };
 
     toggleStormSheet = () => {
@@ -460,157 +465,136 @@ class Hurricane extends Component {
         };
     }
 
-    onChange = async (evt) => {
-        if (evt.target.name === "name") {
-            await this.setState({ name: evt.target.value });
-        }
-        if (evt.target.name === "minYear") {
-            await this.setState({ minYear: evt.target.value });
-        }
-        else if (evt.target.name === "maxYear") {
-            await this.setState({ maxYear: evt.target.value });
-        }
-        else if (evt.target.name === "minMonth") {
-            await this.setState({ minMonth: evt.target.value });
-        }
-        else if (evt.target.name === "maxMonth") {
-            await this.setState({ maxMonth: evt.target.value });
-        }
-        else if (evt.target.name === "minWind") {
-            await this.setState({ minWind: evt.target.value });
-        }
-        else if (evt.target.name === "maxWind") {
-            await this.setState({ maxWind: evt.target.value });
-        }
-        else if (evt.target.name === "filterByPressure") {
-            await this.setState({ filterByPressure: evt.target.checked });
-        }
-        else if (evt.target.name === "minPressure") {
-            await this.setState({ minPressure: evt.target.value });
-        }
-        else if (evt.target.name === "maxPressure") {
-            await this.setState({ maxPressure: evt.target.value });
-        }
-        else if (evt.target.name === "systemStatus") {
-            await this.setState({ systemStatus: evt.target.value });
-        }
-        else if (evt.target.name === "landfall") {
-            await this.setState({ landfall: evt.target.checked });
-        }
-        else if (evt.target.name === "showSpurs") {
-            await this.setState({ showSpurs: evt.target.checked });
-        }
-        else if (evt.target.name === "showMaxWindPoly") {
-            await this.setState({ showMaxWindPoly: evt.target.checked });
-        }
-        else if (evt.target.name === "showWindPoly") {
-            await this.setState({ showWindPoly: evt.target.checked });
-        }
-        else if (evt.target.name === "only6Hour") {
-            await this.setState({ only6Hour: evt.target.checked });
-        }
-        else if (evt.target.name === "plotType") {
-            await this.setState({ plotType: evt.target.value });
-        }
-        else if (evt.target.name === "basin") {
-            await this.setState({ basin: evt.target.value });
-        }
-        else if (evt.target.name === "selectStorm") {
-            const selectedStorm = this.state.storms[evt.target.value.id];
-            const newViewState = this.viewStateForStorm(selectedStorm, false);
-            await this.setState({
+    // The control and the layer have to see the same point. setState does not
+    // update this.state before the next line, so a step used to filter and
+    // paint with the previous point.
+    patchFromEvent(state, evt) {
+        const name = evt.target.name;
+        if (name === "name") return { name: evt.target.value };
+        if (name === "minYear") return { minYear: evt.target.value };
+        if (name === "maxYear") return { maxYear: evt.target.value };
+        if (name === "minMonth") return { minMonth: evt.target.value };
+        if (name === "maxMonth") return { maxMonth: evt.target.value };
+        if (name === "minWind") return { minWind: evt.target.value };
+        if (name === "maxWind") return { maxWind: evt.target.value };
+        if (name === "filterByPressure") return { filterByPressure: evt.target.checked };
+        if (name === "minPressure") return { minPressure: evt.target.value };
+        if (name === "maxPressure") return { maxPressure: evt.target.value };
+        if (name === "systemStatus") return { systemStatus: evt.target.value };
+        if (name === "landfall") return { landfall: evt.target.checked };
+        if (name === "showSpurs") return { showSpurs: evt.target.checked };
+        if (name === "showMaxWindPoly") return { showMaxWindPoly: evt.target.checked };
+        if (name === "showWindPoly") return { showWindPoly: evt.target.checked };
+        if (name === "only6Hour") return { only6Hour: evt.target.checked };
+        if (name === "plotType") return { plotType: evt.target.value };
+        if (name === "basin") return { basin: evt.target.value };
+        if (name === "selectStorm") {
+            const selectedStorm = state.storms[evt.target.value.id];
+            return {
                 stormInfo: selectedStorm,
-                viewState: newViewState,
+                viewState: this.viewStateForStorm(selectedStorm, false),
                 stormSheetCollapsed: false,
-            });
+            };
         }
-        else if (evt.target.name === "selectedPoint") {
-            await this.setState({ selectedPoint: parseInt(evt.target.value) });
+        if (name === "selectedPoint") return { selectedPoint: parseInt(evt.target.value, 10) };
+        if (name === "backwardSelectedPoint" && state.selectedPoint > 0) {
+            return { selectedPoint: state.selectedPoint - 1 };
         }
-        else if (evt.target.name === "backwardSelectedPoint" && this.state.selectedPoint > 0) {
-            await this.setState(prevState => ({ selectedPoint: (prevState.selectedPoint - 1)}))
+        if (name === "forwardSelectedPoint" && state.stormInfo && state.selectedPoint < state.stormInfo.track_points.length - 1) {
+            return { selectedPoint: state.selectedPoint + 1 };
         }
-        else if (evt.target.name === "forwardSelectedPoint" && this.state.selectedPoint < this.state.stormInfo.track_points.length - 1) {
-            await this.setState(prevState => ({ selectedPoint: (prevState.selectedPoint + 1)}))
+        if (name === "exitStorm") {
+            return { stormInfo: null, selectedPoint: 0, stormSheetCollapsed: false };
         }
+        return {};
+    }
+
+    layersFor(state) {
+        let only6Hour = state.only6Hour;
         let dataSource;
-        if (this.state.plotType === PLOT_TYPES.STORM) {
-            dataSource = this.state.storms;
+        if (state.plotType === PLOT_TYPES.STORM) {
+            dataSource = state.storms;
         } else {
             // Spur tracks repeat a main track. Heatmap, Grid, Max Wind Grid
             // and Scatter never count them. The storm-view toggle does not apply here.
-            dataSource = Object.values(this.state.storms)
+            dataSource = Object.values(state.storms)
                 .filter(storm => !isSpurTrack(storm))
                 .flatMap(storm => storm["track_points"]);
-            // For aggregation layers we need to remove none 6 hours points so its unbiased
-            if (this.state.plotType === PLOT_TYPES.HEATMAP || this.state.plotType === PLOT_TYPES.GRID) {
-                await this.setState({ only6Hour: true });
+            // Aggregation layers drop off-synoptic points so the counts stay unbiased.
+            if (state.plotType === PLOT_TYPES.HEATMAP || state.plotType === PLOT_TYPES.GRID) {
+                only6Hour = true;
             }
-            if (this.state.landfall) {
-                await this.setState({ only6Hour: false });
+            if (state.landfall) {
+                only6Hour = false;
             }
         }
+        const view = only6Hour === state.only6Hour ? state : { ...state, only6Hour };
         let data;
-        if (Array.isArray(dataSource)) { // Track points
+        if (Array.isArray(dataSource)) {
             data = dataSource
                 .filter(point =>
-                    (this.state.basin === "ALL" ? true : this.state.storms[point.id].basin === this.state.basin)
-                    && point.year >= this.state.minYear
-                    && point.year <= this.state.maxYear
-                    && point.month >= this.state.minMonth
-                    && point.month <= this.state.maxMonth
-                    && hasWindInRange(point.wind, this.state.minWind, this.state.maxWind)
-                    && (this.state.filterByPressure ? point.pressure && point.pressure >= this.state.minPressure : true)
-                    && (this.state.filterByPressure ? point.pressure && point.pressure <= this.state.maxPressure : true)
-                    && (SYSTEM_STATUSES[this.state.systemStatus] ? point.status === SYSTEM_STATUSES[this.state.systemStatus] : true)
-                    && (this.state.landfall ? point.record_type === "L" : true)
-                    && (this.state.only6Hour ?  point.minutes === 0 && point.hours % 6 === 0 : true));
-        } else { // Storm
+                    (view.basin === "ALL" ? true : view.storms[point.id].basin === view.basin)
+                    && point.year >= view.minYear
+                    && point.year <= view.maxYear
+                    && point.month >= view.minMonth
+                    && point.month <= view.maxMonth
+                    && hasWindInRange(point.wind, view.minWind, view.maxWind)
+                    && (view.filterByPressure ? point.pressure && point.pressure >= view.minPressure : true)
+                    && (view.filterByPressure ? point.pressure && point.pressure <= view.maxPressure : true)
+                    && (SYSTEM_STATUSES[view.systemStatus] ? point.status === SYSTEM_STATUSES[view.systemStatus] : true)
+                    && (view.landfall ? point.record_type === "L" : true)
+                    && (view.only6Hour ? point.minutes === 0 && point.hours % 6 === 0 : true));
+        } else {
             data = Object.fromEntries(Object.entries(dataSource)
-                .filter(([k,storm]) =>
-                    (this.state.stormInfo ? this.state.stormInfo["id"] === storm["id"] : true)
-                    && (this.state.basin === "ALL" ? true : storm.basin === this.state.basin)
-                    && (this.state.name ? storm.name.startsWith(this.state.name.toUpperCase()): true)
-                    && storm.season >= this.state.minYear
-                    && storm.season <= this.state.maxYear
-                    && storm.track_points[0].month >= this.state.minMonth
-                    && storm.track_points[storm.track_points.length - 1].month <= this.state.maxMonth
-                    && (this.state.showSpurs || !isSpurTrack(storm))
-                    && hasWindInRange(storm.max_wind, this.state.minWind, this.state.maxWind)
-                    && (this.state.filterByPressure ? storm.min_pressure && storm.min_pressure >= this.state.minPressure : true)
-                    && (this.state.filterByPressure ? storm.min_pressure && storm.min_pressure <= this.state.maxPressure : true)
-                    && (SYSTEM_STATUSES[this.state.systemStatus] ? storm.status_list.includes(SYSTEM_STATUSES[this.state.systemStatus]) : true)
-                    && (this.state.landfall ? storm.record_type_list.includes("L") : true)))
+                .filter(([k, storm]) =>
+                    (view.stormInfo ? view.stormInfo["id"] === storm["id"] : true)
+                    && (view.basin === "ALL" ? true : storm.basin === view.basin)
+                    && (view.name ? storm.name.startsWith(view.name.toUpperCase()) : true)
+                    && storm.season >= view.minYear
+                    && storm.season <= view.maxYear
+                    && storm.track_points[0].month >= view.minMonth
+                    && storm.track_points[storm.track_points.length - 1].month <= view.maxMonth
+                    && (view.showSpurs || !isSpurTrack(storm))
+                    && hasWindInRange(storm.max_wind, view.minWind, view.maxWind)
+                    && (view.filterByPressure ? storm.min_pressure && storm.min_pressure >= view.minPressure : true)
+                    && (view.filterByPressure ? storm.min_pressure && storm.min_pressure <= view.maxPressure : true)
+                    && (SYSTEM_STATUSES[view.systemStatus] ? storm.status_list.includes(SYSTEM_STATUSES[view.systemStatus]) : true)
+                    && (view.landfall ? storm.record_type_list.includes("L") : true)));
         }
         let layers;
-        if (this.state.plotType === PLOT_TYPES.STORM) {
+        if (view.plotType === PLOT_TYPES.STORM) {
             layers = getStormLayers(data, hoverInfo => this.setState({hoverInfo}), this.onChange,
-                this.state.showMaxWindPoly, this.state.showWindPoly, this.state.stormInfo, this.state.selectedPoint, this.state.scatterplotSettings, this.state.lineSettings);
-        } else if (this.state.plotType === PLOT_TYPES.HEATMAP) {
-            layers = getHeatmapLayer(data, this.state.heatmapSettings);
-        } else if (this.state.plotType === PLOT_TYPES.GRID) {
-            layers = getGridLayer(data, this.state.gridSettings);
-        } else if (this.state.plotType === PLOT_TYPES.MAX_WIND_GRID) {
-            layers = getGridLayerMaxWind(data, this.state.gridSettings);
+                view.showMaxWindPoly, view.showWindPoly, view.stormInfo, view.selectedPoint, view.scatterplotSettings, view.lineSettings);
+        } else if (view.plotType === PLOT_TYPES.HEATMAP) {
+            layers = getHeatmapLayer(data, view.heatmapSettings);
+        } else if (view.plotType === PLOT_TYPES.GRID) {
+            layers = getGridLayer(data, view.gridSettings);
+        } else if (view.plotType === PLOT_TYPES.MAX_WIND_GRID) {
+            layers = getGridLayerMaxWind(data, view.gridSettings);
         } else {
-            // Don't pass anything to stormInfo
-            layers = getScatterplotLayer(data, hoverInfo => this.setState({hoverInfo}), stormInfo => {}, null, this.state.scatterplotSettings);
+            layers = getScatterplotLayer(data, hoverInfo => this.setState({hoverInfo}), stormInfo => {}, null, view.scatterplotSettings);
         }
-        this.setState({
-            dataSource,
-            data,
-            layers
-        })
+        return { only6Hour, dataSource, data, layers };
+    }
+
+    onChange = (evt) => {
+        this.setState(prev => {
+            const partial = this.patchFromEvent(prev, evt);
+            return { ...partial, ...this.layersFor({ ...prev, ...partial }) };
+        });
     };
 
-    onSettingsChange = async (evt, settings) => {
-        await this.setState(prevState => ({
-            [settings.name]: {
-                ...prevState[settings.name],
+    onSettingsChange = (evt, settings) => {
+        this.setState(prev => {
+            const nextSettings = {
+                ...prev[settings.name],
                 [evt.target.name]: parseFloat(evt.target.value)
-            }
-        }));
-        await this.onChange({target: {name: this.state.plotType}})
+            };
+            return {
+                [settings.name]: nextSettings,
+                ...this.layersFor({ ...prev, [settings.name]: nextSettings })
+            };
+        });
     }
 
     updateDimensions = () => {

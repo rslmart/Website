@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import FilterPanel from "./filter-panel";
 import { PLOT_TYPES, mobileSheetMaxHeight, mobileStormPadding } from "./Hurricane";
 import SettingsPanel from "./settings-panel";
-import StormInfo from "./storm-info";
+import StormInfo, { buildIrCandidateUrls } from "./storm-info";
 import { server } from "../test/networkGuard";
 
 const early = {
@@ -148,6 +148,63 @@ describe("satellite imagery states", () => {
         expect(steps).toBeGreaterThan(1);
         expect(screen.getByRole("status")).toHaveTextContent("No imagery");
         expect(document.querySelector("img")).toBeNull();
+    });
+
+    it("shows the frame when a candidate loads", () => {
+        renderStorm(modern);
+        const img = document.querySelector("img");
+        expect(img.getAttribute("src")).toContain("2024al05_4kmirimg_202408121200.gif");
+        fireEvent.load(img);
+        expect(screen.queryByText("Loading imagery…")).not.toBeInTheDocument();
+        expect(screen.getByRole("img")).toBeVisible();
+    });
+
+    it("leaves loading behind when the next point is selected after a miss", () => {
+        const two = {
+            ...modern,
+            track_points: [
+                modern.track_points[0],
+                { date_time: "2024-08-12 18:00:00", wind: 70, pressure: 985 },
+            ],
+        };
+        const { rerender } = renderStorm(two);
+        let steps = 0;
+        while (screen.queryByText("No imagery") == null && steps < 30) {
+            fireEvent.error(document.querySelector("img"));
+            steps += 1;
+        }
+        expect(screen.getByRole("status")).toHaveTextContent("No imagery");
+        rerender(
+            <StormInfo
+                stormInfo={two}
+                selectedPoint={1}
+                onChange={() => {}}
+                exitStormInfo={() => {}}
+            />
+        );
+        expect(screen.getByRole("status")).toHaveTextContent("Loading imagery…");
+        expect(document.querySelector("img").getAttribute("src")).toContain("202408121800");
+    });
+});
+
+describe("imagery URLs", () => {
+    it("builds the RAMMB gif for ISAIAS 2026 and for a frame that exists", () => {
+        const isaias = buildIrCandidateUrls(
+            { season: 2026, atcf_id: "AL092026", id: "2026278N22264" },
+            { date_time: "2026-10-08 09:00:00" }
+        );
+        expect(isaias[0]).toBe(
+            "https://rammb-data.cira.colostate.edu/tc_realtime/products/storms/2026al09/4kmirimg/2026al09_4kmirimg_202610080900.gif"
+        );
+        const southern = buildIrCandidateUrls(
+            { season: 2020, atcf_id: "SH012020", id: "2019329S15113" },
+            { date_time: "2019-11-25 12:00:00" }
+        );
+        expect(southern[0]).toBe(
+            "https://rammb-data.cira.colostate.edu/tc_realtime/products/storms/2020sh01/4kmirimg/2020sh01_4kmirimg_201911251200.gif"
+        );
+        expect(southern.length).toBeGreaterThan(1);
+        expect(buildIrCandidateUrls({ season: 1900, id: "1900252N27230" }, { date_time: "1900-09-08 00:00:00" })).toEqual([]);
     });
 });
 

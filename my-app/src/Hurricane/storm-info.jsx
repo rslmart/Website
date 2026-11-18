@@ -34,7 +34,7 @@ function stamp(ms) {
 // the 2016 season onward.
 const RAMMB_MINUTE_OFFSETS = [0, 10, -10, 15, -15, 20, -20, 30, -30, 45, -45, 60, -60, 90, -90, 120, -120];
 
-function buildRammbUrls(stormInfo, pointInfo) {
+export function buildRammbUrls(stormInfo, pointInfo) {
     const atcf = stormInfo && stormInfo.atcf_id;
     if (!atcf || atcf.length < 8) return [];
     const stormId = `${atcf.slice(4, 8)}${atcf.slice(0, 2).toLowerCase()}${atcf.slice(2, 4)}`;
@@ -65,7 +65,7 @@ function buildHursatUrls(stormInfo, pointInfo) {
     );
 }
 
-function buildIrCandidateUrls(stormInfo, pointInfo) {
+export function buildIrCandidateUrls(stormInfo, pointInfo) {
     const season = stormInfo.season || 0;
     if (season >= 2016) return buildRammbUrls(stormInfo, pointInfo);
     if (season >= 1978) return buildHursatUrls(stormInfo, pointInfo);
@@ -122,17 +122,18 @@ const imageryFrame = {
 
 function SatelliteImage({ stormInfo, pointInfo }) {
     const irKey = `${stormInfo["id"]}|${pointInfo.date_time}`;
-    const [attempt, setAttempt] = React.useState(0);
-    const [ready, setReady] = React.useState(false);
-    React.useEffect(() => {
-        setAttempt(0);
-        setReady(false);
-    }, [irKey]);
+    // Reset during render so a new point does not keep the previous point's
+    // attempt. An error from the image we just unmounted must not advance it.
+    const [frame, setFrame] = React.useState({ key: irKey, attempt: 0, ready: false });
+    if (frame.key !== irKey) {
+        setFrame({ key: irKey, attempt: 0, ready: false });
+    }
+    const showing = frame.key === irKey ? frame : { key: irKey, attempt: 0, ready: false };
 
     const candidates = buildIrCandidateUrls(stormInfo, pointInfo);
     const season = stormInfo.season || 0;
     const source = season >= 2016 ? "Enhanced IR — RAMMB/CIRA" : "Infrared — HURSAT-B1 (NOAA NCEI)";
-    const url = attempt < candidates.length ? candidates[attempt] : null;
+    const url = showing.attempt < candidates.length ? candidates[showing.attempt] : null;
 
     if (!url) {
         return (
@@ -141,23 +142,24 @@ function SatelliteImage({ stormInfo, pointInfo }) {
     }
 
     return (
-        <div aria-busy={!ready} style={{ maxWidth: 300 }}>
-            {!ready && (
+        <div aria-busy={!showing.ready} style={{ maxWidth: 300 }}>
+            {!showing.ready && (
                 <div role="status" style={imageryFrame}>Loading imagery…</div>
             )}
             <img
                 key={url}
                 src={url}
                 alt={`Infrared satellite image of ${stormInfo["name"]} near ${pointInfo.date_time}`}
-                aria-hidden={ready ? undefined : true}
-                style={{ width: "100%", maxWidth: 300, display: ready ? "block" : "none" }}
-                onLoad={() => setReady(true)}
-                onError={() => {
-                    setReady(false);
-                    setAttempt((n) => n + 1);
-                }}
+                aria-hidden={showing.ready ? undefined : true}
+                style={{ width: "100%", maxWidth: 300, display: showing.ready ? "block" : "none" }}
+                onLoad={() => setFrame(current => current.key === irKey ? { ...current, ready: true } : current)}
+                onError={() => setFrame(current => (
+                    current.key === irKey
+                        ? { key: irKey, attempt: current.attempt + 1, ready: false }
+                        : current
+                ))}
             />
-            {ready && <div style={{ fontSize: 11, color: "var(--color-text-faint)" }}>{source}</div>}
+            {showing.ready && <div style={{ fontSize: 11, color: "var(--color-text-faint)" }}>{source}</div>}
         </div>
     );
 }
