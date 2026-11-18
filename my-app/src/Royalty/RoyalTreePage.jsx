@@ -342,8 +342,13 @@ class RoyalTree extends Component {
             'background-color': 'data(color)',
             'border-color': 'data(borderColor)',
             'border-width': 5,
-            'opacity': 'data(opacity)',
           }
+        },
+        {
+          // Marriage nodes have no opacity field. Mapping it on every node
+          // warns once each. The default opacity matches that failed mapping.
+          selector: 'node[opacity]',
+          style: { 'opacity': 'data(opacity)' }
         },
         {
           // Larger ellipse plus a short reign label. Fills, border colours
@@ -390,8 +395,6 @@ class RoyalTree extends Component {
           style: {
             'width': 1.5,
             'label': '',
-            'line-color': 'data(color)',
-            'target-arrow-color': 'data(color)',
             'target-arrow-shape': 'triangle',
             'curve-style': 'bezier',
             'text-rotation': 'autorotate',
@@ -402,8 +405,18 @@ class RoyalTree extends Component {
           }
         },
         {
+          // Colour is set only when an endpoint has a house. Other edges keep
+          // the default grey; mapping `color` onto them warns for both paints.
+          selector: 'edge[color]',
+          style: {
+            'line-color': 'data(color)',
+            'target-arrow-color': 'data(color)',
+          }
+        },
+        {
           // House names: the detail tier, or the one edge under the pointer.
-          selector: 'edge.lod-detail, edge.hover',
+          // Edges with no house have no `family` field.
+          selector: 'edge[family].lod-detail, edge[family].hover',
           style: { 'label': 'data(family)' }
         },
         {
