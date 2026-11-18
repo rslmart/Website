@@ -19,7 +19,9 @@
 //   - plates.json.gz      54 polygons with { Code, PlateName }
 //   - boundaries.json.gz  5,819 steps, one per SEQNUM, columnar
 //                         (seq0, stepClass, plateBound, velocity, azimuth,
-//                         divergence, rightLateral, coordinates)
+//                         divergence, rightLateral, subducting, coordinates)
+//                         subducting is "L" or "R" on each SUB step, null
+//                         otherwise. See README.md for Bird's '/' and '\' rule.
 //   - orogens.json.gz     13 orogeny polygons
 //   - velocity.json.gz    step midpoints about every 250 km along each plate pair
 //                         { lon, lat, azimuthDeg, speed, plateBound, divergence,
@@ -53,6 +55,9 @@ export const DATA_THROUGH = '2003-03';
 const MAX_FETCH_BYTES = 1_000_000;
 const MAX_BOUNDARY_GZIP = 90_000;
 const EXPECTED_STEPS = 5819;
+// SUB rows in the pinned PB2002_steps.csv. An earlier 1,129 count included
+// two repeated steps that this 5,819-row file does not.
+export const EXPECTED_SUB_STEPS = 1127;
 
 const RAW = `https://raw.githubusercontent.com/fraxen/tectonicplates/${PB2002_COMMIT}`;
 export const SOURCES = [
@@ -312,6 +317,56 @@ export function platePairKey(plateBound) {
     return String(plateBound).replace(/[\\/]/g, '-');
 }
 
+// Bird (2003), section 8, paragraph [122]: traveling the step from its start
+// to its end, "/" means the right-hand plate subducts and "\" means the
+// left-hand plate subducts. The overriding plate is the other side. Set only
+// on SUB steps; a non-SUB step can still carry the segment mark in plateBound.
+export function subductingSide(plateBound, stepClass) {
+    if (stepClass !== 'SUB') return null;
+    const bound = String(plateBound);
+    const rightSubducts = bound.includes('/');
+    const leftSubducts = bound.includes('\\');
+    if (rightSubducts && leftSubducts) {
+        throw new Error(`PB2002 plate pair ${bound} has both polarity marks`);
+    }
+    if (rightSubducts) return 'R';
+    if (leftSubducts) return 'L';
+    return null;
+}
+
+// Parallel to the other boundary columns. Row i matches SEQNUM seq0 + i.
+export function withSubducting(columnar, boundaries) {
+    return {
+        ...columnar,
+        subducting: boundaries.features.map((feature) =>
+            subductingSide(feature.properties.plateBound, feature.properties.stepClass),
+        ),
+    };
+}
+
+function assertSubductionSides(boundaries, subducting) {
+    let sub = 0;
+    for (let i = 0; i < boundaries.features.length; i++) {
+        const feature = boundaries.features[i];
+        const side = subducting[i];
+        if (feature.properties.stepClass !== 'SUB') {
+            if (side != null) {
+                throw new Error(`non-SUB step ${feature.properties.seq} has a subducting side`);
+            }
+            continue;
+        }
+        sub += 1;
+        if (side !== 'L' && side !== 'R') {
+            throw new Error(
+                `SUB step ${feature.properties.seq} (${feature.properties.plateBound}) has no subducting side`,
+            );
+        }
+    }
+    if (sub !== EXPECTED_SUB_STEPS) {
+        throw new Error(`expected ${EXPECTED_SUB_STEPS} SUB steps, got ${sub}`);
+    }
+}
+
 function stepLengthKm(step) {
     if (Number.isFinite(step.STEPLENGTH) && step.STEPLENGTH >= 0) return step.STEPLENGTH;
     return haversineKm(step.STARTLONG, step.STARTLAT, step.FINALLONG, step.FINALLAT);
@@ -526,10 +581,12 @@ export async function main(options = {}) {
         throw new Error('boundary SEQNUM values are not unique');
     }
 
+    const boundaryColumns = withSubducting(toColumnar(boundaries), boundaries);
+    if (!options.input) assertSubductionSides(boundaries, boundaryColumns.subducting);
     const packed = {
         'plates.json.gz': gzipJson(buildPlates(plates)),
         'orogens.json.gz': gzipJson(buildOrogens(orogens)),
-        'boundaries.json.gz': gzipJson(toColumnar(boundaries)),
+        'boundaries.json.gz': gzipJson(boundaryColumns),
         'velocity.json.gz': gzipJson(buildVelocity(steps)),
     };
     const boundaryBytes = packed['boundaries.json.gz'].gz.length;

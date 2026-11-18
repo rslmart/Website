@@ -6,11 +6,12 @@ import {mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync} from "nod
 import {tmpdir} from "node:os";
 import {join, resolve} from "node:path";
 import {fileURLToPath, pathToFileURL} from "node:url";
-import {gunzipSync} from "node:zlib";
+import {gunzipSync, gzipSync} from "node:zlib";
 import {afterAll, beforeAll, describe, expect, it} from "vitest";
 import {fromColumnar, longitudeSpans, toColumnar} from "../boundaries.mjs";
 import {
     DATA_THROUGH,
+    EXPECTED_SUB_STEPS,
     PB2002_COMMIT,
     SOURCES,
     buildBoundaries,
@@ -21,7 +22,9 @@ import {
     invokedAsProgram,
     measureArrowSpacing,
     platePairKey,
+    subductingSide,
     VELOCITY_SPACING_KM,
+    withSubducting,
 } from "./build.mjs";
 
 const dataDir = fileURLToPath(new URL(".", import.meta.url));
@@ -248,6 +251,39 @@ describe("build output", () => {
         expect(platePairKey(joined[0].plateBound)).toBe("NA-PA");
     });
 
+    it("records the subducting side from Bird's '/' and '\\' marks", () => {
+        // "/" : the right plate subducts. "\\" : the left plate subducts.
+        expect(subductingSide("NA/PA", "SUB")).toBe("R");
+        expect(subductingSide("PA/AU", "SUB")).toBe("R");
+        expect(subductingSide("SU/AU", "SUB")).toBe("R");
+        expect(subductingSide("MA/PA", "SUB")).toBe("R");
+        expect(subductingSide("AU\\PA", "SUB")).toBe("L");
+        expect(subductingSide("NZ\\SA", "SUB")).toBe("L");
+        expect(subductingSide("NA/PA", "OTF")).toBeNull();
+        expect(subductingSide("PA-NA", "SUB")).toBeNull();
+        expect(() => subductingSide("NA/PA\\AU", "SUB")).toThrow(/both polarity marks/);
+        const columnar = withSubducting(toColumnar(boundaries), boundaries);
+        expect(columnar.subducting).toEqual(boundaries.features.map(() => null));
+        const markedStep = (seq, plateBound, stepClass) => ({
+            type: "Feature",
+            properties: {
+                ...fixture.steps.features[0].properties,
+                SEQNUM: seq,
+                PLATEBOUND: plateBound,
+                STEPCLASS: stepClass,
+            },
+        });
+        const marked = buildBoundaries({
+            type: "FeatureCollection",
+            features: [
+                markedStep(1, "NA/PA", "SUB"),
+                markedStep(2, "AU\\PA", "SUB"),
+                markedStep(3, "NA/PA", "OTF"),
+            ],
+        });
+        expect(withSubducting(toColumnar(marked), marked).subducting).toEqual(["R", "L", null]);
+    });
+
     it("keeps one feature when a SEQNUM is repeated", () => {
         const first = fixture.steps.features[0];
         const repeated = {
@@ -344,7 +380,7 @@ describe("import guard", () => {
         expect(readGzipJson(outDir, "plates.json.gz")).toEqual(buildPlates(fixture.plates));
         expect(readGzipJson(outDir, "orogens.json.gz")).toEqual(buildOrogens(fixture.orogens));
         const built = buildBoundaries(fixture.steps);
-        expect(readGzipJson(outDir, "boundaries.json.gz")).toEqual(toColumnar(built));
+        expect(readGzipJson(outDir, "boundaries.json.gz")).toEqual(withSubducting(toColumnar(built), built));
         expect(fromColumnar(readGzipJson(outDir, "boundaries.json.gz"))).toEqual(built);
         expect(readGzipJson(outDir, "velocity.json.gz")).toEqual(buildVelocity(fixture.steps));
         const meta = JSON.parse(readFileSync(join(outDir, "meta.json"), "utf8"));
@@ -462,6 +498,87 @@ describe("published PB2002 boundaries", () => {
                 stepAzimuth: expect.any(Number),
             }));
         }
+    });
+
+    it("gives every SUB step a subducting side within 5 KB gzipped", () => {
+        const subducting = columnar.subducting;
+        expect(subducting).toHaveLength(5819);
+        let sub = 0;
+        let left = 0;
+        let right = 0;
+        boundaries.features.forEach((feature, i) => {
+            const side = subducting[i];
+            if (feature.properties.stepClass !== "SUB") {
+                expect(side).toBeNull();
+                return;
+            }
+            sub += 1;
+            expect(side === "L" || side === "R").toBe(true);
+            const plateBound = feature.properties.plateBound;
+            if (side === "L") {
+                left += 1;
+                expect(plateBound).toContain("\\");
+            } else {
+                right += 1;
+                expect(plateBound).toContain("/");
+            }
+        });
+        expect(sub).toBe(EXPECTED_SUB_STEPS);
+        expect(left).toBe(358);
+        expect(right).toBe(769);
+
+        const featureAt = (seq) => boundaries.features[seq - columnar.seq0];
+        const sideAt = (seq) => subducting[seq - columnar.seq0];
+        const midpoint = (feature) => {
+            const lines = feature.geometry.type === "LineString"
+                ? [feature.geometry.coordinates]
+                : feature.geometry.coordinates;
+            const start = lines[0][0];
+            const endLine = lines[lines.length - 1];
+            const end = endLine[endLine.length - 1];
+            return {lon: (start[0] + end[0]) / 2, lat: (start[1] + end[1]) / 2};
+        };
+        // Aleutians: Pacific (right) under North America.
+        const aleutians = featureAt(2786);
+        expect(aleutians.properties.plateBound).toBe("NA/PA");
+        expect(sideAt(2786)).toBe("R");
+        expect(midpoint(aleutians).lat).toBeGreaterThan(50);
+        expect(midpoint(aleutians).lon).toBeGreaterThan(165);
+        // Java: Australia (right) under Sunda.
+        const java = featureAt(1378);
+        expect(java.properties.plateBound).toBe("SU/AU");
+        expect(sideAt(1378)).toBe("R");
+        expect(midpoint(java).lat).toBeLessThan(-8);
+        expect(midpoint(java).lon).toBeGreaterThan(105);
+        // Puysegur: Australia under Pacific, digitized both ways.
+        const puysegurLeft = featureAt(1432);
+        expect(puysegurLeft.properties.plateBound).toBe("AU\\PA");
+        expect(sideAt(1432)).toBe("L");
+        expect(midpoint(puysegurLeft).lat).toBeLessThan(-44);
+        const puysegurRight = featureAt(4294);
+        expect(puysegurRight.properties.plateBound).toBe("PA/AU");
+        expect(sideAt(4294)).toBe("R");
+        expect(midpoint(puysegurRight).lat).toBeLessThan(-44);
+        // Andes: Nazca (left) under South America.
+        const andes = featureAt(3056);
+        expect(andes.properties.plateBound).toBe("NZ\\SA");
+        expect(sideAt(3056)).toBe("L");
+        expect(midpoint(andes).lon).toBeLessThan(-70);
+        expect(midpoint(andes).lat).toBeLessThan(-40);
+        // Marianas: Pacific (right) under the Mariana plate.
+        const marianas = featureAt(3200);
+        expect(marianas.properties.plateBound).toBe("MA/PA");
+        expect(sideAt(3200)).toBe("R");
+        expect(midpoint(marianas).lat).toBeGreaterThan(10);
+        expect(midpoint(marianas).lon).toBeGreaterThan(140);
+
+        const full = gzipSync(Buffer.from(JSON.stringify(columnar)), {level: 9, mtime: 0});
+        const rest = {...columnar};
+        delete rest.subducting;
+        const base = gzipSync(Buffer.from(JSON.stringify(rest)), {level: 9, mtime: 0});
+        expect(full.length).toBe(gzipBytes);
+        expect(full.length - base.length).toBeLessThanOrEqual(5_000);
+        expect(full.length).toBeLessThanOrEqual(90_000);
     });
 
     it("stays at or under 90 KB and records provenance", () => {
