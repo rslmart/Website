@@ -102,6 +102,11 @@ def test_date_precision():
     assert validate.date_cmp(p("+1000-05-01T00:00:00Z"), p("+1000-05-00T00:00:00Z")) == 0
     assert validate.date_cmp(p("+1000-05-02T00:00:00Z"), p("+1000-05-01T00:00:00Z")) == 1
     assert validate.date_cmp(p("-0100-00-00T00:00:00Z"), p("+0001-00-00T00:00:00Z")) == -1
+    century = {"time": "+1100-01-01T00:00:00Z", "precision": 7}
+    assert p(century) == (1100, 1, 1)
+    t = tree()
+    t["nodes"]["Q1"]["date of birth"] = century
+    assert "schema-person" not in rules(files(T=t))
 
 
 def test_parent_order_uses_extended_nodes():

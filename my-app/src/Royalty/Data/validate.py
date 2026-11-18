@@ -44,6 +44,20 @@ HOUSES_INDEX = "houses.json"
 
 QID = {"type": "string", "pattern": r"^Q[1-9][0-9]*$"}
 DATE = {"type": "string", "pattern": r"^[+-][0-9]{1,}-[0-9]{2}-[0-9]{2}T00:00:00Z$"}
+# Birth and death may be the legacy time string or {"time", "precision"}.
+# A string still has to match DATE. An object is checked only when the value
+# is an object: this schema subset applies pattern to strings and properties
+# to objects.
+DATE_VALUE = {
+    "type": ["string", "object"],
+    "pattern": DATE["pattern"],
+    "required": ["time", "precision"],
+    "properties": {
+        "time": DATE,
+        "precision": {"type": "integer"},
+    },
+    "additionalProperties": False,
+}
 STR_OR_NULL = {"type": ["string", "null"]}
 QID_LIST = {"type": "array", "items": QID}
 STR_LIST = {"type": "array", "items": {"type": "string"}}
@@ -81,8 +95,8 @@ PERSON_SCHEMA = {
         "sex or gender": {"type": "string"},
         "father": QID,
         "mother": QID,
-        "date of birth": DATE,
-        "date of death": DATE,
+        "date of birth": DATE_VALUE,
+        "date of death": DATE_VALUE,
         "child": QID_LIST,
         "spouse": QID_LIST,
         "sibling": QID_LIST,
@@ -272,8 +286,16 @@ _DATE_RE = re.compile(r"^([+-])([0-9]+)-([0-9]{2})-([0-9]{2})")
 
 
 def parse_date(value):
-    """(year, month, day) from a Wikidata time string; month/day 0 = unknown."""
-    m = _DATE_RE.match(value or "")
+    """(year, month, day) from a Wikidata time or ``{"time", "precision"}``.
+
+    Month or day 0 means unknown. Precision is not a second calendar; the
+    comparison still uses the stored time, at the shared month/day precision.
+    """
+    if isinstance(value, dict):
+        value = value.get("time")
+    if not isinstance(value, str):
+        return None
+    m = _DATE_RE.match(value)
     if not m:
         return None
     year = int(m.group(2)) * (-1 if m.group(1) == "-" else 1)
