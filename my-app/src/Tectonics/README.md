@@ -67,9 +67,12 @@ Transformations:
   ±180 stays a 2-point LineString. A step that does is a MultiLineString split
   at ±180, with the latitude interpolated. The gzipped file is columnar
   (`seq0`, `stepClass`, `plateBound`, `velocity`, `azimuth`, `divergence`,
-  `rightLateral`, `coordinates`). Row `i` is SEQNUM `seq0 + i`. The loader in
-  `Tectonics.jsx` expands that back into a FeatureCollection. `divergence` is
-  Bird's `VELOCITYDI` (convergence negative) and `rightLateral` is `VELOCITYRI`.
+  `rightLateral`, `subducting`, `coordinates`). Row `i` is SEQNUM `seq0 + i`.
+  The loader in `Tectonics.jsx` expands the geometry and the velocity fields
+  back into a FeatureCollection; it does not copy `subducting` onto features,
+  and the page does not draw subduction teeth. `divergence` is Bird's
+  `VELOCITYDI` (convergence negative) and `rightLateral` is `VELOCITYRI`.
+  `subducting` is `"L"`, `"R"`, or `null`, as below.
 - **Velocity** → step midpoints sampled about every 250 km along each plate
   pair (`/` and `\` count as the same pair as `-`). A pair shorter than that
   still gets one arrow. Each point is
@@ -103,6 +106,47 @@ Bird's `STEPCLASS` codes are mapped to four display categories in
 
 `categoryForStepClass()` and `colorForStepClass()` resolve the category and RGB
 color (unknown classes fall back to grey).
+
+### Subduction polarity
+
+Bird (2003), section 8, “Digital Data Formats,” paragraph [122], page 43 of the
+PDF (labeled “43 of 52”), *Geochemistry, Geophysics, Geosystems* 4(3), 1027,
+[doi:10.1029/2001GC000252](https://doi.org/10.1029/2001GC000252). Checked
+2026-11-18 against the PDF at
+[eps.mcgill.ca](https://www.eps.mcgill.ca/~courses/c350/ProbSets/Bird_2003_G3.pdf)
+and the [Wiley HTML](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2001GC000252).
+
+> The title record for each segment has 5 bytes, in which the first two bytes
+> give the identifier of the plate on the left (as one travels along the
+> segment, looking down from outside the Earth) and bytes 4–5 give the
+> identifier of the plate on the right. In byte 3, the symbol “/” indicates
+> that the right-hand plate subducts under the left-hand plate, while symbol
+> “\” indicates the opposite polarity of subduction.
+
+The steps file copies that identifier into `plateBound` (Table 2, bytes 7–11).
+The first code is the left plate and the second is the right, traveling from
+the step's start to its end. On a `SUB` step, `/` is stored as `subducting`
+`"R"` and `\` as `"L"`. The overriding plate is the other side. Other classes
+are `null`, including the 25 non-`SUB` steps whose segment title still carries
+a slash. The pinned `PB2002_steps.csv` has **1,127** `SUB` rows (769 `"R"`,
+358 `"L"`). An earlier count of 1,129 included two repeated steps that this
+5,819-row file does not.
+
+Spot checks against published geology, all checked 2026-11-18. In each case the
+plate Bird marks as subducting is the plate the literature puts on the
+downgoing side:
+
+| Zone | Example | `plateBound` | Side | Downgoing plate | Source |
+|------|---------|--------------|------|-----------------|--------|
+| Aleutians | SEQNUM 2786, 170°E 53°N | `NA/PA` | R | Pacific | National Geographic, [Ocean trench](https://education.nationalgeographic.org/resource/ocean-trench/): the Pacific plate subducts beneath the North American plate |
+| Java | SEQNUM 1378, 106°E 9°S | `SU/AU` | R | Australia | USGS, [Seismicity of the Earth 1900–2012, Java and vicinity](https://www.usgs.gov/publications/seismicity-earth-1900-2012-java-and-vicinity): the India and Australia plates subduct beneath the Sunda plate |
+| Puysegur | SEQNUM 1432 (`AU\PA`) and 4294 (`PA/AU`), ~167°E 45°S | both | L and R | Australia either way | Shuck et al. (2021), *Tectonics*, [doi:10.1029/2020TC006436](https://doi.org/10.1029/2020TC006436): the Australian Plate underthrusts the Pacific Plate. [Te Ara](https://teara.govt.nz/en/sea-floor-geology/page-2) says the same |
+| Andes | SEQNUM 3056, 76°W 43°S | `NZ\SA` | L | Nazca | National Geographic, [Plate tectonics and the Ring of Fire](https://education.nationalgeographic.org/resource/plate-tectonics-ring-fire/): the Nazca Plate subducts beneath the South American Plate at the Peru-Chile Trench |
+| Marianas | SEQNUM 3200, 144°E 12°N | `MA/PA` | R | Pacific | National Geographic, [Ocean trench](https://education.nationalgeographic.org/resource/ocean-trench/): the Pacific plate subducts at the Mariana Trench. In PB2002 the overriding plate of these steps is the Mariana plate |
+
+Adding the column increased `boundaries.json.gz` by 411 bytes, from 87,541 to
+87,952. That is under the 5 KB limit for this field and under the file's 90 KB
+cap.
 
 ## How the frontend uses it
 
@@ -140,11 +184,13 @@ for (const coords of b.coordinates) {
   const lines=Array.isArray(coords[0][0])?coords:[coords];
   for (const line of lines) for (let i=1;i<line.length;i++) if (Math.abs(line[i][0]-line[i-1][0])>180) wide++;
 }
+const sub=b.subducting.filter(Boolean);
 console.log({plates:L("plates.json.gz").features.length,
   orogens:L("orogens.json.gz").features.length, steps:b.stepClass.length,
   seq0:b.seq0, wide, velocity:L("velocity.json.gz").length,
+  subducting:sub.length, subL:sub.filter(s=>s==="L").length,
   boundaryGzip:fs.statSync("public/tectonics/boundaries.json.gz").size})'
-# { plates: 54, orogens: 13, steps: 5819, seq0: 1, wide: 0, velocity: 988, boundaryGzip: 87541 }
+# { plates: 54, orogens: 13, steps: 5819, seq0: 1, wide: 0, velocity: 988, subducting: 1127, subL: 358, boundaryGzip: 87952 }
 ```
 
 Then confirm the page with `npm run dev` and `npm run build`, and commit the
