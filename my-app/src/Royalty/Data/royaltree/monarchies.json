@@ -1,0 +1,422 @@
+{
+  "England": {
+    "ancestor": "european",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_English_monarchs",
+        "strategy": "navbox",
+        "param": "English, Scottish, and British monarchs",
+        "blocklist": ["Oliver_Cromwell", "Richard_Cromwell"]
+      }
+    ]
+  },
+  "France": {
+    "ancestor": "european",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_French_monarchs",
+        "strategy": "navbox",
+        "param": "Monarchs of France"
+      }
+    ]
+  },
+  "Holy_Roman_Empire": {
+    "ancestor": "european",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/Holy_Roman_Emperor",
+        "strategy": "navbox",
+        "param": "Holy Roman emperors"
+      }
+    ]
+  },
+  "Germany": {
+    "ancestor": "european",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_German_monarchs",
+        "strategy": "navbox",
+        "param": "Monarchs of Germany"
+      }
+    ]
+  },
+  "Spain": {
+    "ancestor": "european",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/Kingdom_of_Asturias",
+        "strategy": "navbox",
+        "param": "Monarchs of Asturias"
+      },
+      {
+        "page": "https://en.wikipedia.org/wiki/Kingdom_of_Le%C3%B3n",
+        "strategy": "navbox",
+        "param": "Monarchs of León"
+      },
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_Spanish_monarchs",
+        "strategy": "tables",
+        "param": [0, 1, 2, 3, 4, 5, 6, 8, 12]
+      }
+    ]
+  },
+  "Russia": {
+    "ancestor": "european",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_Russian_monarchs",
+        "strategy": "navbox",
+        "param": "List of Russian monarchs"
+      }
+    ]
+  },
+  "Sweden": {
+    "ancestor": "european",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_Swedish_monarchs",
+        "strategy": "navbox",
+        "param": "Monarchs of Sweden"
+      }
+    ]
+  },
+  "Denmark": {
+    "ancestor": "european",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_Danish_monarchs",
+        "strategy": "navbox",
+        "param": "Monarchs of Denmark"
+      }
+    ]
+  },
+  "Scotland": {
+    "ancestor": "european",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_Scottish_monarchs",
+        "strategy": "navbox",
+        "param": "Pictish and Scottish monarchs"
+      }
+    ]
+  },
+  "Norway": {
+    "ancestor": "european",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_Norwegian_monarchs",
+        "strategy": "navbox",
+        "param": "Monarchs of Norway"
+      }
+    ]
+  },
+  "Iceland": {
+    "ancestor": "european",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/Lists_of_heads_of_state_of_Iceland",
+        "strategy": "navbox",
+        "param": "Monarchs of Iceland"
+      }
+    ]
+  },
+  "Bohemia": {
+    "ancestor": "european",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_Bohemian_monarchs",
+        "strategy": "navbox",
+        "param": "Monarchs of Bohemia"
+      }
+    ]
+  },
+  "Austria": {
+    "ancestor": "european",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_rulers_of_Austria",
+        "strategy": "navbox",
+        "param": "Monarchs of Austria"
+      }
+    ]
+  },
+  "Hungary": {
+    "ancestor": "european",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_Hungarian_monarchs",
+        "strategy": "navbox",
+        "param": "Monarchs of Hungary"
+      }
+    ]
+  },
+  "Naples": {
+    "ancestor": "european",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_monarchs_of_Naples",
+        "strategy": "navbox",
+        "param": "Monarchs of Naples"
+      }
+    ]
+  },
+  "Portugal": {
+    "ancestor": "european",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_Portuguese_monarchs",
+        "strategy": "navbox",
+        "param": "Monarchs of Portugal"
+      }
+    ]
+  },
+  "Poland": {
+    "ancestor": "european",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_Polish_monarchs",
+        "strategy": "navbox",
+        "param": "Monarchs of Poland"
+      }
+    ]
+  },
+  "Bavaria": {
+    "ancestor": "european",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_monarchs_of_Bavaria",
+        "strategy": "tables",
+        "param": null
+      }
+    ]
+  },
+  "Japan": {
+    "ancestor": "none",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/Emperor_of_Japan",
+        "strategy": "navbox",
+        "param": "Emperors of Japan (list)"
+      }
+    ]
+  },
+  "Joseon": {
+    "ancestor": "none",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_kings_of_Joseon",
+        "strategy": "tables",
+        "param": [0]
+      }
+    ]
+  },
+  "Shang": {
+    "ancestor": "none",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/Shang_dynasty",
+        "strategy": "navbox",
+        "param": "Kings of the Shang dynasty"
+      }
+    ]
+  },
+  "Zhou": {
+    "ancestor": "none",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/Zhou_dynasty",
+        "strategy": "navbox",
+        "param": "Kings of the Zhou dynasty"
+      }
+    ]
+  },
+  "Han": {
+    "ancestor": "none",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_emperors_of_the_Han_dynasty",
+        "strategy": "navbox",
+        "param": "Emperors of the Han dynasty"
+      }
+    ]
+  },
+  "Tang": {
+    "ancestor": "none",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/Template:Tang_emperors",
+        "strategy": "navbox",
+        "param": "Emperors of the Tang dynasty"
+      }
+    ]
+  },
+  "Yuan": {
+    "ancestor": "none",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/Template:Yuan_emperors",
+        "strategy": "navbox",
+        "param": "Emperors of the Yuan dynasty"
+      }
+    ]
+  },
+  "Ming": {
+    "ancestor": "none",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/Template:Ming_emperors",
+        "strategy": "navbox",
+        "param": "Emperors of the Ming dynasty"
+      }
+    ]
+  },
+  "Qing": {
+    "ancestor": "none",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/Template:Qing_emperors",
+        "strategy": "navbox",
+        "param": "Emperors of the Qing dynasty"
+      }
+    ]
+  },
+  "Ottoman": {
+    "ancestor": "none",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/Category:Sultans_of_the_Ottoman_Empire",
+        "strategy": "navbox",
+        "param": "Ottoman sultans / caliphs"
+      }
+    ]
+  },
+  "Thailand": {
+    "ancestor": "none",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_monarchs_of_Thailand",
+        "strategy": "navbox",
+        "param": "Monarchs of Thailand"
+      }
+    ]
+  },
+  "Greece": {
+    "ancestor": "european",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_kings_of_Greece",
+        "strategy": "tables",
+        "param": null
+      }
+    ]
+  },
+  "Netherlands": {
+    "ancestor": "european",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_monarchs_of_the_Netherlands",
+        "strategy": "navbox",
+        "param": "Monarchs of the Netherlands"
+      }
+    ]
+  },
+  "Mughal": {
+    "ancestor": "none",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_emperors_of_the_Mughal_Empire",
+        "strategy": "tables",
+        "param": [0]
+      }
+    ]
+  },
+  "Byzantine": {
+    "ancestor": "none",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_Byzantine_emperors",
+        "strategy": "tables",
+        "param": null
+      }
+    ]
+  },
+  "Egypt_Old_Kingdom": {
+    "ancestor": "none",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_pharaohs",
+        "strategy": "egypt",
+        "param": "Old Kingdom",
+        "blocklist": ["Manetho", "Eusebius", "Sextus_Julius_Africanus", "Herodotus", "Diodorus_Siculus", "Africanus", "Josephus"]
+      }
+    ]
+  },
+  "Egypt_Middle_Kingdom": {
+    "ancestor": "none",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_pharaohs",
+        "strategy": "egypt",
+        "param": "Middle Kingdom",
+        "blocklist": ["Manetho", "Eusebius", "Sextus_Julius_Africanus", "Herodotus", "Diodorus_Siculus", "Africanus", "Josephus"]
+      }
+    ]
+  },
+  "Egypt_New_Kingdom": {
+    "ancestor": "none",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_pharaohs",
+        "strategy": "egypt",
+        "param": "New Kingdom",
+        "blocklist": ["Manetho", "Eusebius", "Sextus_Julius_Africanus", "Herodotus", "Diodorus_Siculus", "Africanus", "Josephus"]
+      }
+    ]
+  },
+  "Mongol_Empire": {
+    "ancestor": "deep",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_Mongol_rulers",
+        "strategy": "heading",
+        "param": "Great Khans",
+        "stop_after": "Kublai_Khan"
+      }
+    ]
+  },
+  "Golden_Horde": {
+    "ancestor": "deep",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_khans_of_the_Golden_Horde",
+        "strategy": "tables",
+        "param": [0]
+      }
+    ]
+  },
+  "Ilkhanate": {
+    "ancestor": "deep",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_Mongol_rulers",
+        "strategy": "heading",
+        "param": "Ilkhanate"
+      }
+    ]
+  },
+  "Chagatai_Khanate": {
+    "ancestor": "deep",
+    "sources": [
+      {
+        "page": "https://en.wikipedia.org/wiki/List_of_Chagatai_khans",
+        "strategy": "tables",
+        "param": [0]
+      }
+    ]
+  },
+  "Chinggisids": {
+    "ancestor": "deep",
+    "union_of": ["Mongol_Empire", "Yuan", "Golden_Horde", "Ilkhanate", "Chagatai_Khanate", "Mughal"],
+    "ensure_first": "Q720"
+  }
+}
