@@ -281,7 +281,9 @@ describe("build output", () => {
                 markedStep(3, "NA/PA", "OTF"),
             ],
         });
-        expect(withSubducting(toColumnar(marked), marked).subducting).toEqual(["R", "L", null]);
+        const markedColumns = withSubducting(toColumnar(marked), marked);
+        expect(markedColumns.subducting).toEqual(["R", "L", null]);
+        expect(fromColumnar(markedColumns).features.map((feature) => feature.properties.subducting)).toEqual(["R", "L", null]);
     });
 
     it("keeps one feature when a SEQNUM is repeated", () => {
@@ -380,8 +382,15 @@ describe("import guard", () => {
         expect(readGzipJson(outDir, "plates.json.gz")).toEqual(buildPlates(fixture.plates));
         expect(readGzipJson(outDir, "orogens.json.gz")).toEqual(buildOrogens(fixture.orogens));
         const built = buildBoundaries(fixture.steps);
-        expect(readGzipJson(outDir, "boundaries.json.gz")).toEqual(withSubducting(toColumnar(built), built));
-        expect(fromColumnar(readGzipJson(outDir, "boundaries.json.gz"))).toEqual(built);
+        const gzipped = readGzipJson(outDir, "boundaries.json.gz");
+        expect(gzipped).toEqual(withSubducting(toColumnar(built), built));
+        const expanded = fromColumnar(gzipped);
+        expect(expanded.features.map((feature) => feature.properties.subducting)).toEqual(gzipped.subducting);
+        expect(expanded.features.map((feature) => {
+            const properties = {...feature.properties};
+            delete properties.subducting;
+            return {...feature, properties};
+        })).toEqual(built.features);
         expect(readGzipJson(outDir, "velocity.json.gz")).toEqual(buildVelocity(fixture.steps));
         const meta = JSON.parse(readFileSync(join(outDir, "meta.json"), "utf8"));
         expect(meta).toMatchObject({

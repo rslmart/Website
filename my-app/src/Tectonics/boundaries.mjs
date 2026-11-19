@@ -41,17 +41,21 @@ export function fromColumnar(data) {
     const features = data.stepClass.map((stepClass, i) => {
         const coordinates = data.coordinates[i];
         const seq = data.seq ? data.seq[i] : data.seq0 + i;
+        const properties = {
+            seq,
+            stepClass,
+            plateBound: data.plateBound[i],
+            velocity: data.velocity[i],
+            azimuth: data.azimuth[i],
+            divergence: data.divergence[i],
+            rightLateral: data.rightLateral[i],
+        };
+        // The page draws teeth from this side. A file without the column
+        // (and toColumnar, which does not write it) stays unchanged.
+        if (Array.isArray(data.subducting)) properties.subducting = data.subducting[i];
         return {
             type: 'Feature',
-            properties: {
-                seq,
-                stepClass,
-                plateBound: data.plateBound[i],
-                velocity: data.velocity[i],
-                azimuth: data.azimuth[i],
-                divergence: data.divergence[i],
-                rightLateral: data.rightLateral[i],
-            },
+            properties,
             geometry: {
                 type: isMultiLine(coordinates) ? 'MultiLineString' : 'LineString',
                 coordinates,
