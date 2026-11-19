@@ -99,11 +99,28 @@ def _navbox_title(div):
     return " ".join("".join(parts).split())
 
 
+def _titles_owned_by_li(li):
+    """Article titles linked from this item, excluding a nested item.
+
+    A co-ruler is a later ``a`` in the same ``li``. A link inside a child
+    ``li`` belongs to that child, so walking every item does not count it twice.
+    """
+    titles = []
+    for link in li.find_all("a", href=True):
+        if link.find_parent("li") is not li:
+            continue
+        item = _title_from_href(link["href"])
+        if item:
+            titles.append(item)
+    return titles
+
+
 def _links_from_navbox(soup, title):
     """Ordered titles from the navbox whose title text matches ``title``.
 
-    Match is on the normalised title, not on aria-labelledby. A missing
-    navbox raises; it does not yield an empty list.
+    Match is on the normalised title, not on aria-labelledby. Each item
+    contributes every article link that belongs to it. A missing navbox
+    raises; it does not yield an empty list.
     """
     wanted = normalise_navbox_title(title)
     boxes = soup.find_all("div", class_="navbox")
@@ -114,11 +131,7 @@ def _links_from_navbox(soup, title):
         if text and normalise_navbox_title(text) == wanted:
             titles = []
             for li in div.find_all("li"):
-                link = li.find("a", href=True)
-                if link:
-                    item = _title_from_href(link["href"])
-                    if item:
-                        titles.append(item)
+                titles.extend(_titles_owned_by_li(li))
             titles = _ordered_unique(titles)
             if not titles:
                 raise ValueError(f"navbox titled {title!r} has no article links")

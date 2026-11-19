@@ -111,6 +111,14 @@ def test_navbox_title_ignores_punctuation_and_not_the_id():
         lists._links_from_navbox(soup, "Monarchs of Spain")
 
 
+def test_navbox_keeps_a_coruler_once_and_a_nested_item_once():
+    soup = _soup("navbox_coruler.html")
+    titles = lists._links_from_navbox(soup, "Monarchs of Denmark")
+    assert titles == ["Canute_V", "Valdemar_I", "Valdemar_the_Young", "Eric_Christoffersen"]
+    assert titles.count("Valdemar_I") == 1
+    assert titles.count("Valdemar_the_Young") == 1
+
+
 def test_missing_table_is_an_error_not_an_empty_list():
     missing = _soup("tables_missing.html")
     with pytest.raises(ValueError, match="no wikitable found"):
