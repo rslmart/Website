@@ -7,6 +7,7 @@ Commands
   split          offline: rebuild houses and public/royalty/ from the committed
                  combined files in --data-dir (no store needed)
   check / diff   validate.py on --out-dir (schema + invariants / data-level diff)
+  lists          scrape monarch lists; --check prints the diff and writes nothing
   import-legacy  one-time, network-free import of the old data/*.json caches
 
 Examples (from my-app/src/Royalty/Data)
@@ -16,6 +17,8 @@ Examples (from my-app/src/Royalty/Data)
   python -m royaltree build --all --offline && python -m royaltree diff
   python -m royaltree import-legacy --from data.legacy
   python -m royaltree fetch --all --refresh-conflicts --max-refetch 5000
+  python -m royaltree lists --all --check
+  python -m royaltree lists England --apply
 
 Every run ends with a summary: stages, durations, request counts, 429s.
 """
@@ -105,8 +108,8 @@ def _load_lists(data_dir):
 
 
 def _known_monarchies():
-    import GetListOfMonarchs
-    return list(GetListOfMonarchs.monarchies)
+    from royaltree.registry import NAMES
+    return list(NAMES)
 
 
 def resolve_monarchies(args, lists):
@@ -273,6 +276,34 @@ def cmd_import(run, args, store):
     run.counters["store_labels"] = store.count("label")
 
 
+def _list_names(args):
+    known = _known_monarchies()
+    if args.all:
+        return known
+    if not args.monarchies:
+        raise SystemExit("lists: name one or more monarchies, or --all")
+    unknown = [name for name in args.monarchies if name not in known]
+    if unknown:
+        raise SystemExit(f"unknown monarchies: {unknown}")
+    return list(dict.fromkeys(args.monarchies))
+
+
+def cmd_lists(run, args):
+    """Scrape lists. --check only prints. --apply is the only write."""
+    import GetListOfMonarchs
+    names = _list_names(args)
+    baseline = _load_lists(args.data_dir)
+    GetListOfMonarchs.MONARCH_LIST_PATH = os.path.join(args.data_dir, "monarch_list.json")
+    with run.stage("lists"):
+        scraped, errors, lines = GetListOfMonarchs.report_lists(names, baseline)
+    for line in lines:
+        print(line, flush=True)
+    if args.apply:
+        with run.stage("write-lists"):
+            GetListOfMonarchs.apply_lists(names, scraped)
+    return 1 if errors else 0
+
+
 def build_parser():
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--data-dir", default=DEFAULT_DATA_DIR,
@@ -317,6 +348,14 @@ def build_parser():
     # Other options (--base, --verbose, --json, --update-allowlist) pass through to validate.py.
     sub.add_parser("check", parents=[common], help="validate.py check on --out-dir")
     sub.add_parser("diff", parents=[common], help="validate.py diff on --out-dir (e.g. --base HEAD)")
+    lists = sub.add_parser("lists", parents=[common],
+                           help="scrape monarch lists (--check prints, --apply writes)")
+    lists.add_argument("monarchies", nargs="*", help="e.g. England Sweden")
+    lists.add_argument("--all", action="store_true", help="every tree in the registry")
+    lists.add_argument("--check", action="store_true",
+                       help="print added, removed and reordered QIDs; write nothing")
+    lists.add_argument("--apply", action="store_true",
+                       help="write the scraped lists to monarch_list.json")
     p = sub.add_parser("import-legacy", parents=[common], help="import the old JSON caches")
     p.add_argument("--from", dest="source", required=True, help="legacy data directory")
     p.add_argument("--conflicts-only", action="store_true",
@@ -338,6 +377,8 @@ def main(argv=None):
         return validate.main(["--public", args.out_dir, args.command, *extra])
     if extra:
         parser.error(f"unrecognized arguments: {' '.join(extra)}")
+    if args.command == "lists" and bool(args.check) == bool(args.apply):
+        parser.error("lists: pass exactly one of --check and --apply")
     if getattr(args, "offline", False) and (getattr(args, "refresh", False) or getattr(args, "since", None)
                                             or getattr(args, "refresh_conflicts", False)):
         parser.error("--refresh/--since/--refresh-conflicts need the network; drop --offline")
@@ -347,9 +388,14 @@ def main(argv=None):
     run = Run(args.command)
     store = None
     status = "ok"
+    code = 0
     try:
         if args.command == "split":
             derive_outputs(run, args)
+        elif args.command == "lists":
+            code = cmd_lists(run, args)
+            if code:
+                status = "completed with tree failures"
         else:
             store = Store(args.data_dir)
             if args.command == "import-legacy":
@@ -371,4 +417,4 @@ def main(argv=None):
         if args.summary_json:
             with open(args.summary_json, "w") as f:
                 json.dump(summary, f, indent=2)
-    return 0
+    return code

@@ -93,6 +93,12 @@ python -m royaltree import-legacy --from /path/to/old/data
 # store without re-importing.
 python -m royaltree import-legacy --from /path/to/old/data --conflicts-only
 python -m royaltree fetch --all --refresh-conflicts --max-refetch 5000 --maxlag 30
+
+# Compare every scraped list with data/monarch_list.json. Writes nothing.
+python -m royaltree lists --all --check
+
+# The only lists mode that writes monarch_list.json.
+python -m royaltree lists --all --apply
 ```
 
 Options shared by every command: `--data-dir`, `--out-dir`, `--offline`,
@@ -186,14 +192,22 @@ summary):
 
 ### Monarch lists
 
-`GetListOfMonarchs.get_monarch_lists` has one branch per monarchy. Older
-branches parse a specific navbox (`aria-labelledby` anchor plus `td` classes)
-through `get_monarch_list` / `get_monarch_list_with_i`. Newer branches use
-`scrape_monarchy` with a named strategy (navbox, wikitables, heading list or
-Egyptian period). `Chinggisids` is the union of the Mongol lists
-(`build_chinggisids`). Article titles are resolved to Q-IDs in batches through
-the Wikipedia API, and only humans (`P31 = Q5`) are kept. This stage depends on
-exact Wikipedia markup and is the most fragile one, so it runs only when a list
+Every tree is one entry in [`royaltree/monarchies.json`](royaltree/monarchies.json):
+the Wikipedia page, a strategy (`navbox`, `tables`, `heading` or `egypt`),
+that strategy's param, an optional title blocklist and `stop_after`, or
+`union_of` other trees. `ancestor` is `european`, `deep` or `none`. The file
+is checked against that schema when the registry is imported.
+
+`scrape_monarchy` reads the entry. A navbox is chosen by its visible title,
+with punctuation and `/` ignored, not by the `aria-labelledby` id. Article
+titles are resolved to Q-IDs in batches through the Wikipedia API, and only
+humans (`P31 = Q5`) are kept. `Chinggisids` is the union of the Mongol lists
+already scraped in this run; it does not read `monarch_list.json`. A missing
+navbox, table or heading fails that tree with a message and the run continues.
+
+`python -m royaltree lists --check` prints, per tree, the QIDs added, removed
+and reordered versus `data/monarch_list.json`, and writes nothing. `--apply`
+is the only flag that writes. `build` / `fetch` still scrape only when a list
 is missing or with `--lists`.
 
 ### People and succession paths
@@ -238,10 +252,10 @@ pytest.
 ### Ancestors
 
 `graph.gather_ancestors` follows `father`/`mother` out to 5 generations from
-every listed monarch and adds the siblings of each ancestor, for
-`EUROPEAN_MONARCHIES`, so multi-monarchy views show shared ancestry. The Mongol
-houses (`DEEP_ANCESTOR_MONARCHIES`) get a deeper (12), sibling-free pass that
-reconnects the khanates to Genghis Khan. Other trees have no ancestor stage.
+every listed monarch and adds the siblings of each ancestor, for trees whose
+registry `ancestor` is `european`, so multi-monarchy views show shared ancestry.
+Trees marked `deep` (the Mongol houses) get a deeper (12), sibling-free pass
+that reconnects the khanates to Genghis Khan. `none` skips the ancestor stage.
 A parent link is the single best-rank father or mother. A tie is not used as
 that link. A child who does not list a parent is still connected when the
 parent lists the child, and the reverse.

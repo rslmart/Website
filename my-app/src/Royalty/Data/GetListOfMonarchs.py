@@ -1,88 +1,28 @@
-from bs4 import BeautifulSoup
+"""Scrape ordered monarch lists from the registry in royaltree/monarchies.json.
+
+Every tree uses scrape_monarchy (navbox title, wikitables, a section heading,
+or an Egyptian period). A union tree, such as Chinggisids, concatenates lists
+already scraped in this run. It does not read monarch_list.json, so a check
+cannot observe a half-written file.
+
+Navbox selection compares the navbox's visible title, with punctuation and
+slashes ignored, to the registry param. The aria-labelledby id is not the key.
+A missing navbox, table or heading raises; the caller records that tree and
+continues with the others.
+"""
 import json
 import os
 import re
 
+from bs4 import BeautifulSoup
+
 from royaltree import http as requests  # project UA, timeouts, back-off, counters
+from royaltree.registry import NAMES, REGISTRY
 from royaltree.store import atomic_write
 from royaltree.wikidata import get_entities
 
 # Where saveData writes; the CLI points this at --data-dir.
-MONARCH_LIST_PATH = os.path.join('data', 'monarch_list.json')
-
-
-def flatten(l):
-    return [item for sublist in l for item in sublist]
-
-
-def get_monarch_list(url, div_name, td_classes, name_filter={}):
-    response = requests.get(url=url)
-    soup = BeautifulSoup(response.content, 'html.parser')
-    div_element = soup.find('div', attrs={'aria-labelledby': div_name})
-    td_elements = div_element.find_all('td', attrs={'class': td_classes})
-    li_tags = flatten([td_element.find_all('li') for td_element in td_elements])
-    a_tags = flatten([li_tag.find_all(lambda tag: tag.name == 'a' and not tag.find_parents('i')) for li_tag in li_tags])
-    monarchs = [a_tag.get('href') for a_tag in a_tags]
-    wiki_list = [x for i, x in enumerate(monarchs) if x not in monarchs[:i]]
-    wiki_data_list = convert_wiki_list_to_wiki_data_list(wiki_list, name_filter=name_filter)
-    return wiki_data_list
-
-def get_monarch_list_with_i(url, div_name, td_classes, name_filter={}):
-    response = requests.get(url=url)
-    soup = BeautifulSoup(response.content, 'html.parser')
-    div_element = soup.find('div', attrs={'aria-labelledby': div_name})
-    td_elements = div_element.find_all('td', attrs={'class': td_classes})
-    li_tags = flatten([td_element.find_all('li') for td_element in td_elements])
-    a_tags = flatten([li_tag.find_all(lambda tag: tag.name == 'a') for li_tag in li_tags])
-    monarchs = [a_tag.get('href') for a_tag in a_tags]
-    wiki_list = [x for i, x in enumerate(monarchs) if x not in monarchs[:i]]
-    wiki_data_list = convert_wiki_list_to_wiki_data_list(wiki_list, name_filter=name_filter)
-    return wiki_data_list
-
-
-def convert_wiki_list_to_wiki_data_list(wiki_list, name_filter={}):
-    wiki_data_list = []
-    print("Converting: {} {}".format(len(wiki_list), wiki_list))
-    for monarch in wiki_list:
-        if monarch not in name_filter and monarch.startswith('/wiki/'):
-            response = requests.get(
-                url="https://en.wikipedia.org" + monarch
-            )
-            soup = BeautifulSoup(response.content, 'html.parser')
-            li_tag = soup.find('li', attrs={'id': 't-wikibase'})
-            wiki_data_url = li_tag.find('a').get('href')
-            pattern = r'/([A-Z]\d+)$'
-            wiki_data_id = re.search(pattern, wiki_data_url).group(1)
-            if wiki_data_id not in wiki_data_list:
-                wiki_data_list.append(wiki_data_id)
-    wiki_data = get_entities(wiki_data_list)
-    wiki_data_list = [w for w in wiki_data_list if wiki_data[w]['claims']['P31'][0]['mainsnak']['datavalue']['value']['id'] == 'Q5']
-    return wiki_data_list
-
-
-# ---------------------------------------------------------------------------
-# Robust scraper for additional monarchies (2024+ Parsoid HTML).
-#
-# The legacy get_monarch_list() helpers above assume the old MediaWiki HTML:
-# relative "/wiki/Foo" hrefs and a "t-wikibase" sidebar link on every article.
-# Wikipedia now serves Parsoid HTML with ABSOLUTE hrefs
-# ("https://en.wikipedia.org/wiki/Foo", rel="mw:WikiLink") and the sidebar is
-# not always present, which silently breaks the legacy path.
-#
-# This scraper instead: (1) extracts page titles from a navbox / wikitables /
-# a section list, then (2) resolves those titles to Wikidata Q-IDs via the
-# MediaWiki pageprops API (which follows redirects), and (3) keeps only humans
-# (P31 = Q5). Everything is title-based, so it is robust to absolute vs
-# relative hrefs and to page redirects.
-# ---------------------------------------------------------------------------
-
-
-# Ancient king lists link a handful of classical chroniclers who are humans
-# (Q5) but obviously not pharaohs; drop them so they don't pollute the list.
-EGYPT_BLOCKLIST = frozenset({
-    "Manetho", "Eusebius", "Sextus_Julius_Africanus", "Herodotus",
-    "Diodorus_Siculus", "Africanus", "Josephus",
-})
+MONARCH_LIST_PATH = os.path.join("data", "monarch_list.json")
 
 # Kingdom/period groupings used to bucket the single List_of_pharaohs page.
 _EGYPT_PERIODS = [
@@ -90,6 +30,12 @@ _EGYPT_PERIODS = [
     "Second Intermediate", "New Kingdom", "Third Intermediate", "Late Period",
     "Ptolemaic",
 ]
+
+# One run's pages. scrape_registered clears this so a check never reuses an
+# earlier run, and so List_of_pharaohs is downloaded once for its three trees.
+_soup_cache = {}
+
+monarchies = list(NAMES)
 
 
 def _title_from_href(href):
@@ -103,89 +49,179 @@ def _title_from_href(href):
 
 
 def _get_soup(url):
-    return BeautifulSoup(requests.get(url, timeout=30).content, "html.parser")
+    soup = _soup_cache.get(url)
+    if soup is None:
+        soup = BeautifulSoup(requests.get(url, timeout=30).content, "html.parser")
+        _soup_cache[url] = soup
+    return soup
 
 
 def _ordered_unique(seq):
     out = []
-    for x in seq:
-        if x not in out:
-            out.append(x)
+    for item in seq:
+        if item not in out:
+            out.append(item)
     return out
 
 
-def _links_from_navbox(soup, anchor_prefix):
-    """Ordered titles from a navbox, matched by aria-labelledby prefix (the
-    numeric suffix Wikipedia appends is volatile, so we match on the prefix)."""
-    div = None
-    for d in soup.find_all("div", attrs={"aria-labelledby": True}):
-        if d["aria-labelledby"].startswith(anchor_prefix):
-            div = d
-            break
-    if div is None:
-        raise ValueError(f"navbox with anchor prefix '{anchor_prefix}' not found")
+def normalise_navbox_title(text):
+    """Compare navbox titles ignoring case, punctuation and slashes.
+
+    Underscores are spaces, so a legacy anchor prefix and the visible title
+    collapse to the same string. The aria-labelledby id is not compared.
+    """
+    text = (text or "").replace("/", " ").replace("_", " ")
+    text = re.sub(r"[^\w\s]", " ", text, flags=re.UNICODE)
+    return re.sub(r"\s+", " ", text).strip().casefold()
+
+
+def _element_text(el):
+    return " ".join(el.get_text(" ", strip=True).split())
+
+
+def _navbox_title(div):
+    """Visible title of a navbox. The labelled element is the accessible name."""
+    labelled = (div.get("aria-labelledby") or "").split()
+    if labelled:
+        title_el = div.find(id=labelled[0])
+        if title_el is not None:
+            return _element_text(title_el)
+    title_el = div.find(class_="navbox-title")
+    if title_el is None:
+        return ""
+    parts = []
+    for node in title_el.descendants:
+        if not isinstance(node, str):
+            continue
+        if any("navbar" in (parent.get("class") or []) for parent in node.parents):
+            continue
+        parts.append(node)
+    return " ".join("".join(parts).split())
+
+
+def _titles_owned_by_li(li):
+    """Article titles linked from this item, excluding a nested item.
+
+    A co-ruler is a later ``a`` in the same ``li``. A link inside a child
+    ``li`` belongs to that child, so walking every item does not count it twice.
+    """
     titles = []
-    for li in div.find_all("li"):
-        a = li.find("a", href=True)
-        if a:
-            t = _title_from_href(a["href"])
-            if t:
-                titles.append(t)
-    return _ordered_unique(titles)
+    for link in li.find_all("a", href=True):
+        if link.find_parent("li") is not li:
+            continue
+        item = _title_from_href(link["href"])
+        if item:
+            titles.append(item)
+    return titles
+
+
+def _links_from_navbox(soup, title):
+    """Ordered titles from the navbox whose title text matches ``title``.
+
+    Match is on the normalised title, not on aria-labelledby. Each item
+    contributes every article link that belongs to it. A missing navbox
+    raises; it does not yield an empty list.
+    """
+    wanted = normalise_navbox_title(title)
+    boxes = soup.find_all("div", class_="navbox")
+    found = []
+    for div in boxes:
+        text = _navbox_title(div)
+        found.append(text)
+        if text and normalise_navbox_title(text) == wanted:
+            titles = []
+            for li in div.find_all("li"):
+                titles.extend(_titles_owned_by_li(li))
+            titles = _ordered_unique(titles)
+            if not titles:
+                raise ValueError(f"navbox titled {title!r} has no article links")
+            return titles
+    shown = [text for text in found if text]
+    raise ValueError(f"navbox titled {title!r} not found; page titles: {shown}")
 
 
 def _first_link_in_row(tr):
-    for a in tr.find_all("a", href=True):
-        t = _title_from_href(a["href"])
-        if t:
-            return t
+    for link in tr.find_all("a", href=True):
+        title = _title_from_href(link["href"])
+        if title:
+            return title
     return None
 
 
 def _links_from_tables(soup, indices=None):
-    """First person-like link in each row (skips leading portrait/File cells)."""
+    """First article link in each row of the requested wikitables.
+
+    A missing table raises. An empty selection is not reported as success.
+    """
     tables = soup.find_all("table", class_="wikitable")
-    if indices is not None:
-        tables = [tables[i] for i in indices if i < len(tables)]
+    if indices is None:
+        if not tables:
+            raise ValueError("no wikitable found")
+        chosen = tables
+    else:
+        missing = [i for i in indices if i >= len(tables)]
+        if missing or not indices:
+            raise ValueError(
+                f"wikitable index {missing or list(indices)} not found "
+                f"({len(tables)} wikitables on the page)")
+        chosen = [tables[i] for i in indices]
     titles = []
-    for table in tables:
+    for table in chosen:
         for tr in table.find_all("tr"):
-            t = _first_link_in_row(tr)
-            if t:
-                titles.append(t)
-    return _ordered_unique(titles)
+            title = _first_link_in_row(tr)
+            if title:
+                titles.append(title)
+    titles = _ordered_unique(titles)
+    if not titles:
+        raise ValueError("wikitable has no article links")
+    return titles
 
 
 def _links_from_heading_list(soup, keyword):
-    """Ordered titles from the first <ul>/<table> following a heading that
-    contains `keyword` (used for the per-khanate sections on the Mongol page)."""
-    for h in soup.find_all(["h2", "h3", "h4"]):
-        if keyword.lower() in h.get_text().lower():
-            container = h.find_next(["ul", "table"])
-            if container is not None:
-                titles = [_title_from_href(a["href"]) for a in container.find_all("a", href=True)]
-                return _ordered_unique([t for t in titles if t])
-    raise ValueError(f"heading containing '{keyword}' not found")
+    """Ordered titles from the first list or table after a matching heading."""
+    for heading in soup.find_all(["h2", "h3", "h4"]):
+        if keyword.lower() in heading.get_text().lower():
+            container = heading.find_next(["ul", "table"])
+            if container is None:
+                raise ValueError(f"heading containing {keyword!r} has no list or table")
+            titles = [_title_from_href(link["href"]) for link in container.find_all("a", href=True)]
+            titles = _ordered_unique([title for title in titles if title])
+            if not titles:
+                raise ValueError(f"heading containing {keyword!r} has no article links")
+            return titles
+    raise ValueError(f"heading containing {keyword!r} not found")
 
 
 def _links_from_egypt_period(soup, period):
-    """Bucket List_of_pharaohs wikitables by the kingdom/period heading they
-    fall under, returning the pharaohs for a single period."""
+    """Pharaohs under one kingdom heading on List_of_pharaohs.
+
+    A missing period heading raises instead of returning an empty list.
+    """
+    if period not in _EGYPT_PERIODS:
+        raise ValueError(f"unknown Egyptian period {period!r}")
     current = None
+    seen = False
     titles = []
     for el in soup.find_all(["h2", "h3", "table"]):
         if el.name in ("h2", "h3"):
             text = el.get_text()
-            for p in _EGYPT_PERIODS:
-                if p.lower() in text.lower():
-                    current = p
+            for name in _EGYPT_PERIODS:
+                if name.lower() in text.lower():
+                    current = name
+                    if name == period:
+                        seen = True
                     break
         elif el.name == "table" and "wikitable" in (el.get("class") or []) and current == period:
             for tr in el.find_all("tr"):
-                t = _first_link_in_row(tr)
-                if t:
-                    titles.append(t)
-    return _ordered_unique(titles)
+                title = _first_link_in_row(tr)
+                if title:
+                    titles.append(title)
+    if not seen:
+        raise ValueError(f"heading for period {period!r} not found")
+    titles = _ordered_unique(titles)
+    if not titles:
+        raise ValueError(f"period {period!r} has no article links")
+    return titles
 
 
 def _resolve_titles_to_qids(titles):
@@ -207,8 +243,8 @@ def _resolve_titles_to_qids(titles):
         redir = {r["from"]: r["to"] for r in query.get("redirects", [])}
         by_title = {p.get("title"): p.get("pageprops", {}).get("wikibase_item")
                     for p in query.get("pages", {}).values()}
-        for t in batch:
-            key = t.replace("_", " ")
+        for title in batch:
+            key = title.replace("_", " ")
             key = norm.get(key, key)
             key = redir.get(key, key)
             qid = by_title.get(key)
@@ -221,24 +257,25 @@ def _keep_humans(qids):
     """Keep only Q-IDs whose instance-of (P31) includes human (Q5)."""
     data = get_entities(qids)
     humans = []
-    for q in qids:
-        entity = data.get(q)
+    for qid in qids:
+        entity = data.get(qid)
         if not entity:
             continue
         try:
-            p31 = [c["mainsnak"]["datavalue"]["value"]["id"] for c in entity["claims"].get("P31", [])]
+            p31 = [claim["mainsnak"]["datavalue"]["value"]["id"]
+                   for claim in entity["claims"].get("P31", [])]
         except (KeyError, TypeError):
             p31 = []
         if "Q5" in p31:
-            humans.append(q)
+            humans.append(qid)
     return humans
 
 
 def scrape_monarchy(url, strategy, param=None, blocklist=frozenset(), stop_after=None):
-    """Scrape an ordered, humans-only list of Wikidata Q-IDs for a monarchy.
+    """Scrape an ordered, humans-only list of Wikidata Q-IDs for one source.
 
-    strategy: "navbox" (param=anchor prefix), "tables" (param=list of table
-    indices, or None for all wikitables), "heading" (param=heading keyword),
+    strategy: "navbox" (param=title text), "tables" (param=list of table
+    indexes, or None for every wikitable), "heading" (param=heading keyword),
     or "egypt" (param=kingdom/period name).
     stop_after: optional title to truncate the list after (inclusive).
     """
@@ -254,35 +291,159 @@ def scrape_monarchy(url, strategy, param=None, blocklist=frozenset(), stop_after
     else:
         raise ValueError(f"unknown strategy: {strategy}")
 
-    titles = [t for t in titles if t not in blocklist]
+    titles = [title for title in titles if title not in blocklist]
     if stop_after and stop_after in titles:
         titles = titles[: titles.index(stop_after) + 1]
+    if not titles:
+        raise ValueError(f"no titles left after filtering {url}")
 
     qids = _resolve_titles_to_qids(titles)
     qids = _keep_humans(qids)
-    print(f"scrape_monarchy({url}, {strategy}, {param}) -> {len(qids)} humans")
+    if not qids:
+        raise ValueError(f"no human Q-IDs resolved from {url}")
+    print(f"scrape_monarchy({url}, {strategy}, {param}) -> {len(qids)} humans", flush=True)
     return qids
 
 
-def build_chinggisids():
-    """Union of the Genghisid empires into one 'descendants of Genghis' tree.
+def scrape_entry(entry):
+    """Q-IDs for one registry entry that has ``sources`` (not a union)."""
+    qids = []
+    for source in entry["sources"]:
+        qids.extend(scrape_monarchy(
+            source["page"],
+            source["strategy"],
+            source.get("param"),
+            blocklist=frozenset(source.get("blocklist") or ()),
+            stop_after=source.get("stop_after"),
+        ))
+    return _ordered_unique(qids)
 
-    The per-empire succession lists are concatenated (Genghis first); the
-    downstream tree build links each khanate founder to Genghis via father
-    edges, so the branches all hang off the common root."""
-    with open("data/monarch_list.json") as json_file:
-        monarch_lists = json.load(json_file)
-    order = ["Mongol_Empire", "Yuan", "Golden_Horde", "Ilkhanate", "Chagatai_Khanate", "Mughal"]
-    union = []
-    for m in order:
-        union.extend(monarch_lists.get(m, []))
-    union = _ordered_unique(union)
-    if "Q720" not in union:  # Genghis Khan
-        union.insert(0, "Q720")
-    elif union[0] != "Q720":
-        union.remove("Q720")
-        union.insert(0, "Q720")
-    saveData("Chinggisids", union)
+
+def union_lists(entry, scraped):
+    """Concatenate this run's component lists. Does not read monarch_list.json."""
+    qids = []
+    for name in entry["union_of"]:
+        qids.extend(scraped[name])
+    qids = _ordered_unique(qids)
+    root = entry.get("ensure_first")
+    if root:
+        if root in qids:
+            qids.remove(root)
+        qids.insert(0, root)
+    if not qids:
+        raise ValueError("union is empty")
+    return qids
+
+
+def _closure(names, registry):
+    """Requested trees plus the union members they depend on, dependencies first."""
+    seen = []
+
+    def add(name):
+        if name in seen:
+            return
+        entry = registry[name]
+        for part in entry.get("union_of", []):
+            add(part)
+        seen.append(name)
+
+    for name in names:
+        add(name)
+    return seen
+
+
+def scrape_registered(names, registry=None):
+    """Scrape ``names``. Return ``(lists, errors)``.
+
+    A failing tree is an error string. The others are still scraped. Union
+    trees are built from the lists this call just scraped.
+    """
+    registry = registry or REGISTRY
+    names = list(names)
+    unknown = [name for name in names if name not in registry]
+    if unknown:
+        raise ValueError(f"unknown monarchies: {unknown}")
+    _soup_cache.clear()
+    order = _closure(names, registry)
+    scraped = {}
+    errors = {}
+    for name in order:
+        entry = registry[name]
+        if "union_of" in entry:
+            continue
+        try:
+            scraped[name] = scrape_entry(entry)
+        except Exception as exc:
+            errors[name] = str(exc)
+    for name in order:
+        entry = registry[name]
+        if "union_of" not in entry:
+            continue
+        missing = [part for part in entry["union_of"] if part not in scraped]
+        if missing:
+            detail = "; ".join(f"{part}: {errors.get(part, 'not scraped')}" for part in missing)
+            errors[name] = f"union incomplete ({detail})"
+            continue
+        try:
+            scraped[name] = union_lists(entry, scraped)
+        except Exception as exc:
+            errors[name] = str(exc)
+    return (
+        {name: scraped[name] for name in names if name in scraped},
+        {name: errors[name] for name in names if name in errors},
+    )
+
+
+def diff_qids(old, new):
+    """QIDs added, removed, or reordered relative to the saved list.
+
+    Order is compared on the shared QIDs only, so an insertion is "added"
+    and not also "reordered".
+    """
+    old_ids = _ordered_unique(old or [])
+    new_ids = _ordered_unique(new or [])
+    old_set = set(old_ids)
+    new_set = set(new_ids)
+    added = [qid for qid in new_ids if qid not in old_set]
+    removed = [qid for qid in old_ids if qid not in new_set]
+    shared_old = [qid for qid in old_ids if qid in new_set]
+    shared_new = [qid for qid in new_ids if qid in old_set]
+    reordered = []
+    if shared_old != shared_new:
+        position = {qid: index for index, qid in enumerate(shared_old)}
+        new_position = {qid: index for index, qid in enumerate(shared_new)}
+        reordered = [qid for qid in shared_new if position[qid] != new_position[qid]]
+    return added, removed, reordered
+
+
+def report_lists(names, baseline, registry=None):
+    """Scrape and describe each tree. Does not write."""
+    scraped, errors = scrape_registered(names, registry)
+    lines = []
+    for name in names:
+        if name in errors:
+            lines.append(f"{name}: failed: {errors[name]}")
+            continue
+        added, removed, reordered = diff_qids(baseline.get(name), scraped[name])
+        if name not in baseline:
+            lines.append(f"{name}: added {len(added)}, removed 0, reordered 0 (no saved list)")
+        elif not added and not removed and not reordered:
+            lines.append(f"{name}: match ({len(scraped[name])})")
+        else:
+            lines.append(
+                f"{name}: added {len(added)}, removed {len(removed)}, reordered {len(reordered)}"
+            )
+        lines.append("  added: " + (", ".join(added) or "-"))
+        lines.append("  removed: " + (", ".join(removed) or "-"))
+        lines.append("  reordered: " + (", ".join(reordered) or "-"))
+    failed = len(errors)
+    matched = sum(
+        1 for name in names
+        if name in scraped and name in baseline and not any(diff_qids(baseline.get(name), scraped[name]))
+    )
+    differed = len(names) - matched - failed
+    lines.append(f"{len(names)} trees: {matched} match, {differed} differ, {failed} failed")
+    return scraped, errors, lines
 
 
 def saveData(list_name, monarch_list):
@@ -291,248 +452,23 @@ def saveData(list_name, monarch_list):
     if not os.path.exists(file_path):
         data = {}
     else:
-        # Open the JSON file and load its content into a Python object
-        with open(file_path, 'r') as file:
-            data = json.load(file)
+        with open(file_path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
     data[list_name] = monarch_list
-    # Convert dictionary to JSON string using the custom encoder
-    json_data = json.dumps(data, indent=4)
-    # Write JSON data to a file
-    atomic_write(file_path, json_data)
+    atomic_write(file_path, json.dumps(data, indent=4))
 
-def get_monarch_lists(monarchies):
-    if "England" in monarchies:
-        # Kings of England
-        response = requests.get(
-            url="https://en.wikipedia.org/wiki/List_of_English_monarchs",
-        )
-        soup = BeautifulSoup(response.content, 'html.parser')
-        div_element = soup.find('div', attrs={'aria-labelledby': "English,_Scottish_and_British_monarchs189"})
-        td_element = div_element.find(lambda tag: tag.name == 'td' and tag['class'] == ['navbox-list'])
-        li_tags = td_element.find_all('li')
-        kings_of_england = [li_tag.find('a').get('href') for li_tag in li_tags if li_tag.find('a')]
-        td_elements = div_element.find('td', attrs={'class': "navbox-list navbox-even hlist"})
-        li_tags = td_elements.find_all('li')
-        td_elements = div_element.find('td', attrs={'class': "navbox-list navbox-odd hlist"})
-        li_tags = li_tags + td_elements.find_all('li')
-        kings_of_england = kings_of_england + [li_tag.find('a').get('href') for li_tag in li_tags if li_tag.find('a')]
-        kings_of_england = [x for i, x in enumerate(kings_of_england) if x not in kings_of_england[:i]]
-        kings_of_england = convert_wiki_list_to_wiki_data_list(kings_of_england, name_filter={'/wiki/Oliver_Cromwell',
-                                                                                              '/wiki/Richard_Cromwell'})
-        saveData('England', kings_of_england)
-    if "France" in monarchies:
-        # Kings of France
-        saveData('France',
-                 get_monarch_list("https://en.wikipedia.org/wiki/List_of_French_monarchs", 'Monarchs_of_France759',
-                                  ['navbox-list-with-group', 'navbox-list', 'hlist']))
-    if "Holy_Roman_Empire" in monarchies:
-        # Holy Roman Emperors
-        saveData('Holy_Roman_Empire',
-                 get_monarch_list("https://en.wikipedia.org/wiki/Holy_Roman_Emperor", 'Holy_Roman_emperors164',
-                                  ['navbox-list', 'hlist']))
 
-    if "Germany" in monarchies:
-        # German Kings
-        saveData('Germany', get_monarch_list("https://en.wikipedia.org/wiki/List_of_German_monarchs", 'Monarchs_of_Germany547',
-                                             ['navbox-list-with-group', 'navbox-list', 'hlist']))
+def apply_lists(names, scraped):
+    """Write scraped lists. ``--apply`` is the only caller. Unions are already in ``scraped``."""
+    for name in names:
+        if name in scraped:
+            saveData(name, scraped[name])
 
-    if "Spain" in monarchies:
-        kings_of_asturias = get_monarch_list("https://en.wikipedia.org/wiki/Kingdom_of_Asturias",
-                                         'Monarchs_of_Asturias74', ['navbox-list-with-group', 'navbox-list', 'hlist'])[:-2]
-        kings_of_leon = get_monarch_list("https://en.wikipedia.org/wiki/Kingdom_of_Le%C3%B3n",
-                                          'Monarchs_of_León226', ['navbox-list-with-group', 'navbox-list', 'hlist'])[:-5]
-        kings_of_spain = get_monarch_list("https://en.wikipedia.org/wiki/List_of_Spanish_monarchs", 'Monarchs_of_Spain279', ['navbox-list-with-group', 'navbox-list', 'hlist'])
-        kings_of_spain.remove("Q7726")
-        saveData('Spain', kings_of_asturias + kings_of_leon + kings_of_spain)
 
-    if "Russia" in monarchies:
-        # Russian Monarchs
-        saveData('Russia',
-                 get_monarch_list("https://en.wikipedia.org/wiki/List_of_Russian_monarchs", 'List_of_Russian_monarchs206',
-                                  ['navbox-list-with-group', 'navbox-list', 'hlist']))
-    if "Sweden" in monarchies:
-        # Swedish Monarchs
-        saveData('Sweden', get_monarch_list("https://en.wikipedia.org/wiki/List_of_Swedish_monarchs", 'Monarchs_of_Sweden1274',
-                                            ['navbox-list-with-group', 'navbox-list']))
-    if "Denmark" in monarchies:
-        # Danish Monarchs
-        saveData('Denmark', get_monarch_list_with_i("https://en.wikipedia.org/wiki/List_of_Danish_monarchs", 'Monarchs_of_Denmark885',
-                                             ['navbox-list-with-group', 'navbox-list']))
-    if "Scotland" in monarchies:
-        # Scottish Monarchs
-        saveData('Scotland', get_monarch_list("https://en.wikipedia.org/wiki/List_of_Scottish_monarchs",
-                                              'Pictish_and_Scottish_monarchs338', ['navbox-list-with-group', 'navbox-list']))
-    if "Norway" in monarchies:
-        # Norwegian Monarchs
-        saveData('Norway',
-                 get_monarch_list("https://en.wikipedia.org/wiki/List_of_Norwegian_monarchs", 'Monarchs_of_Norway867',
-                                  ['navbox-list-with-group', 'navbox-list']))
-    if "Iceland" in monarchies:
-        # Icelanic Monarchs
-        saveData('Iceland',
-                 get_monarch_list("https://en.wikipedia.org/wiki/Lists_of_heads_of_state_of_Iceland", 'Monarchs_of_Iceland177',
-                                  ['navbox-list-with-group', 'navbox-list']))
-    if "Bohemia" in monarchies:
-        # List_of_Bohemian_monarchs
-        saveData('Bohemia',
-                 get_monarch_list("https://en.wikipedia.org/wiki/List_of_Bohemian_monarchs", 'Monarchs_of_Bohemia1205',
-                                  ['navbox-list-with-group', 'navbox-list']))
-    if "Austria" in monarchies:
-        # List_of_rulers_of_Austria
-        saveData('Austria',
-                 get_monarch_list("https://en.wikipedia.org/wiki/List_of_rulers_of_Austria", 'Monarchs_of_Austria247',
-                                  ['navbox-list-with-group', 'navbox-list']))
-    if "Hungary" in monarchies:
-        # List_of_Hungarian_monarchs
-        saveData('Hungary',
-                 get_monarch_list("https://en.wikipedia.org/wiki/List_of_Hungarian_monarchs", 'Monarchs_of_Hungary522',
-                                  ['navbox-list-with-group', 'navbox-list']))
-    if "Naples" in monarchies:
-        # List_of_monarchs_of_Naples
-        saveData('Naples',
-                 get_monarch_list("https://en.wikipedia.org/wiki/List_of_monarchs_of_Naples", 'Monarchs_of_Naples136',
-                                  ['navbox-list-with-group', 'navbox-list']))
-    if "Portugal" in monarchies:
-        # List_of_Portuguese_monarchs
-        saveData('Portugal',
-                 get_monarch_list("https://en.wikipedia.org/wiki/List_of_Portuguese_monarchs", 'Monarchs_of_Portugal284',
-                                  ['navbox-list-with-group', 'navbox-list']))
-    if "Poland" in monarchies:
-        # List_of_Polish_monarchs
-        saveData('Poland',
-                 get_monarch_list("https://en.wikipedia.org/wiki/List_of_Polish_monarchs", 'Monarchs_of_Poland721',
-                                  ['navbox-list-with-group', 'navbox-list']))
-    if "Bavaria" in monarchies:
-        # Bavarian Monarchs
-        response = requests.get(
-            url="https://en.wikipedia.org/wiki/List_of_monarchs_of_Bavaria",
-        )
-        soup = BeautifulSoup(response.content, 'html.parser')
-        tr_tags = soup.find_all('tr')
-        td_tags = []
-        for tr_tag in tr_tags:
-            temp = tr_tag.find_all('td')
-            if len(temp) >= 1:
-                td_tags.append(temp[0])
-        bavarian_monarchs = []
-        for td_tag in td_tags:
-            a_tag = td_tag.find('a')
-            if a_tag:
-                href = a_tag.get('href')
-                bavarian_monarchs.append(href)
-            else:
-                b_tags = td_tag.find_all('b')
-                for b_tag in b_tags:
-                    a_tag = b_tag.find('a')
-                    if a_tag:
-                        href = a_tag.get('href')
-                        bavarian_monarchs.append(href)
-        bavarian_monarchs = [h for h in bavarian_monarchs if
-                             h.startswith('/wiki/') and not h.startswith('/wiki/File:') and not h.startswith('/wiki/Pope')][
-                            :-18]
-        bavarian_monarchs = [x for i, x in enumerate(bavarian_monarchs) if x not in bavarian_monarchs[:i]]
-        bavarian_monarchs = convert_wiki_list_to_wiki_data_list(bavarian_monarchs)
-        saveData('Bavaria', bavarian_monarchs)
-    if "Japan" in monarchies:
-        saveData('Japan', get_monarch_list("https://en.wikipedia.org/wiki/Emperor_of_Japan",
-                                           "23x15px&#124;border&#124;link=Japan&#124;alt=Japan_Emperors_of_Japan_(list)1115",
-                                           ['navbox-list', 'hlist']))
-    if "Joseon" in monarchies:
-        # Korean Monarchs
-        response = requests.get(
-            url="https://en.wikipedia.org/wiki/List_of_kings_of_Joseon",
-        )
-        soup = BeautifulSoup(response.content, 'html.parser')
-        table = soup.find('table')
-        th = table.find_all('th', attrs={'scope': 'row'})
-        links = []
-        for t in th:
-            links = links + [a.get('href') for a in t.find_all('a')]
-        joseon_monarchs = convert_wiki_list_to_wiki_data_list(links)
-        saveData('Joseon', joseon_monarchs)
-    if "Shang" in monarchies:
-       saveData('Shang', get_monarch_list("https://en.wikipedia.org/wiki/Shang_dynasty",
-                                           "Kings_of_the_Shang_dynasty1551",
-                                           ['navbox-list', 'hlist'])[3:])
-    if "Zhou" in monarchies:
-       saveData('Zhou', get_monarch_list("https://en.wikipedia.org/wiki/Zhou_dynasty",
-                                           "Kings_of_the_Zhou_dynasty1116",
-                                           ['navbox-list', 'hlist']))
-    if "Han" in monarchies:
-       saveData('Han', get_monarch_list("https://en.wikipedia.org/wiki/List_of_emperors_of_the_Han_dynasty",
-                                           "Emperors_of_the_Han_dynasty1153",
-                                           ['navbox-list', 'hlist']))
-    if "Tang" in monarchies:
-       saveData('Tang', get_monarch_list("https://en.wikipedia.org/wiki/Template:Tang_emperors",
-                                           "Emperors_of_the_Tang_dynasty1055",
-                                           ['navbox-list', 'hlist']))
-    if "Yuan" in monarchies:
-       saveData('Yuan', get_monarch_list("https://en.wikipedia.org/wiki/Template:Yuan_emperors",
-                                           "Emperors_of_the_Yuan_dynasty1679",
-                                           ['navbox-list', 'hlist']))
-    if "Ming" in monarchies:
-       saveData('Ming', get_monarch_list("https://en.wikipedia.org/wiki/Template:Ming_emperors",
-                                           "Emperors_of_the_Ming_dynasty1093",
-                                           ['navbox-list', 'hlist']))
-    if "Qing" in monarchies:
-       saveData('Qing', get_monarch_list("https://en.wikipedia.org/wiki/Template:Qing_emperors",
-                                           "Emperors_of_the_Qing_dynasty1059",
-                                           ['navbox-list', 'hlist']))
-    if "Ottoman" in monarchies:
-       saveData('Ottoman', get_monarch_list("https://en.wikipedia.org/wiki/Category:Sultans_of_the_Ottoman_Empire",
-                                           "Ottoman_sultans_/_caliphs675",
-                                           ['navbox-list', 'hlist']))
-
-    # --- Additional monarchies (robust title/Wikidata-based scraper) ---
-    if "Thailand" in monarchies:
-        saveData('Thailand', scrape_monarchy(
-            "https://en.wikipedia.org/wiki/List_of_monarchs_of_Thailand", "navbox", "Monarchs_of_Thailand"))
-    if "Greece" in monarchies:
-        saveData('Greece', scrape_monarchy(
-            "https://en.wikipedia.org/wiki/List_of_kings_of_Greece", "tables", None))
-    if "Netherlands" in monarchies:
-        saveData('Netherlands', scrape_monarchy(
-            "https://en.wikipedia.org/wiki/List_of_monarchs_of_the_Netherlands", "navbox", "Monarchs_of_the_Netherlands"))
-    if "Mughal" in monarchies:
-        saveData('Mughal', scrape_monarchy(
-            "https://en.wikipedia.org/wiki/List_of_emperors_of_the_Mughal_Empire", "tables", [0]))
-    if "Byzantine" in monarchies:
-        saveData('Byzantine', scrape_monarchy(
-            "https://en.wikipedia.org/wiki/List_of_Byzantine_emperors", "tables", None))
-    if "Egypt_Old_Kingdom" in monarchies:
-        saveData('Egypt_Old_Kingdom', scrape_monarchy(
-            "https://en.wikipedia.org/wiki/List_of_pharaohs", "egypt", "Old Kingdom", blocklist=EGYPT_BLOCKLIST))
-    if "Egypt_Middle_Kingdom" in monarchies:
-        saveData('Egypt_Middle_Kingdom', scrape_monarchy(
-            "https://en.wikipedia.org/wiki/List_of_pharaohs", "egypt", "Middle Kingdom", blocklist=EGYPT_BLOCKLIST))
-    if "Egypt_New_Kingdom" in monarchies:
-        saveData('Egypt_New_Kingdom', scrape_monarchy(
-            "https://en.wikipedia.org/wiki/List_of_pharaohs", "egypt", "New Kingdom", blocklist=EGYPT_BLOCKLIST))
-    if "Mongol_Empire" in monarchies:
-        saveData('Mongol_Empire', scrape_monarchy(
-            "https://en.wikipedia.org/wiki/List_of_Mongol_rulers", "heading", "Great Khans", stop_after="Kublai_Khan"))
-    if "Golden_Horde" in monarchies:
-        saveData('Golden_Horde', scrape_monarchy(
-            "https://en.wikipedia.org/wiki/List_of_khans_of_the_Golden_Horde", "tables", [0]))
-    if "Ilkhanate" in monarchies:
-        saveData('Ilkhanate', scrape_monarchy(
-            "https://en.wikipedia.org/wiki/List_of_Mongol_rulers", "heading", "Ilkhanate"))
-    if "Chagatai_Khanate" in monarchies:
-        saveData('Chagatai_Khanate', scrape_monarchy(
-            "https://en.wikipedia.org/wiki/List_of_Chagatai_khans", "tables", [0]))
-    # Chinggisids is a union of the empires above, so it must run last.
-    if "Chinggisids" in monarchies:
-        build_chinggisids()
-
-monarchies = [
-    "England","France","Holy_Roman_Empire","Germany",
-    "Spain","Russia","Sweden","Denmark","Scotland","Norway","Iceland","Bohemia","Austria","Hungary","Naples",
-    "Portugal","Poland","Bavaria","Japan","Joseon","Shang", "Zhou", "Han", "Tang", "Yuan", "Ming", "Qing", "Ottoman",
-    # Additional monarchies
-    "Thailand", "Greece", "Netherlands", "Mughal", "Byzantine",
-    "Egypt_Old_Kingdom", "Egypt_Middle_Kingdom", "Egypt_New_Kingdom",
-    "Mongol_Empire", "Golden_Horde", "Ilkhanate", "Chagatai_Khanate", "Chinggisids",
-]
-
-if __name__ == '__main__':
-    get_monarch_lists(["Spain"])
+def get_monarch_lists(monarchies_to_scrape):
+    """Re-scrape and save, for ``royaltree build --lists``. Failures are printed and skipped."""
+    scraped, errors = scrape_registered(monarchies_to_scrape)
+    for name in monarchies_to_scrape:
+        if name in errors:
+            print(f"{name}: failed: {errors[name]}")
+    apply_lists(monarchies_to_scrape, scraped)

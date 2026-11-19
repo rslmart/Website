@@ -23,15 +23,6 @@ SUCCESSOR_WINDOW = 5  # try the next 5 monarchs for a path
 MAX_ANCESTOR_DEPTH = 5
 DEEP_ANCESTOR_DEPTH = 12
 
-EUROPEAN_MONARCHIES = {
-    "Austria", "Bavaria", "Bohemia", "Denmark", "England", "France", "Germany",
-    "Greece", "Holy_Roman_Empire", "Hungary", "Iceland", "Naples", "Netherlands",
-    "Norway", "Poland", "Portugal", "Russia", "Scotland", "Spain", "Sweden",
-}
-DEEP_ANCESTOR_MONARCHIES = {
-    "Mongol_Empire", "Golden_Horde", "Ilkhanate", "Chagatai_Khanate", "Chinggisids",
-}
-
 
 class Retriever:
     """Person lookups for one tree: store first, then the network (unless offline).
@@ -288,10 +279,16 @@ def gather_ancestors(monarch_ids, retriever, depth, include_siblings):
 
 
 def ancestor_settings(monarchy):
-    """(depth, include_siblings) for trees with an ancestor stage, else None."""
-    if monarchy in EUROPEAN_MONARCHIES:
+    """(depth, include_siblings) for trees with an ancestor stage, else None.
+
+    The mode comes from the monarch registry: ``european`` (5 generations,
+    with siblings), ``deep`` (12, no siblings) or ``none``.
+    """
+    from royaltree.registry import ancestor_mode
+    mode = ancestor_mode(monarchy)
+    if mode == "european":
         return MAX_ANCESTOR_DEPTH, True
-    if monarchy in DEEP_ANCESTOR_MONARCHIES:
+    if mode == "deep":
         return DEEP_ANCESTOR_DEPTH, False
     return None
 
