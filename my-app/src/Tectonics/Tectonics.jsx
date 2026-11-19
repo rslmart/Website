@@ -15,6 +15,8 @@ import {isolateMapControls} from '../hooks/mapControls';
 import {
     CATEGORIES,
     STEP_CLASS_LABEL,
+    TOOTH_LENGTH_PX,
+    TOOTH_SPACING_PX,
     categoryForStepClass,
     colorForStepClass,
 } from './constants';
@@ -127,13 +129,9 @@ export const MAP_STYLES = {
     dark: 'mapbox://styles/mapbox/dark-v10',
 };
 
-// On the light basemap the green ridge and orange transform lines are below
-// 3:1 against the land and water, so they get a thin dark casing underneath
-// (same hue on top). The other two categories already clear 3:1.
-const CASED_CATEGORIES = new Set(['ridge', 'transform']);
 const BOUNDARY_WIDTH = 2.5;
 const BOUNDARY_MIN_WIDTH = 1.5;
-const CASING_EXTRA = 2; // 1px either side
+const TOOTH_WIDTH = 1.5;
 
 // Draw the deck.gl layers on every world copy the basemap shows. The default
 // view is centred on the Pacific (longitude 150), so the Americas and the
@@ -156,7 +154,14 @@ export const VELOCITY_ARROW_MIN_PX = 16;
 export const VELOCITY_ARROW_MAX_PX = 48;
 export const VELOCITY_ARROW_OFFSET_PX = 12;
 // 0.8 px per mm/yr: a 30 mm/yr arrow is 24 px and anything past 60 mm/yr caps.
-const VELOCITY_ARROW_PX_PER_MM_YR = 0.8;
+// The legend states the 16–48 px clamp in these same units (20–60 mm/yr).
+export const VELOCITY_ARROW_PX_PER_MM_YR = 0.8;
+export const VELOCITY_SCALE = {
+    minPx: VELOCITY_ARROW_MIN_PX,
+    maxPx: VELOCITY_ARROW_MAX_PX,
+    minMmYr: VELOCITY_ARROW_MIN_PX / VELOCITY_ARROW_PX_PER_MM_YR,
+    maxMmYr: VELOCITY_ARROW_MAX_PX / VELOCITY_ARROW_PX_PER_MM_YR,
+};
 const VELOCITY_BARB_FRAC = 0.3;
 const VELOCITY_BARB_ANGLE = (25 * Math.PI) / 180;
 
@@ -223,6 +228,162 @@ export function buildVelocityArrows(points, zoom = DESKTOP_ZOOM, plates) {
         }
     }
     return segments;
+}
+
+function lineParts(feature) {
+    const coordinates = feature?.geometry?.coordinates;
+    if (!coordinates) return [];
+    return feature.geometry.type === 'MultiLineString' ? coordinates : [coordinates];
+}
+
+// East/north offset in degrees, with longitude scaled by cos(latitude) so a
+// pixel length matches the Web Mercator scale used for the velocity barbs.
+function eastNorth(from, to) {
+    const lat = ((from[1] + to[1]) / 2) * Math.PI / 180;
+    const cosLat = Math.max(Math.cos(lat), 0.2);
+    return {
+        east: (to[0] - from[0]) * cosLat,
+        north: to[1] - from[1],
+    };
+}
+
+function chordsOf(part, degPerPx) {
+    const chords = [];
+    for (let i = 1; i < part.length; i++) {
+        const from = part[i - 1];
+        const to = part[i];
+        const {east, north} = eastNorth(from, to);
+        const px = Math.hypot(east, north) / degPerPx;
+        if (px > 0) chords.push({from, to, px, east, north});
+    }
+    return chords;
+}
+
+function pointAlong(chord, t) {
+    return [
+        chord.from[0] + (chord.to[0] - chord.from[0]) * t,
+        chord.from[1] + (chord.to[1] - chord.from[1]) * t,
+    ];
+}
+
+// deck.gl 9 removed GeoJsonLayer getLineDashArray. Each category's dash run
+// is drawn as its own line segments, and the legend swatch repeats that run.
+export function buildBoundarySegments(features, zoom = DESKTOP_ZOOM) {
+    const z = Number.isFinite(zoom) ? zoom : DESKTOP_ZOOM;
+    const degPerPx = mercatorLatitudeDegreesPerPixel(z);
+    const segments = [];
+    for (const feature of features ?? []) {
+        const stepClass = feature.properties?.stepClass;
+        const category = categoryForStepClass(stepClass);
+        const dash = category ? CATEGORIES[category].dash : null;
+        const color = colorForStepClass(stepClass);
+        for (const part of lineParts(feature)) {
+            const chords = chordsOf(part, degPerPx);
+            if (!dash) {
+                for (const chord of chords) {
+                    segments.push({
+                        from: chord.from,
+                        to: chord.to,
+                        properties: feature.properties,
+                        category,
+                        color,
+                    });
+                }
+                continue;
+            }
+            let chordIndex = 0;
+            let consumed = 0;
+            let patternIndex = 0;
+            let remaining = dash[0];
+            let drawing = true;
+            let guard = 0;
+            while (chordIndex < chords.length && guard < 100000) {
+                guard += 1;
+                const chord = chords[chordIndex];
+                const available = chord.px - consumed;
+                const take = Math.min(available, remaining);
+                if (drawing && take > 0.05) {
+                    segments.push({
+                        from: pointAlong(chord, consumed / chord.px),
+                        to: pointAlong(chord, (consumed + take) / chord.px),
+                        properties: feature.properties,
+                        category,
+                        color,
+                    });
+                }
+                consumed += take;
+                remaining -= take;
+                if (consumed >= chord.px - 1e-6) {
+                    chordIndex += 1;
+                    consumed = 0;
+                }
+                if (remaining <= 1e-6) {
+                    patternIndex = (patternIndex + 1) % dash.length;
+                    remaining = dash[patternIndex];
+                    drawing = patternIndex % 2 === 0;
+                    if (!(remaining > 0)) break;
+                }
+            }
+        }
+    }
+    return segments;
+}
+
+// R: the right-hand plate subducts, so the tooth points left of travel.
+// L: the left-hand plate subducts, so the tooth points right of travel.
+// A null side, and any non-SUB row, grows no teeth. plateBound is not read.
+export function overridingSign(subducting, stepClass) {
+    if (stepClass !== 'SUB') return 0;
+    if (subducting === 'R') return -1;
+    if (subducting === 'L') return 1;
+    return 0;
+}
+
+export function buildSubductionTeeth(features, zoom = DESKTOP_ZOOM) {
+    const z = Number.isFinite(zoom) ? zoom : DESKTOP_ZOOM;
+    const degPerPx = mercatorLatitudeDegreesPerPixel(z);
+    const teeth = [];
+    for (const feature of features ?? []) {
+        const sign = overridingSign(feature.properties?.subducting, feature.properties?.stepClass);
+        if (!sign) continue;
+        for (const part of lineParts(feature)) {
+            const chords = chordsOf(part, degPerPx);
+            const total = chords.reduce((sum, chord) => sum + chord.px, 0);
+            if (!(total > 0)) continue;
+            const places = total <= TOOTH_SPACING_PX
+                ? [total / 2]
+                : Array.from(
+                    {length: Math.floor((total - TOOTH_SPACING_PX / 2) / TOOTH_SPACING_PX) + 1},
+                    (_, i) => TOOTH_SPACING_PX / 2 + i * TOOTH_SPACING_PX,
+                );
+            for (const distance of places) {
+                let walked = 0;
+                for (const chord of chords) {
+                    if (walked + chord.px < distance) {
+                        walked += chord.px;
+                        continue;
+                    }
+                    const t = (distance - walked) / chord.px;
+                    const [lon, lat] = pointAlong(chord, t);
+                    const az = Math.atan2(chord.east, chord.north);
+                    const toothAz = az + sign * (Math.PI / 2);
+                    const lenDeg = TOOTH_LENGTH_PX * degPerPx;
+                    const cosLat = Math.max(Math.cos((lat * Math.PI) / 180), 0.2);
+                    teeth.push({
+                        from: [lon, lat],
+                        to: [
+                            lon + (Math.sin(toothAz) * lenDeg) / cosLat,
+                            lat + Math.cos(toothAz) * lenDeg,
+                        ],
+                        properties: feature.properties,
+                        color: colorForStepClass('SUB'),
+                    });
+                    break;
+                }
+            }
+        }
+    }
+    return teeth;
 }
 
 function tooltipModel(info) {
@@ -336,15 +497,14 @@ function Tectonics() {
         };
     }, [data, visibility]);
 
-    const casedBoundaries = useMemo(() => {
-        if (!visibleBoundaries || theme !== 'light') return null;
-        return {
-            type: 'FeatureCollection',
-            features: visibleBoundaries.features.filter((f) =>
-                CASED_CATEGORIES.has(categoryForStepClass(f.properties.stepClass))
-            ),
-        };
-    }, [visibleBoundaries, theme]);
+    const boundarySegments = useMemo(
+        () => buildBoundarySegments(visibleBoundaries?.features, viewState.zoom),
+        [visibleBoundaries, viewState.zoom],
+    );
+    const subductionTeeth = useMemo(
+        () => buildSubductionTeeth(visibleBoundaries?.features, viewState.zoom),
+        [visibleBoundaries, viewState.zoom],
+    );
 
     const velocityArrows = useMemo(
         () => (data ? buildVelocityArrows(data.velocity, viewState.zoom, data.plates) : []),
@@ -413,33 +573,16 @@ function Tectonics() {
             );
         }
 
-        if (casedBoundaries) {
-            out.push(
-                new GeoJsonLayer({
-                    id: 'boundaries-casing',
-                    data: casedBoundaries,
-                    stroked: true,
-                    filled: false,
-                    getLineColor: cssColorToRgba(ink, 230, [40, 40, 40, 230]),
-                    getLineWidth: BOUNDARY_WIDTH + CASING_EXTRA,
-                    lineWidthUnits: 'pixels',
-                    lineWidthMinPixels: BOUNDARY_MIN_WIDTH + CASING_EXTRA,
-                    wrapLongitude: true,
-                    pickable: false,
-                })
-            );
-        }
-
         out.push(
-            new GeoJsonLayer({
+            new LineLayer({
                 id: 'boundaries',
-                data: visibleBoundaries,
-                stroked: true,
-                filled: false,
-                getLineColor: (f) => colorForStepClass(f.properties.stepClass),
-                getLineWidth: BOUNDARY_WIDTH,
-                lineWidthUnits: 'pixels',
-                lineWidthMinPixels: BOUNDARY_MIN_WIDTH,
+                data: boundarySegments,
+                getSourcePosition: (d) => d.from,
+                getTargetPosition: (d) => d.to,
+                getColor: (d) => d.color,
+                getWidth: BOUNDARY_WIDTH,
+                widthUnits: 'pixels',
+                widthMinPixels: BOUNDARY_MIN_WIDTH,
                 wrapLongitude: true,
                 pickable: true,
                 autoHighlight: true,
@@ -448,8 +591,24 @@ function Tectonics() {
             })
         );
 
+        if (subductionTeeth.length > 0) {
+            out.push(
+                new LineLayer({
+                    id: 'subduction-teeth',
+                    data: subductionTeeth,
+                    getSourcePosition: (d) => d.from,
+                    getTargetPosition: (d) => d.to,
+                    getColor: (d) => d.color,
+                    getWidth: TOOTH_WIDTH,
+                    widthUnits: 'pixels',
+                    wrapLongitude: true,
+                    pickable: false,
+                })
+            );
+        }
+
         return out;
-    }, [data, visibility, visibleBoundaries, casedBoundaries, velocityArrows, selectedPlate, ink]);
+    }, [data, visibility, boundarySegments, subductionTeeth, velocityArrows, selectedPlate, ink]);
 
     // deck.gl applies this inline to its tooltip <div>, so var() works.
     const TOOLTIP_STYLE = {
@@ -658,6 +817,7 @@ function Tectonics() {
                 <LegendPanel
                     open={legendOpen}
                     categories={CATEGORIES}
+                    velocityScale={VELOCITY_SCALE}
                     visibility={visibility}
                     onToggle={toggle}
                     togglePanel={() => setLegendOpen((prev) => !prev)}
@@ -676,6 +836,7 @@ function Tectonics() {
                     <LegendPanel
                         embedded
                         categories={CATEGORIES}
+                        velocityScale={VELOCITY_SCALE}
                         visibility={visibility}
                         onToggle={toggle}
                     />

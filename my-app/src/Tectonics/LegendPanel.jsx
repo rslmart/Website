@@ -19,14 +19,62 @@ const panelStyles = {
     zIndex: 9999,
 };
 
-const swatch = (color) => ({
-    display: 'inline-block',
-    width: '18px',
-    height: '4px',
-    marginRight: '8px',
-    verticalAlign: 'middle',
-    backgroundColor: `rgb(${color[0]}, ${color[1]}, ${color[2]})`,
-});
+const SWATCH_HEIGHT = 4;
+
+// One cycle of the same [on, off, ...] pixel run the map draws as segments.
+function DashSwatch({color, dash}) {
+    const rgb = `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
+    if (!dash) {
+        return (
+            <span
+                data-dash="solid"
+                style={{
+                    display: 'inline-block',
+                    width: 18,
+                    height: SWATCH_HEIGHT,
+                    marginRight: 8,
+                    verticalAlign: 'middle',
+                    backgroundColor: rgb,
+                }}
+            />
+        );
+    }
+    const cycle = dash.reduce((sum, run) => sum + run, 0);
+    const target = cycle * Math.max(1, Math.ceil(18 / cycle));
+    const pieces = [];
+    let used = 0;
+    let index = 0;
+    while (used < target - 0.01 && index < 24) {
+        const run = dash[index % dash.length];
+        const draw = index % 2 === 0;
+        pieces.push(
+            <span
+                key={index}
+                style={{
+                    display: 'inline-block',
+                    width: run,
+                    height: SWATCH_HEIGHT,
+                    backgroundColor: draw ? rgb : 'transparent',
+                }}
+            />
+        );
+        used += run;
+        index += 1;
+    }
+    return (
+        <span
+            data-dash={dash.join(',')}
+            style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                marginRight: 8,
+                verticalAlign: 'middle',
+            }}
+        >
+            {pieces}
+        </span>
+    );
+}
 
 const areaSwatch = (rgba) => ({
     display: 'inline-block',
@@ -66,15 +114,18 @@ function Checkbox({name, checked, onToggle, children}) {
 }
 
 function LegendPanel(props) {
-    const {open, categories, visibility, onToggle, togglePanel, embedded} = props;
+    const {open, categories, velocityScale, visibility, onToggle, togglePanel, embedded} = props;
+    const scaleLabel = velocityScale
+        ? `${velocityScale.minMmYr}–${velocityScale.maxMmYr} mm/yr`
+        : null;
 
     const body = (
         <React.Fragment>
             <div style={{marginTop: 6}}>
                 <div style={{fontWeight: 600, marginTop: 6}}>Boundaries</div>
-                {Object.entries(categories).map(([key, {label, color}]) => (
+                {Object.entries(categories).map(([key, {label, color, dash}]) => (
                     <Checkbox key={key} name={key} checked={visibility[key]} onToggle={onToggle}>
-                        <span style={swatch(color)} />
+                        <DashSwatch color={color} dash={dash} />
                         {label}
                     </Checkbox>
                 ))}
@@ -89,9 +140,20 @@ function LegendPanel(props) {
                     Plates (click to identify)
                 </Checkbox>
                 <Checkbox name="velocity" checked={visibility.velocity} onToggle={onToggle}>
-                    {/* Same ink as the arrows (useThemeTokens), so it shows in dark too. */}
-                    <span style={{...swatch([40, 40, 40]), backgroundColor: 'var(--map-ink)', height: '2px'}} />
-                    Velocity vectors
+                    {/* Same ink as the arrows. The two strokes are the 16 px floor and the 48 px cap. */}
+                    {velocityScale && (
+                        <span style={{display: 'inline-flex', alignItems: 'center', gap: 3, marginRight: 8}}>
+                            <span
+                                data-velocity-px={velocityScale.minPx}
+                                style={{width: velocityScale.minPx, height: 2, backgroundColor: 'var(--map-ink)'}}
+                            />
+                            <span
+                                data-velocity-px={velocityScale.maxPx}
+                                style={{width: velocityScale.maxPx, height: 2, backgroundColor: 'var(--map-ink)'}}
+                            />
+                        </span>
+                    )}
+                    Velocity vectors{scaleLabel ? `, ${scaleLabel}` : ''}
                 </Checkbox>
             </div>
 

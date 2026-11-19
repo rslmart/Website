@@ -21,9 +21,18 @@ import Tectonics, {
     VELOCITY_ARROW_OFFSET_PX,
     buildVelocityArrows,
     mercatorLatitudeDegreesPerPixel,
+    overridingSign,
     velocityArrowLengthPx,
     velocityReference,
+    VELOCITY_SCALE,
+    buildBoundarySegments,
+    buildSubductionTeeth,
 } from "./Tectonics";
+import { CATEGORIES } from "./constants";
+import { fromColumnar } from "./boundaries.mjs";
+import { gunzipSync } from "node:zlib";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 // Visible longitude from the same Web Mercator viewport deck.gl draws with.
 function spanFromViewport(width, height, viewState) {
@@ -177,8 +186,10 @@ describe("Tectonics columnar boundaries", () => {
         );
         await waitFor(() => expect(screen.getByTestId("mock-deckgl").dataset.layerIds).toContain("boundaries"));
         const layer = lastDeckProps.current.layers.flat(Infinity).find((item) => item?.id === "boundaries");
-        expect(layer.props.data.features).toHaveLength(1);
-        expect(layer.props.data.features[0]).toMatchObject({
+        expect(layer.props.data).toHaveLength(1);
+        expect(layer.props.data[0]).toMatchObject({
+            from: [10, 1],
+            to: [11, 2],
             properties: {
                 seq: 1,
                 stepClass: "OSR",
@@ -187,8 +198,8 @@ describe("Tectonics columnar boundaries", () => {
                 divergence: 1.5,
                 rightLateral: -0.5,
             },
-            geometry: { type: "LineString", coordinates: [[10, 1], [11, 2]] },
         });
+        expect(lastDeckProps.current.layers.flat(Infinity).some((item) => item?.id === "boundaries-casing")).toBe(false);
     });
 });
 
@@ -445,5 +456,182 @@ describe("mapbox token failure", () => {
         expect(mapboxTokenFailed("pk.bad", { message: "Not Authorized - Invalid Token" })).toBe(true);
         expect(mapboxTokenFailed("pk.bad", { message: "An API access token is required to use Mapbox GL." })).toBe(true);
         expect(mapboxTokenFailed("pk.good", { message: "Failed to fetch" })).toBe(false);
+    });
+});
+
+// WCAG 2.x relative luminance, as used in reviews/theme/report.md:
+// channel c/255 is c/12.92 when c ≤ 0.04045, else ((c+0.055)/1.055)^2.4.
+// L = 0.2126R + 0.7152G + 0.0722B. Ratio (L1+0.05)/(L2+0.05).
+const LIGHT_V10_OCEAN = [204, 210, 211];
+// Absent until a token-backed sample of mapbox dark-v10 water exists.
+// Do not invent this RGB, and do not substitute the unverified v11 value.
+const DARK_V10_OCEAN = undefined;
+
+function linearChannel(channel) {
+    const value = channel / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+}
+
+function encodeChannel(value) {
+    const clamped = Math.min(1, Math.max(0, value));
+    const encoded = clamped <= 0.0031308 ? 12.92 * clamped : 1.055 * clamped ** (1 / 2.4) - 0.055;
+    return 255 * encoded;
+}
+
+function contrastRatio(first, second) {
+    const luminance = (rgb) => {
+        const [red, green, blue] = rgb.map(linearChannel);
+        return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+    };
+    const lighter = Math.max(luminance(first), luminance(second));
+    const darker = Math.min(luminance(first), luminance(second));
+    return (lighter + 0.05) / (darker + 0.05);
+}
+
+// Machado, Oliveira, and Fernandes 2009, full severity, applied in linear sRGB.
+// Deuteranopia is the same matrix the hurricane category test uses.
+const MACHADO_2009 = {
+    deuteranopia: [
+        [0.367322, 0.860646, -0.227968],
+        [0.280085, 0.672501, 0.047413],
+        [-0.011820, 0.042940, 0.968881],
+    ],
+    protanopia: [
+        [0.152286, 1.052583, -0.204868],
+        [0.114503, 0.786281, 0.099216],
+        [-0.003882, -0.048116, 1.051998],
+    ],
+};
+
+function simulateDeficiency(rgb, matrix) {
+    const [red, green, blue] = rgb.map(linearChannel);
+    return matrix.map((row) => encodeChannel(row[0] * red + row[1] * green + row[2] * blue));
+}
+
+// CIE76: Euclidean distance in CIE Lab (D65).
+function cie76(first, second) {
+    const lab = (rgb) => {
+        const [red, green, blue] = rgb.map(linearChannel);
+        const x = red * 0.4124564 + green * 0.3575761 + blue * 0.1804375;
+        const y = red * 0.2126729 + green * 0.7151522 + blue * 0.072175;
+        const z = red * 0.0193339 + green * 0.119192 + blue * 0.9503041;
+        const pivot = (t) => (t > 0.008856 ? t ** (1 / 3) : 7.787 * t + 16 / 116);
+        const fy = pivot(y);
+        return [116 * fy - 16, 500 * (pivot(x / 0.95047) - fy), 200 * (fy - pivot(z / 1.08883))];
+    };
+    const [l1, a1, b1] = lab(first);
+    const [l2, a2, b2] = lab(second);
+    return Math.hypot(l1 - l2, a1 - a2, b1 - b2);
+}
+
+describe("boundary palette", () => {
+    it("clears 3:1 on light-v10 ocean 204,210,211", () => {
+        for (const [key, { color }] of Object.entries(CATEGORIES)) {
+            expect(contrastRatio(color, LIGHT_V10_OCEAN), key).toBeGreaterThanOrEqual(3);
+        }
+    });
+
+    it("keeps every pair above 40 CIE76 ΔE under Machado 2009 deuteranopia and protanopia", () => {
+        const keys = Object.keys(CATEGORIES);
+        for (const deficiency of ["deuteranopia", "protanopia"]) {
+            for (let i = 0; i < keys.length; i += 1) {
+                for (let j = i + 1; j < keys.length; j += 1) {
+                    const gap = cie76(
+                        simulateDeficiency(CATEGORIES[keys[i]].color, MACHADO_2009[deficiency]),
+                        simulateDeficiency(CATEGORIES[keys[j]].color, MACHADO_2009[deficiency]),
+                    );
+                    expect(gap, `${deficiency} ${keys[i]}/${keys[j]}`).toBeGreaterThan(40);
+                }
+            }
+        }
+    });
+
+    (DARK_V10_OCEAN ? it : it.skip)("clears 3:1 on recorded dark-v10 water", () => {
+        for (const { color } of Object.values(CATEGORIES)) {
+            expect(contrastRatio(color, DARK_V10_OCEAN)).toBeGreaterThanOrEqual(3);
+        }
+    });
+});
+
+describe("boundary dashes and subduction teeth", () => {
+    const line = (stepClass, subducting, coordinates = [[0, 0], [8, 0]]) => ({
+        type: "Feature",
+        properties: { seq: 9, stepClass, plateBound: "NA/PA", subducting },
+        geometry: { type: "LineString", coordinates },
+    });
+
+    it("draws dash runs as separated segments and keeps a solid category whole", () => {
+        const solid = buildBoundarySegments([line("CCB")], 4);
+        expect(solid).toHaveLength(1);
+        expect(solid[0].from).toEqual([0, 0]);
+        expect(solid[0].to).toEqual([8, 0]);
+        expect(solid[0].color).toEqual(CATEGORIES.convergent.color);
+
+        const dashed = buildBoundarySegments([line("OTF")], 4);
+        expect(dashed.length).toBeGreaterThan(1);
+        expect(dashed[0].to[0]).toBeLessThan(dashed[1].from[0]);
+        expect(dashed.every((segment) => segment.category === "transform")).toBe(true);
+        expect(dashed[0].color).toEqual(CATEGORIES.transform.color);
+    });
+
+    it("offsets teeth opposite the stored side and grows none for a null or non-SUB row", () => {
+        expect(overridingSign("R", "SUB")).toBe(-1);
+        expect(overridingSign("L", "SUB")).toBe(1);
+        expect(overridingSign(null, "SUB")).toBe(0);
+        expect(overridingSign("R", "OTF")).toBe(0);
+        // Due east: left of travel is north. plateBound is NA/PA for every row.
+        const towardLeft = buildSubductionTeeth([line("SUB", "R")], 4)[0];
+        const towardRight = buildSubductionTeeth([line("SUB", "L")], 4)[0];
+        expect(towardLeft.to[1]).toBeGreaterThan(towardLeft.from[1]);
+        expect(towardRight.to[1]).toBeLessThan(towardRight.from[1]);
+        expect(buildSubductionTeeth([line("SUB", null)], 4)).toEqual([]);
+        expect(buildSubductionTeeth([line("OTF", "R")], 4)).toEqual([]);
+        expect(buildSubductionTeeth([line("OTF", null)], 4)).toEqual([]);
+    });
+
+    it("points Aleutian teeth toward North America and Andes teeth toward South America", () => {
+        const gzipPath = join(process.cwd(), "public/tectonics/boundaries.json.gz");
+        const columnar = JSON.parse(gunzipSync(readFileSync(gzipPath)).toString("utf8"));
+        const features = fromColumnar(columnar).features;
+        const at = (seq) => features[seq - columnar.seq0];
+        const aleutians = at(2786);
+        const andes = at(3056);
+        expect(aleutians.properties).toMatchObject({ plateBound: "NA/PA", subducting: "R", stepClass: "SUB" });
+        expect(andes.properties).toMatchObject({ plateBound: "NZ\\SA", subducting: "L", stepClass: "SUB" });
+        const teeth = buildSubductionTeeth([aleutians, andes], 1.6);
+        const aleutianTooth = teeth.find((tooth) => tooth.properties.seq === 2786);
+        const andesTooth = teeth.find((tooth) => tooth.properties.seq === 3056);
+        // SEQ 2786 runs southeast. North America is north of the trench.
+        expect(aleutianTooth.to[1]).toBeGreaterThan(aleutianTooth.from[1]);
+        // SEQ 3056 runs north. South America is east of the trench.
+        expect(andesTooth.to[0]).toBeGreaterThan(andesTooth.from[0]);
+    });
+});
+
+describe("velocity legend scale", () => {
+    beforeEach(() => {
+        server.use(http.get("*/tectonics/*", () => new HttpResponse(null, { status: 404 })));
+    });
+
+    it("states one mm/yr row for the 16–48 px clamp", () => {
+        render(
+            <MemoryRouter>
+                <Tectonics />
+            </MemoryRouter>
+        );
+        expect(VELOCITY_SCALE).toEqual({ minPx: 16, maxPx: 48, minMmYr: 20, maxMmYr: 60 });
+        const scale = screen.getByRole("checkbox", { name: /Velocity vectors, 20–60 mm\/yr/ });
+        expect(scale).toBeInTheDocument();
+        const bars = scale.parentElement.querySelectorAll("[data-velocity-px]");
+        expect([...bars].map((bar) => Number(bar.getAttribute("data-velocity-px")))).toEqual([16, 48]);
+        expect(bars[0].style.width).toBe("16px");
+        expect(bars[1].style.width).toBe("48px");
+        expect(document.querySelector('[data-dash="solid"]')).toBeTruthy();
+        for (const key of ["ridge", "transform", "subduction"]) {
+            const swatch = document.querySelector(`[data-dash="${CATEGORIES[key].dash.join(",")}"]`);
+            expect(swatch, key).toBeTruthy();
+            const drawn = [...swatch.children].filter((piece) => piece.style.backgroundColor !== "transparent");
+            expect(drawn[0].style.width).toBe(`${CATEGORIES[key].dash[0]}px`);
+        }
     });
 });
