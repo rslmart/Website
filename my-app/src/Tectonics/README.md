@@ -68,9 +68,10 @@ Transformations:
   at ±180, with the latitude interpolated. The gzipped file is columnar
   (`seq0`, `stepClass`, `plateBound`, `velocity`, `azimuth`, `divergence`,
   `rightLateral`, `subducting`, `coordinates`). Row `i` is SEQNUM `seq0 + i`.
-  The loader in `Tectonics.jsx` expands the geometry and the velocity fields
-  back into a FeatureCollection; it does not copy `subducting` onto features,
-  and the page does not draw subduction teeth. `divergence` is Bird's
+  The loader in `boundaries.mjs` expands the geometry and the velocity fields
+  back into a FeatureCollection and copies `subducting` onto each feature.
+  `buildSubductionTeeth` draws teeth on the overriding side of each `SUB`
+  step. A null side, and any other step class, grows none. `divergence` is Bird's
   `VELOCITYDI` (convergence negative) and `rightLateral` is `VELOCITYRI`.
   `subducting` is `"L"`, `"R"`, or `null`, as below.
 - **Velocity** → step midpoints sampled about every 250 km along each plate
