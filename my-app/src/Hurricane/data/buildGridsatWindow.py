@@ -1,19 +1,21 @@
-"""Crop GridSat-B1 windows for four full tracks and resample them onto Web Mercator.
+"""Crop one GridSat-B1 window per storm from each occupied hour.
 
-Sandy 2012296N14283, Matthew 2016273N13300, Hugo 1989254N13340, and Melissa
-2025294N14290. One JPEG per distinct GridSat hour on the track (00, 03, 06,
-09, 12, 15, 18, 21 UTC). Two track points in the same hour share that image.
-A point at any other time is not its own file. Each window is 301 by 301
-cells of the file's 0.07° grid, about 1,100 km from the center. The output
-pixels are evenly spaced in EPSG:3857 and the stored bounds are centered on
-the source-grid cell in that projection, so a deck.gl BitmapLayer can draw
-the JPEG with those bounds unchanged.
+Download each GRIDSAT-B1.YYYY.MM.DD.HH.v02r01.nc once, cut every exact
+3-hour fix in that file, then delete the NetCDF. NOAA Open Data is tried
+first. The NCEI access folder is used only when that object 404s. A window
+that crosses the date line is read from both edges and joined. A fill
+window writes no JPEG. The scratch manifest stays next to the JPEGs.
 
-The global NetCDF is deleted after its crop is written. A JPEG already on
-disk is left in place, so a rerun continues at the next missing frame. Run with:
+The default --out is public/hurricane/gridsat/. Catalog crops do not belong
+there; pass a directory outside the repo. Published objects, after a later
+approved upload, are https://makoa.link/hurricane-gridsat/{sid}/{stamp}.jpg.
+They are not part of the Vite build. Sandy, Matthew, Hugo, and Melissa keep
+the frames already committed under public/hurricane/gridsat/.
 
     uv run --with netCDF4 --with numpy --with pillow --with matplotlib \
-        python buildGridsatWindow.py
+        python buildGridsatWindow.py \
+        --dates 2023-10-20,1992-09-25 \
+        --out /tmp/makoa-gridsat-slice1
 """
 
 import argparse
@@ -21,6 +23,7 @@ import gzip
 import json
 import math
 import os
+import re
 import subprocess
 import tempfile
 
@@ -28,8 +31,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.join(HERE, "..", "..", "..", "public", "hurricane", "gridsat")
 STORMS_PATH = os.path.join(HERE, "..", "..", "..", "public", "hurricane", "storms.json.gz")
 
-# NCEI HTTPS access, then the NOAA Open Data bucket that holds the same
-# GRIDSAT-B1.YYYY.MM.DD.HH.v02r01.nc objects when that access path 404s.
 ACCESS_URL = (
     "https://www.ncei.noaa.gov/data/"
     "geostationary-ir-channel-brightness-temperature-gridsat-b1/access/"
@@ -42,25 +43,24 @@ IR_VMIN = 190.0
 IR_VMAX = 300.0
 WINDOW = 301
 CENTER = WINDOW // 2  # pixel 150 of a 301-pixel image
+PAD = 2
+
+# Fixed GridSat-B1 grid. Latitude from −70°, longitude from −180°, 0.07°.
+CELL = 0.07
+LAT0 = -70.0
+LON0 = -180.0
+NLAT = 2000
+NLON = 5143
 
 # EPSG:3857 sphere.
 R_M = 6378137.0
 
-# Full tracks, in the order the manifest is written.
-SIDS = (
-    "2012296N14283",  # Sandy, 2012
-    "2016273N13300",  # Matthew, 2016
-    "1989254N13340",  # Hugo, 1989
-    "2025294N14290",  # Melissa, 2025
-)
+DAY = re.compile(r"\d{4}-\d{2}-\d{2}$")
+VERSION = "v02r01"
 
-# Printed at the end. One center error per storm, from these track times.
-CENTER_TIMES = {
-    "2012296N14283": "2012-10-30 09:00:00",
-    "2016273N13300": "2016-10-03 00:00:00",
-    "1989254N13340": "1989-09-21 18:00:00",
-    "2025294N14290": "2025-10-28 18:00:00",
-}
+
+class NotFound(Exception):
+    """The GridSat object returned HTTP 404."""
 
 
 def _imaging():
@@ -81,29 +81,110 @@ def inv_merc_y(y):
     return math.degrees(2 * math.atan(math.exp(y)) - math.pi / 2)
 
 
-def _curl(url, dest):
-    cmd = [
+def wrap_lon(lon):
+    """Longitude in −180..180. 180 and −180 are the same meridian."""
+    x = math.fmod(lon + 180.0, 360.0)
+    if x < 0.0:
+        x += 360.0
+    return x - 180.0
+
+
+def nearest_index(origin, value, step, size, wrap):
+    """Index of the closest cell. A tie keeps the lower index.
+
+    Matches np.argmin on an ascending axis: equal distances return the
+    first cell. Longitude wraps. Latitude clamps to the stored grid.
+    """
+    raw = (value - origin) / step
+    lower = math.floor(raw)
+
+    def at(index):
+        return origin + index * step
+
+    if abs(value - at(lower)) <= abs(value - at(lower + 1)):
+        index = lower
+    else:
+        index = lower + 1
+    if wrap:
+        return index % size
+    if index < 0:
+        return 0
+    if index >= size:
+        return size - 1
+    return index
+
+
+def catalog_bounds(lat, lon):
+    """Web Mercator edges of the 301 by 301 window around the nearest cell.
+
+    The page uses this same placement. A point with |latitude| > 70° has
+    no cell.
+    """
+    if abs(lat) > 70.0:
+        return None
+    lon = wrap_lon(lon)
+    i = nearest_index(LAT0, lat, CELL, NLAT, wrap=False)
+    j = nearest_index(LON0, lon, CELL, NLON, wrap=True)
+    lat_c = LAT0 + i * CELL
+    lon_c = LON0 + j * CELL
+    dy = math.radians(CELL) / math.cos(math.radians(lat_c))
+    y_c = merc_y(lat_c)
+    half_y = (WINDOW / 2) * dy
+    half_x = (WINDOW / 2) * CELL
+    return [
+        lon_c - half_x,
+        inv_merc_y(y_c - half_y),
+        lon_c + half_x,
+        inv_merc_y(y_c + half_y),
+    ]
+
+
+def _curl_cmd(url, dest):
+    return [
         "curl", "-fsSL", "--retry", "4", "--retry-delay", "2",
         "--retry-connrefused", "--max-time", "600",
-        "-A", "gridsat-window/1.0", "-o", dest, url,
+        "-A", "gridsat-window/1.0",
+        "-w", "%{http_code}",
+        "-o", dest, url,
     ]
-    subprocess.run(cmd, check=True)
 
 
-def download(storm, dest):
-    """Fetch one GridSat file. The access URL is tried first."""
-    name = storm["name"]
-    year = storm["year"]
-    access = ACCESS_URL.format(year=year, name=name)
+def fetch(url, dest):
+    """Download one HTTPS object. HTTP 404 raises NotFound."""
+    if not url.startswith("https://"):
+        raise RuntimeError(f"refusing non-HTTPS URL {url}")
+    proc = subprocess.run(_curl_cmd(url, dest), capture_output=True, text=True)
+    code = (proc.stdout or "").strip().splitlines()
+    http = code[-1] if code else ""
+    if proc.returncode == 0 and http == "200":
+        return
+    if os.path.exists(dest):
+        os.remove(dest)
+    detail = (proc.stderr or "").strip()
+    if http == "404" or "404" in detail:
+        raise NotFound(url)
+    raise RuntimeError(
+        f"download failed {url} http {http or '?'} exit {proc.returncode} {detail}"
+    )
+
+
+def download_hour(name, year, dest):
+    """NOAA Open Data first. NCEI only when that object 404s."""
     nodd = NODD_URL.format(year=year, name=name)
     try:
-        _curl(access, dest)
-        return access
-    except subprocess.CalledProcessError:
+        fetch(nodd, dest)
+        return "nodd"
+    except NotFound:
         if os.path.exists(dest):
             os.remove(dest)
-        _curl(nodd, dest)
-        return nodd
+    access = ACCESS_URL.format(year=year, name=name)
+    try:
+        fetch(access, dest)
+        return "ncei"
+    except NotFound:
+        if os.path.exists(dest):
+            os.remove(dest)
+        raise
 
 
 def is_gridsat_hour(date_time):
@@ -114,31 +195,47 @@ def is_gridsat_hour(date_time):
     return second == 0 and minute == 0 and hour % 3 == 0
 
 
-def load_targets(storms_path):
-    """One target per distinct GridSat hour on the four tracks.
+def hour_name(date_time):
+    return (
+        "GRIDSAT-B1."
+        + date_time[0:4] + "." + date_time[5:7] + "." + date_time[8:10] + "."
+        + date_time[11:13] + "." + VERSION + ".nc"
+    )
 
-    Track points at any other time are not files. Two points that share a
-    GridSat hour share one image, centered on the first of those points.
+
+def _check_day(text):
+    if not DAY.fullmatch(text):
+        raise SystemExit(f"bad date {text}")
+    return text
+
+
+def load_hours(storms_path, dates, start, end):
+    """Exact 3-hour fixes grouped by GridSat file name.
+
+    Two fixes for one storm in one hour share a single JPEG. Longitude is
+    left as stored; the crop wraps it.
     """
     with gzip.open(storms_path, "rt") as fp:
         storms = json.load(fp)
-    targets = []
-    seen = set()
-    for sid in SIDS:
-        for point in storms[sid]["track_points"]:
+    hours = {}
+    for sid, storm in storms.items():
+        seen = set()
+        for point in storm["track_points"]:
             when = point["date_time"]
             if not is_gridsat_hour(when):
                 continue
-            name = (
-                "GRIDSAT-B1."
-                + when[0:4] + "." + when[5:7] + "." + when[8:10] + "."
-                + when[11:13] + ".v02r01.nc"
-            )
-            key = (sid, name)
-            if key in seen:
+            day = when[:10]
+            if dates is not None and day not in dates:
                 continue
-            seen.add(key)
-            targets.append({
+            if start and day < start:
+                continue
+            if end and day > end:
+                continue
+            name = hour_name(when)
+            if (name, sid) in seen:
+                continue
+            seen.add((name, sid))
+            hours.setdefault(name, []).append({
                 "sid": sid,
                 "track_time": when,
                 "lat": float(point["latitude"]),
@@ -146,7 +243,9 @@ def load_targets(storms_path):
                 "name": name,
                 "year": int(when[0:4]),
             })
-    return targets
+    for fixes in hours.values():
+        fixes.sort(key=lambda fix: fix["sid"])
+    return hours
 
 
 def haversine_km(lat1, lon1, lat2, lon2):
@@ -158,16 +257,9 @@ def haversine_km(lat1, lon1, lat2, lon2):
     return 2.0 * R_M * math.asin(math.sqrt(a)) / 1000.0
 
 
-def bounds_center_km(bounds, lat, lon):
-    """Distance from the Web Mercator center of the stored bounds to the track point."""
-    west, south, east, north = bounds
-    lon_c = (west + east) / 2.0
-    lat_c = inv_merc_y((merc_y(south) + merc_y(north)) / 2.0)
-    return haversine_km(lat_c, lon_c, lat, lon)
-
-
-def jpeg_ready(path):
-    if not os.path.isfile(path) or os.path.getsize(path) < 2000:
+def jpeg_markers(path):
+    """True when the file starts and ends with JPEG markers."""
+    if not os.path.isfile(path) or os.path.getsize(path) < 4:
         return False
     with open(path, "rb") as fp:
         head = fp.read(2)
@@ -181,18 +273,22 @@ def load_manifest(path):
         return {}
     with open(path) as fp:
         body = json.load(fp)
-    index = {}
-    for frame in body.get("frames", []):
-        index[(frame["sid"], frame["trackTime"])] = frame
-    return index
+    hours = body.get("hours", {})
+    return hours if isinstance(hours, dict) else {}
 
 
-def write_manifest(path, frames):
+def write_manifest(path, hours):
     tmp = path + ".part"
     with open(tmp, "w") as fp:
-        json.dump({"frames": frames}, fp, indent=2)
+        json.dump({"hours": hours}, fp, indent=2)
         fp.write("\n")
     os.replace(tmp, path)
+
+
+def frames_ready(out, frames):
+    if not frames:
+        return False
+    return all(jpeg_markers(os.path.join(out, rel)) for rel in frames)
 
 
 def file_time(nc, ds):
@@ -200,8 +296,8 @@ def file_time(nc, ds):
     var = ds.variables["time"]
     when = nc.num2date(var[:][0], var.units, getattr(var, "calendar", "standard"))
     return (
-        f"{when.year:04d}-{when.month:02d}-{when.day:02d} "
-        f"{when.hour:02d}:{when.minute:02d}:{when.second:02d}"
+        f"{int(when.year):04d}-{int(when.month):02d}-{int(when.day):02d} "
+        f"{int(when.hour):02d}:{int(when.minute):02d}:{int(when.second):02d}"
     )
 
 
@@ -211,44 +307,68 @@ def stamp_of(gridsat_time):
     return digits[:12]
 
 
-def nearest_cell(np, axis, value):
-    index = int(np.argmin(np.abs(axis - value)))
-    return index, float(axis[index])
+def axis_step(axis, index):
+    if index > 0:
+        step = float(axis[index] - axis[index - 1])
+    elif axis.size > 1:
+        step = float(axis[1] - axis[0])
+    else:
+        step = CELL
+    if step == 0.0:
+        return CELL
+    return abs(step)
 
 
-def read_window(np, nc, path, track_lat, track_lon):
-    ds = nc.Dataset(path)
-    try:
-        gridsat_time = file_time(nc, ds)
-        lat = np.array(ds.variables["lat"][:], dtype=np.float64)
-        lon = np.array(ds.variables["lon"][:], dtype=np.float64)
-        i_c, lat_c = nearest_cell(np, lat, track_lat)
-        j_c, lon_c = nearest_cell(np, lon, track_lon)
-        cell_lat = float(lat[i_c] - lat[i_c - 1])
-        cell_lon = float(lon[j_c] - lon[j_c - 1])
-        pad = 2
-        i0 = max(0, i_c - CENTER - pad)
-        i1 = min(lat.size, i_c + CENTER + 1 + pad)
-        j0 = max(0, j_c - CENTER - pad)
-        j1 = min(lon.size, j_c + CENTER + 1 + pad)
-        # valid_range is in Kelvin, but it is stored on the packed variable.
-        # netCDF4 would mask every packed value outside 140–375, which is
-        # almost the whole grid. Scale and mask the fill value ourselves.
-        var = ds.variables["irwin_cdr"]
-        var.set_auto_maskandscale(False)
-        packed = np.array(var[0, i0:i1, j0:j1])
-        scale = float(getattr(var, "scale_factor", 1.0))
-        offset = float(getattr(var, "add_offset", 0.0))
-        fill = int(getattr(var, "_FillValue"))
-        grid = packed.astype(np.float64) * scale + offset
+def _unwrap(np, values, origin):
+    delta = (values - origin + 180.0) % 360.0 - 180.0
+    return origin + delta
+
+
+def read_window_ds(np, nc, ds, track_lat, track_lon):
+    """301-cell neighborhood. A window past either longitude edge is joined."""
+    track_lon = wrap_lon(track_lon)
+    if abs(track_lat) > 70.0:
+        return None
+    gridsat_time = file_time(nc, ds)
+    lat = np.array(ds.variables["lat"][:], dtype=np.float64)
+    lon = np.array(ds.variables["lon"][:], dtype=np.float64)
+    i_c = int(np.argmin(np.abs(lat - track_lat)))
+    lon_delta = (lon - track_lon + 180.0) % 360.0 - 180.0
+    j_c = int(np.argmin(np.abs(lon_delta)))
+    lat_c = float(lat[i_c])
+    lon_c = float(lon[j_c])
+    cell_lat = axis_step(lat, i_c)
+    cell_lon = axis_step(lon, j_c)
+    nlat = int(lat.size)
+    nlon = int(lon.size)
+    i_lo = max(0, i_c - (CENTER + PAD))
+    i_hi = min(nlat, i_c + (CENTER + PAD) + 1)
+    j_lo = j_c - (CENTER + PAD)
+    j_hi = j_c + (CENTER + PAD)
+    var = ds.variables["irwin_cdr"]
+    var.set_auto_maskandscale(False)
+    if j_lo >= 0 and j_hi < nlon:
+        packed = np.array(var[0, i_lo:i_hi, j_lo:j_hi + 1])
+        raw_lon = lon[j_lo:j_hi + 1]
+    else:
+        # One contiguous slice stops at the array edge and drops the other
+        # side of the date line. Read both edges, in window order.
+        cols = np.array([j % nlon for j in range(j_lo, j_hi + 1)], dtype=np.int64)
+        rows = np.array(var[0, i_lo:i_hi, :])
+        packed = rows[:, cols]
+        raw_lon = lon[cols]
+    scale = float(getattr(var, "scale_factor", 1.0))
+    offset = float(getattr(var, "add_offset", 0.0))
+    grid = packed.astype(np.float64) * scale + offset
+    fill = getattr(var, "_FillValue", None)
+    if fill is not None:
         grid[packed == fill] = np.nan
-        if hasattr(var, "valid_range"):
-            lo, hi = (float(x) for x in var.valid_range)
-            grid[(grid < lo) | (grid > hi)] = np.nan
-        slab_lat = lat[i0:i1]
-        slab_lon = lon[j0:j1]
-    finally:
-        ds.close()
+    if hasattr(var, "valid_range"):
+        lo, hi = (float(x) for x in var.valid_range)
+        grid[(grid < lo) | (grid > hi)] = np.nan
+    slab_lon = _unwrap(np, np.array(raw_lon, dtype=np.float64), lon_c)
+    if slab_lon.size > 1 and np.any(np.diff(slab_lon) <= 0):
+        raise RuntimeError(f"longitude window is not increasing at {lon_c}")
     return {
         "gridsat_time": gridsat_time,
         "lat_c": lat_c,
@@ -256,17 +376,25 @@ def read_window(np, nc, path, track_lat, track_lon):
         "cell_lat": cell_lat,
         "cell_lon": cell_lon,
         "grid": grid,
-        "slab_lat": slab_lat,
+        "slab_lat": lat[i_lo:i_hi],
         "slab_lon": slab_lon,
     }
+
+
+def read_window(np, nc, path, track_lat, track_lon):
+    ds = nc.Dataset(path)
+    try:
+        return read_window_ds(np, nc, ds, track_lat, track_lon)
+    finally:
+        ds.close()
 
 
 def output_axes(lat_c, lon_c, cell_lat, cell_lon):
     """Pixel centers, north-up, and the geographic edges of those pixels.
 
-    Longitude is linear. Latitude is spaced evenly in Web Mercator, using
-    the local size of one source cell at the center so a north-south step
-    keeps its ground length. The center pixel is the source-grid cell.
+    Longitude is linear and may leave −180..180 when the window crosses the
+    date line. Latitude is spaced evenly in Web Mercator. The center pixel
+    is the source-grid cell.
     """
     np, _nc, _mpl, _image = _imaging()
     dy = math.radians(cell_lat) / math.cos(math.radians(lat_c))
@@ -295,12 +423,20 @@ def inv_merc_array(y):
 
 def bilinear(grid, lat_axis, lon_axis, lats, lons):
     np, _nc, _mpl, _image = _imaging()
-    lat0 = float(lat_axis[0])
-    lon0 = float(lon_axis[0])
+    lat_axis = np.asarray(lat_axis, dtype=np.float64)
+    lon_axis = np.asarray(lon_axis, dtype=np.float64)
+    if lat_axis.size < 2 or lon_axis.size < 2:
+        return np.full((lats.size, lons.size), np.nan)
     dlat = float(lat_axis[1] - lat_axis[0])
-    dlon = float(lon_axis[1] - lon_axis[0])
-    fi = (lats - lat0) / dlat
-    fj = (lons - lon0) / dlon
+    if dlat == 0.0:
+        return np.full((lats.size, lons.size), np.nan)
+    fi = (lats - float(lat_axis[0])) / dlat
+    fj = np.interp(lons, lon_axis, np.arange(lon_axis.size, dtype=np.float64))
+    if dlat > 0:
+        inside_i = (lats >= lat_axis[0]) & (lats <= lat_axis[-1])
+    else:
+        inside_i = (lats <= lat_axis[0]) & (lats >= lat_axis[-1])
+    inside_j = (lons >= lon_axis[0]) & (lons <= lon_axis[-1])
     i0 = np.clip(np.floor(fi).astype(np.int32), 0, grid.shape[0] - 2)
     j0 = np.clip(np.floor(fj).astype(np.int32), 0, grid.shape[1] - 2)
     wi = (fi - i0)[:, None]
@@ -318,7 +454,10 @@ def bilinear(grid, lat_axis, lon_axis, lats, lons):
         ww = np.where(finite, weight, 0.0)
         total += np.where(finite, sample, 0.0) * ww
         total_w += ww
-    return np.where(total_w > 0, total / total_w, np.nan)
+    sampled = np.full(g00.shape, np.nan, dtype=np.float64)
+    np.divide(total, total_w, out=sampled, where=total_w > 0)
+    sampled[~inside_i[:, None] | ~inside_j[None, :]] = np.nan
+    return sampled
 
 
 def colorize(kelvin):
@@ -331,118 +470,177 @@ def colorize(kelvin):
 
 def write_jpeg(rgb, path):
     _np, _nc, _mpl, Image = _imaging()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     img = Image.fromarray(rgb, "RGB")
     tmp = path + ".part"
     img.save(tmp, format="JPEG", quality=82)
     os.replace(tmp, path)
 
 
-def build_one(storm, nc_path):
-    np, nc, _mpl, _image = _imaging()
-    window = read_window(np, nc, nc_path, storm["lat"], storm["lon"])
-    lats, lons, bounds = output_axes(
+def crop_fix(np, nc, ds, fix):
+    """One JPEG's pixels, or None when the fix has no cell or the window is fill."""
+    window = read_window_ds(np, nc, ds, fix["lat"], fix["lon"])
+    if window is None:
+        return None
+    lats, lons, _bounds = output_axes(
         window["lat_c"], window["lon_c"], window["cell_lat"], window["cell_lon"]
     )
     sampled = bilinear(window["grid"], window["slab_lat"], window["slab_lon"], lats, lons)
-    rgb = colorize(sampled)
-    stamp = stamp_of(window["gridsat_time"])
-    image = f"{storm['sid']}-{stamp}.jpg"
+    if not np.isfinite(sampled).any():
+        return None
+    stamp = stamp_of(fix["track_time"])
+    file_stamp = stamp_of(window["gridsat_time"])
+    if file_stamp != stamp:
+        raise SystemExit(
+            f"{fix['name']} grid time {window['gridsat_time']} "
+            f"does not match track time {fix['track_time']}"
+        )
+    center = sampled[CENTER, CENTER]
+    center_k = float(center) if np.isfinite(center) else float("nan")
+    center_km = haversine_km(
+        window["lat_c"], window["lon_c"], fix["lat"], wrap_lon(fix["lon"])
+    )
     return {
-        "sid": storm["sid"],
-        "trackTime": storm["track_time"],
-        "gridsatTime": window["gridsat_time"],
-        "image": image,
-        "bounds": bounds,
-        "rgb": rgb,
-        "lat_c": window["lat_c"],
-        "lon_c": window["lon_c"],
-        "center_k": float(sampled[CENTER, CENTER]),
+        "rgb": colorize(sampled),
+        "stamp": stamp,
+        "center_km": center_km,
+        "center_k": center_k,
     }
 
 
-def crop_storm(storm, source_dir):
-    """Download one global file, crop it, and delete the NetCDF."""
+def process_hour(name, fixes, out, source_dir, manifest, manifest_path, recheck_absent):
+    """Download one file, crop every fix, delete the NetCDF, record the hour."""
+    record = manifest.get(name) or {}
+    status = record.get("status")
+    if status == "complete" and frames_ready(out, record.get("frames") or []):
+        print(f"skip complete {name} {len(record['frames'])}", flush=True)
+        return "complete"
+    if status == "empty":
+        print(f"skip empty {name}", flush=True)
+        return "empty"
+    if status == "absent" and not recheck_absent:
+        print(f"skip absent {name}", flush=True)
+        return "absent"
+
+    delete_nc = False
     if source_dir:
-        nc_path = os.path.join(source_dir, storm["name"])
-        return build_one(storm, nc_path)
-    with tempfile.TemporaryDirectory(prefix="gridsat_") as tmp:
-        nc_path = os.path.join(tmp, storm["name"])
-        download(storm, nc_path)
-        frame = build_one(storm, nc_path)
-        os.remove(nc_path)
-        return frame
+        nc_path = os.path.join(source_dir, name)
+        if not os.path.isfile(nc_path):
+            raise SystemExit(f"missing local NetCDF {nc_path}")
+        source = "local"
+    else:
+        fd, nc_path = tempfile.mkstemp(prefix="gridsat_", suffix=".nc")
+        os.close(fd)
+        delete_nc = True
+        year = int(name.split(".")[1])
+        try:
+            source = download_hour(name, year, nc_path)
+        except NotFound:
+            if os.path.exists(nc_path):
+                os.remove(nc_path)
+            manifest[name] = {"status": "absent", "frames": []}
+            write_manifest(manifest_path, manifest)
+            print(f"absent {name}", flush=True)
+            return "absent"
+
+    # Size is only a log line. A few MB can still hold a scene, so open it.
+    print(f"open {name} {os.path.getsize(nc_path)} {source}", flush=True)
+    np, nc, _mpl, _image = _imaging()
+    frames = []
+    any_scene = False
+    try:
+        ds = nc.Dataset(nc_path)
+        try:
+            for fix in fixes:
+                stamp = stamp_of(fix["track_time"])
+                rel = f"{fix['sid']}/{stamp}.jpg"
+                path = os.path.join(out, fix["sid"], stamp + ".jpg")
+                if abs(fix["lat"]) > 70.0:
+                    print(f"no-cell {fix['sid']} {stamp}", flush=True)
+                    continue
+                if jpeg_markers(path):
+                    frames.append(rel)
+                    any_scene = True
+                    print(f"keep {rel}", flush=True)
+                    continue
+                built = crop_fix(np, nc, ds, fix)
+                if built is None:
+                    print(f"fill {fix['sid']} {stamp}", flush=True)
+                    continue
+                write_jpeg(built["rgb"], path)
+                frames.append(rel)
+                any_scene = True
+                print(
+                    f"{fix['sid']} {stamp} center {built['center_km']:.3f} km "
+                    f"{built['center_k']:.1f} K",
+                    flush=True,
+                )
+        finally:
+            ds.close()
+    finally:
+        if delete_nc and os.path.exists(nc_path):
+            os.remove(nc_path)
+
+    if any_scene:
+        manifest[name] = {"status": "complete", "source": source, "frames": frames}
+        print(f"complete {name} {len(frames)} {source}", flush=True)
+        write_manifest(manifest_path, manifest)
+        return "complete"
+    manifest[name] = {"status": "empty", "source": source, "frames": []}
+    print(f"empty {name} {source}", flush=True)
+    write_manifest(manifest_path, manifest)
+    return "empty"
 
 
-def main():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--source-dir",
-        help="Directory of already downloaded NetCDF files. Skips the download.",
-    )
+    parser.add_argument("--source-dir", help="Directory of NetCDF files. Skips the download.")
     parser.add_argument("--storms", default=STORMS_PATH)
     parser.add_argument("--out", default=OUT_DIR)
-    args = parser.parse_args()
+    parser.add_argument("--dates", help="Comma-separated YYYY-MM-DD days.")
+    parser.add_argument("--from-date", dest="from_date", help="First day, inclusive.")
+    parser.add_argument("--to-date", dest="to_date", help="Last day, inclusive.")
+    parser.add_argument(
+        "--recheck-absent",
+        action="store_true",
+        help="Try hours recorded absent again. They are skipped otherwise.",
+    )
+    args = parser.parse_args(argv)
+    dates = None
+    if args.dates:
+        dates = {_check_day(part.strip()) for part in args.dates.split(",") if part.strip()}
+    start = _check_day(args.from_date) if args.from_date else None
+    end = _check_day(args.to_date) if args.to_date else None
+    if not dates and not start and not end:
+        raise SystemExit("pass --dates or --from-date/--to-date")
+    args.dates = dates
+    args.from_date = start
+    args.to_date = end
+    return args
+
+
+def main(argv=None):
+    args = parse_args(argv)
     os.makedirs(args.out, exist_ok=True)
-    targets = load_targets(args.storms)
-    dest = os.path.join(args.out, "frames.json")
-    saved = load_manifest(dest)
-    frames = []
-    errors = {}
-    total = len(targets)
-    for index, storm in enumerate(targets, start=1):
-        image = f"{storm['sid']}-{stamp_of(storm['track_time'])}.jpg"
-        image_path = os.path.join(args.out, image)
-        prev = saved.get((storm["sid"], storm["track_time"]))
-        if prev and prev.get("image") == image and jpeg_ready(image_path):
-            frame = {
-                "sid": prev["sid"],
-                "trackTime": prev["trackTime"],
-                "gridsatTime": prev["gridsatTime"],
-                "image": prev["image"],
-                "bounds": prev["bounds"],
-            }
-            print(
-                f"{index}/{total} keep {frame['image']}",
-                flush=True,
-            )
-        else:
-            built = crop_storm(storm, args.source_dir)
-            rgb = built.pop("rgb")
-            lat_c = built.pop("lat_c")
-            lon_c = built.pop("lon_c")
-            center_k = built.pop("center_k")
-            if built["image"] != image:
-                raise SystemExit(
-                    f"{storm['name']} grid time {built['gridsatTime']} "
-                    f"does not match track time {storm['track_time']}"
-                )
-            write_jpeg(rgb, image_path)
-            center_km = haversine_km(lat_c, lon_c, storm["lat"], storm["lon"])
-            frame = built
-            print(
-                f"{index}/{total} {frame['sid']} gridsat {frame['gridsatTime']} "
-                f"cell {lat_c:.5f},{lon_c:.5f} "
-                f"center {center_km:.3f} km {center_k:.1f} K",
-                flush=True,
-            )
-        if storm["track_time"] == CENTER_TIMES.get(storm["sid"]):
-            errors[storm["sid"]] = bounds_center_km(frame["bounds"], storm["lat"], storm["lon"])
-        frames.append(frame)
-        done = {(item["sid"], item["trackTime"]) for item in frames}
-        merged = list(frames)
-        for key, prev in saved.items():
-            if key not in done:
-                merged.append(prev)
-        write_manifest(dest, merged)
-    counts = {}
-    for frame in frames:
-        counts[frame["sid"]] = counts.get(frame["sid"], 0) + 1
-    print("counts " + " ".join(f"{sid}={counts.get(sid, 0)}" for sid in SIDS), flush=True)
-    for sid, when in CENTER_TIMES.items():
-        if sid in errors:
-            print(f"center {sid} {when} {errors[sid]:.3f} km", flush=True)
-    write_manifest(dest, frames)
-    print(f"wrote {dest}", flush=True)
+    hours = load_hours(args.storms, args.dates, args.from_date, args.to_date)
+    manifest_path = os.path.join(args.out, "manifest.json")
+    manifest = load_manifest(manifest_path)
+    counts = {"complete": 0, "empty": 0, "absent": 0}
+    frame_count = 0
+    for name in sorted(hours):
+        status = process_hour(
+            name, hours[name], args.out, args.source_dir,
+            manifest, manifest_path, args.recheck_absent,
+        )
+        counts[status] = counts.get(status, 0) + 1
+        if status == "complete":
+            frame_count += len(manifest[name].get("frames") or [])
+    print(
+        f"summary hours={len(hours)} complete={counts['complete']} "
+        f"empty={counts['empty']} absent={counts['absent']} frames={frame_count}",
+        flush=True,
+    )
+    print(f"wrote {manifest_path}", flush=True)
 
 
 if __name__ == "__main__":

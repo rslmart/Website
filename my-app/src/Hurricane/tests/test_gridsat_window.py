@@ -1,9 +1,8 @@
-"""Size of the committed GridSat frames for four full tracks.
+"""GridSat frame placement for the four committed tracks and the catalog crop.
 
 Reads public/hurricane/gridsat/frames.json, the JPEGs, and the published
-storm file for the three-hour track times. It does not download and it does
-not import the crop script. pytest-socket blocks sockets here. A crop, if
-one has to be run again, is a subprocess:
+storm file. It does not download GridSat. pytest-socket blocks sockets in
+this process. The date-line join and the fill hour run in a subprocess:
 
     uv run --with netCDF4 --with numpy --with pillow --with matplotlib \
         python buildGridsatWindow.py
@@ -12,14 +11,23 @@ one has to be run again, is a subprocess:
 from __future__ import annotations
 
 import gzip
+import importlib.util
 import json
 import math
+import subprocess
+import textwrap
 from pathlib import Path
+
+import pytest
 
 HURRICANE_DIR = Path(__file__).resolve().parents[1]
 PUBLIC_HURRICANE = HURRICANE_DIR.parents[1] / "public" / "hurricane"
 FRAMES_PATH = PUBLIC_HURRICANE / "gridsat" / "frames.json"
 STORMS_PATH = PUBLIC_HURRICANE / "storms.json.gz"
+SCRIPT = HURRICANE_DIR / "data" / "buildGridsatWindow.py"
+
+SLICE_DAYS = ("2023-10-20", "1992-09-25")
+POLEWARD_NAMES = {"BONNIE", "CHARLEY", "DANIELLE", "TED"}
 
 # EPSG:3857 sphere. One 0.07° latitude cell is about 8 km on this sphere.
 R_M = 6378137.0
@@ -254,6 +262,338 @@ def test_full_grid_and_geostationary_disk_fail():
         assert not placement_ok(FULL_GRIDSAT_BOUNDS, *FULL_GRIDSAT_SIZE, track["lat"], track["lon"])
         assert not placement_ok(FULL_GRIDSAT_BOUNDS, width, height, track["lat"], track["lon"])
         assert not placement_ok(GOES_DISK_BOUNDS, width, height, track["lat"], track["lon"])
+
+
+@pytest.fixture(scope="module")
+def gridsat():
+    spec = importlib.util.spec_from_file_location("buildGridsatWindow", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _storms():
+    with gzip.open(STORMS_PATH, "rt") as fp:
+        return json.load(fp)
+
+
+def _exact_points(storms, day):
+    found = []
+    for sid, storm in storms.items():
+        for point in storm["track_points"]:
+            when = point["date_time"]
+            if when[:10] == day and is_gridsat_hour(when):
+                found.append((sid, storm["name"], point))
+    return found
+
+
+def _write_storms(path: Path, payload):
+    with gzip.open(path, "wb") as handle:
+        handle.write(json.dumps(payload).encode("utf-8"))
+
+
+def _jpeg(path: Path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"\xff\xd8" + b"\x00" * 16 + b"\xff\xd9")
+
+
+def test_slice_days_match_the_crop_counts():
+    """The two slice days are 46 and 85 exact fixes, with no basin filter."""
+    storms = _storms()
+    counts = {day: _exact_points(storms, day) for day in SLICE_DAYS}
+    assert len(counts["2023-10-20"]) == 46
+    assert len(counts["1992-09-25"]) == 85
+    names = {name for _sid, name, _point in counts["2023-10-20"]}
+    assert names == {"TAMMY", "NORMA", "SANBA", "TEJ", "HAMOON", "LOLA"}
+    assert all(abs(point["latitude"]) <= 30 for _sid, _name, point in counts["2023-10-20"])
+    late = {name for _sid, name, point in counts["1992-09-25"] if abs(point["latitude"]) > 30}
+    assert late <= POLEWARD_NAMES
+    assert late
+    unnamed = [
+        point for _sid, name, point in counts["1992-09-25"]
+        if name == "UNNAMED" and 80 < point["longitude"] < 100
+    ]
+    assert len(unnamed) == 1
+    ward = [point["longitude"] for _sid, name, point in counts["1992-09-25"] if name == "WARD"]
+    assert ward and min(ward) > 180
+
+
+def test_computed_bounds_place_equatorward_and_poleward_frames(gridsat):
+    """One frame from these days on each side of 30° passes the center and 200 km checks.
+
+    The four corners of the full GridSat grid fail the same check.
+    """
+    storms = _storms()
+    low = min(counts := _exact_points(storms, "2023-10-20"), key=lambda item: abs(item[2]["latitude"]))
+    high = max(_exact_points(storms, "1992-09-25"), key=lambda item: abs(item[2]["latitude"]))
+    assert abs(low[2]["latitude"]) < 30
+    assert abs(high[2]["latitude"]) > 30
+    assert high[1] in POLEWARD_NAMES
+    for sid, name, point in (low, high):
+        bounds = gridsat.catalog_bounds(point["latitude"], point["longitude"])
+        assert bounds is not None
+        assert placement_ok(bounds, 301, 301, point["latitude"], point["longitude"]), (
+            f"{name} {sid} {placement_errors(bounds, 301, 301, point['latitude'], point['longitude'])}"
+        )
+        assert not placement_ok(
+            FULL_GRIDSAT_BOUNDS, *FULL_GRIDSAT_SIZE, point["latitude"], point["longitude"]
+        )
+        assert not placement_ok(
+            FULL_GRIDSAT_BOUNDS, 301, 301, point["latitude"], point["longitude"]
+        )
+    # The stored four-track bounds already pass. The fixed-grid formula has to as well.
+    for sid, track in CENTER_CHECKS.items():
+        bounds = gridsat.catalog_bounds(track["lat"], track["lon"])
+        assert placement_ok(bounds, 301, 301, track["lat"], track["lon"]), sid
+    lola = max(
+        (point for _sid, name, point in counts if name == "LOLA"),
+        key=lambda point: point["longitude"],
+    )
+    lola_bounds = gridsat.catalog_bounds(lola["latitude"], lola["longitude"])
+    assert lola_bounds[2] > 180
+    ward = next(point for _sid, name, point in _exact_points(storms, "1992-09-25") if name == "WARD")
+    assert gridsat.wrap_lon(ward["longitude"]) < -170
+    ward_bounds = gridsat.catalog_bounds(ward["latitude"], ward["longitude"])
+    assert ward_bounds[0] < -180 < ward_bounds[2]
+    assert placement_ok(ward_bounds, 301, 301, ward["latitude"], ward["longitude"])
+
+
+def test_nodd_is_first_and_only_a_404_uses_ncei(tmp_path, gridsat, monkeypatch):
+    seen = []
+
+    def fail(url, dest):
+        seen.append(url)
+        raise gridsat.NotFound(url)
+
+    monkeypatch.setattr(gridsat, "fetch", fail)
+    with pytest.raises(gridsat.NotFound):
+        gridsat.download_hour(
+            "GRIDSAT-B1.1992.09.25.00.v02r01.nc", 1992, str(tmp_path / "missing.nc")
+        )
+    assert "noaa-cdr-gridsat-b1-pds.s3.amazonaws.com" in seen[0]
+    assert seen[0].endswith("GRIDSAT-B1.1992.09.25.00.v02r01.nc")
+    assert "ncei.noaa.gov" in seen[1]
+    assert len(seen) == 2
+
+    seen.clear()
+
+    def nodd_ok(url, dest):
+        seen.append(url)
+        if "ncei.noaa.gov" in url:
+            raise AssertionError(url)
+        Path(dest).write_bytes(b"netcdf")
+
+    monkeypatch.setattr(gridsat, "fetch", nodd_ok)
+    assert gridsat.download_hour(
+        "GRIDSAT-B1.1992.09.25.00.v02r01.nc", 1992, str(tmp_path / "ok.nc")
+    ) == "nodd"
+    assert len(seen) == 1
+
+
+def test_server_error_does_not_fall_through(gridsat, monkeypatch):
+    seen = []
+
+    def fail(url, dest):
+        seen.append(url)
+        raise RuntimeError("http 500")
+
+    monkeypatch.setattr(gridsat, "fetch", fail)
+    with pytest.raises(RuntimeError):
+        gridsat.download_hour("GRIDSAT-B1.1992.09.25.00.v02r01.nc", 1992, "/tmp/gridsat-500.nc")
+    assert len(seen) == 1
+    assert seen[0].startswith("https://noaa-cdr-gridsat-b1-pds.s3.amazonaws.com/")
+
+
+def test_fetch_treats_only_404_as_missing(tmp_path, gridsat, monkeypatch):
+    dest = tmp_path / "hour.nc"
+
+    def run(cmd, **_kwargs):
+        assert cmd[0] == "curl"
+        assert "aws" not in cmd
+        assert cmd[-1].startswith("https://")
+
+        class Proc:
+            returncode = 22
+            stdout = "404"
+            stderr = "The requested URL returned error: 404"
+
+        return Proc()
+
+    monkeypatch.setattr(gridsat.subprocess, "run", run)
+    with pytest.raises(gridsat.NotFound):
+        gridsat.fetch("https://example.invalid/hour.nc", str(dest))
+
+
+def _one_storm(sid, when, lat, lon):
+    return {
+        sid: {
+            "id": sid,
+            "name": "TEST",
+            "track_points": [{
+                "date_time": when,
+                "latitude": lat,
+                "longitude": lon,
+            }],
+        }
+    }
+
+
+def test_absent_hour_is_skipped_until_recheck(tmp_path, gridsat, monkeypatch):
+    storms = tmp_path / "storms.json.gz"
+    _write_storms(storms, _one_storm("1992265N18099", "1992-09-25 00:00:00", 21.7, 87.7))
+    out = tmp_path / "out"
+    calls = []
+
+    def fail(url, dest):
+        calls.append(url)
+        raise gridsat.NotFound(url)
+
+    monkeypatch.setattr(gridsat, "fetch", fail)
+    argv = ["--dates", "1992-09-25", "--out", str(out), "--storms", str(storms)]
+    gridsat.main(argv)
+    manifest = json.loads((out / "manifest.json").read_text())
+    hour = manifest["hours"]["GRIDSAT-B1.1992.09.25.00.v02r01.nc"]
+    assert hour["status"] == "absent"
+    assert hour["frames"] == []
+    assert len(calls) == 2
+    calls.clear()
+    gridsat.main(argv)
+    assert calls == []
+    gridsat.main(argv + ["--recheck-absent"])
+    assert len(calls) == 2
+
+
+def test_complete_hour_skips_the_download(tmp_path, gridsat, monkeypatch):
+    storms = tmp_path / "storms.json.gz"
+    sid = "1992269S05087"
+    _write_storms(storms, _one_storm(sid, "1992-09-25 00:00:00", -5.0, 88.0))
+    out = tmp_path / "out"
+    rel = f"{sid}/199209250000.jpg"
+    _jpeg(out / rel)
+    name = "GRIDSAT-B1.1992.09.25.00.v02r01.nc"
+    (out / "manifest.json").write_text(json.dumps({
+        "hours": {name: {"status": "complete", "source": "nodd", "frames": [rel]}}
+    }))
+
+    def fail(url, dest):
+        raise AssertionError(url)
+
+    monkeypatch.setattr(gridsat, "fetch", fail)
+    gridsat.main(["--dates", "1992-09-25", "--out", str(out), "--storms", str(storms)])
+
+
+def test_date_line_join_and_fill(tmp_path):
+    """A contiguous longitude slice misses the date line. A fill window writes no JPEG.
+
+    The NetCDF is synthetic and the child does not download. The fill file is
+    only a few MB and is opened and recorded empty, not skipped for its length.
+    """
+    child = textwrap.dedent(
+        """
+        import gzip, json, os, sys
+        import numpy as np
+        import netCDF4 as nc
+        import importlib.util
+
+        script, work = sys.argv[1], sys.argv[2]
+        spec = importlib.util.spec_from_file_location("buildGridsatWindow", script)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        nlat, nlon = 400, 5143
+        lat = np.arange(nlat, dtype=np.float64) * 0.07
+        lon = -180.0 + np.arange(nlon, dtype=np.float64) * 0.07
+
+        def write_nc(path, hour, values):
+            ds = nc.Dataset(path, "w")
+            ds.createDimension("time", 1)
+            ds.createDimension("lat", nlat)
+            ds.createDimension("lon", nlon)
+            lat_v = ds.createVariable("lat", "f8", ("lat",))
+            lon_v = ds.createVariable("lon", "f8", ("lon",))
+            time_v = ds.createVariable("time", "f8", ("time",))
+            time_v.units = "hours since 1992-09-25 00:00:00"
+            time_v.calendar = "standard"
+            time_v[0] = hour
+            lat_v[:] = lat
+            lon_v[:] = lon
+            var = ds.createVariable("irwin_cdr", "i2", ("time", "lat", "lon"), fill_value=np.int16(-9999))
+            var.scale_factor = np.float32(1.0)
+            var.add_offset = np.float32(0.0)
+            var.valid_range = np.array([100.0, 320.0], dtype="f4")
+            var[0, :, :] = values
+            ds.close()
+
+        source = os.path.join(work, "src")
+        os.makedirs(source)
+        fill = np.full((nlat, nlon), -9999, dtype=np.int16)
+        scene = np.full((nlat, nlon), -9999, dtype=np.int16)
+        scene[:, -8:] = np.int16(250)
+        write_nc(os.path.join(source, "GRIDSAT-B1.1992.09.25.00.v02r01.nc"), 0, fill)
+        write_nc(os.path.join(source, "GRIDSAT-B1.1992.09.25.03.v02r01.nc"), 3, scene)
+
+        window = mod.read_window(np, nc, os.path.join(source, "GRIDSAT-B1.1992.09.25.03.v02r01.nc"), 12.5, 186.0)
+        assert window is not None
+        assert np.any(np.isclose(window["grid"], 250.0)), "joined window missed the east edge"
+        dlon = (lon - mod.wrap_lon(186.0) + 180.0) % 360.0 - 180.0
+        j_c = int(np.argmin(np.abs(dlon)))
+        half = mod.CENTER + mod.PAD
+        j0 = max(0, j_c - half)
+        j1 = min(nlon, j_c + half + 1)
+        assert not np.any(scene[:, j0:j1] == 250), "fixture: contiguous slice already saw the seam"
+
+        storms = {
+            "1992265N18099": {
+                "id": "1992265N18099",
+                "name": "UNNAMED",
+                "track_points": [{"date_time": "1992-09-25 00:00:00", "latitude": 21.7, "longitude": 87.7}],
+            },
+            "1992268N11193": {
+                "id": "1992268N11193",
+                "name": "WARD",
+                "track_points": [{"date_time": "1992-09-25 03:00:00", "latitude": 12.5, "longitude": 186.0}],
+            },
+        }
+        storms_path = os.path.join(work, "storms.json.gz")
+        with gzip.open(storms_path, "wb") as handle:
+            handle.write(json.dumps(storms).encode("utf-8"))
+        out = os.path.join(work, "out")
+        mod.main([
+            "--dates", "1992-09-25",
+            "--out", out,
+            "--storms", storms_path,
+            "--source-dir", source,
+        ])
+        manifest = json.load(open(os.path.join(out, "manifest.json")))
+        assert manifest["hours"]["GRIDSAT-B1.1992.09.25.00.v02r01.nc"]["status"] == "empty"
+        assert manifest["hours"]["GRIDSAT-B1.1992.09.25.00.v02r01.nc"]["frames"] == []
+        ward = manifest["hours"]["GRIDSAT-B1.1992.09.25.03.v02r01.nc"]
+        assert ward["status"] == "complete"
+        assert ward["frames"] == ["1992268N11193/199209250300.jpg"]
+        jpeg = os.path.join(out, "1992268N11193", "199209250300.jpg")
+        data = open(jpeg, "rb").read()
+        assert data[:2] == b"\\xff\\xd8" and data[-2:] == b"\\xff\\xd9"
+        assert not os.path.exists(os.path.join(out, "1992265N18099", "199209250000.jpg"))
+        print("seam-fill ok")
+        """
+    )
+    proc = subprocess.run(
+        [
+            "uv", "run", "--with", "netCDF4", "--with", "numpy",
+            "--with", "pillow", "--with", "matplotlib",
+            "python", "-c", child, str(SCRIPT), str(tmp_path),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    log = tmp_path / "child.log"
+    log.write_text(proc.stdout + "\n" + proc.stderr)
+    assert proc.returncode == 0, proc.stderr[-2000:]
+    assert "seam-fill ok" in proc.stdout
+    assert "empty" in proc.stdout
+    assert "open " in proc.stdout
 
 
 def test_recorded_errors(capsys):

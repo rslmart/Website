@@ -105,6 +105,97 @@ const STORMS_URL = process.env.PUBLIC_URL + "/hurricane/storms.json.gz";
 const META_URL = process.env.PUBLIC_URL + "/hurricane/meta.json";
 const GRIDSAT_URL = process.env.PUBLIC_URL + "/hurricane/gridsat/frames.json";
 
+// Sandy, Matthew, Hugo, and Melissa keep their committed local frames.
+// Every other storm computes the same 301 by 301 window as catalog_bounds
+// in data/buildGridsatWindow.py and requests one JPEG. A missing object
+// drops the layer. No catalog frame list is loaded.
+const GRIDSAT_LOCAL_SIDS = new Set([
+    "2012296N14283",
+    "2016273N13300",
+    "1989254N13340",
+    "2025294N14290",
+]);
+const GRIDSAT_CATALOG = "https://makoa.link/hurricane-gridsat/";
+const GRIDSAT_WINDOW = 301;
+const GRIDSAT_CELL = 0.07;
+const GRIDSAT_LAT0 = -70;
+const GRIDSAT_LON0 = -180;
+const GRIDSAT_NLAT = 2000;
+const GRIDSAT_NLON = 5143;
+
+function wrapLon(lon) {
+    return ((lon + 180) % 360 + 360) % 360 - 180;
+}
+
+function mercY(latDeg) {
+    const phi = latDeg * Math.PI / 180;
+    return Math.log(Math.tan(Math.PI / 4 + phi / 2));
+}
+
+function invMercY(y) {
+    return (2 * Math.atan(Math.exp(y)) - Math.PI / 2) * (180 / Math.PI);
+}
+
+function nearestIndex(origin, value, step, size, wrap) {
+    const raw = (value - origin) / step;
+    const lower = Math.floor(raw);
+    const at = (index) => origin + index * step;
+    const index = Math.abs(value - at(lower)) <= Math.abs(value - at(lower + 1)) ? lower : lower + 1;
+    if (wrap) return ((index % size) + size) % size;
+    if (index < 0) return 0;
+    if (index >= size) return size - 1;
+    return index;
+}
+
+function catalogBounds(lat, lon) {
+    if (Math.abs(lat) > 70) return null;
+    const wrapped = wrapLon(lon);
+    const i = nearestIndex(GRIDSAT_LAT0, lat, GRIDSAT_CELL, GRIDSAT_NLAT, false);
+    const j = nearestIndex(GRIDSAT_LON0, wrapped, GRIDSAT_CELL, GRIDSAT_NLON, true);
+    const latC = GRIDSAT_LAT0 + i * GRIDSAT_CELL;
+    const lonC = GRIDSAT_LON0 + j * GRIDSAT_CELL;
+    const dy = (GRIDSAT_CELL * Math.PI / 180) / Math.cos(latC * Math.PI / 180);
+    const yC = mercY(latC);
+    const halfY = (GRIDSAT_WINDOW / 2) * dy;
+    const halfX = (GRIDSAT_WINDOW / 2) * GRIDSAT_CELL;
+    return [lonC - halfX, invMercY(yC - halfY), lonC + halfX, invMercY(yC + halfY)];
+}
+
+function isGridsatHour(dateTime) {
+    if (!dateTime || dateTime.length < 19) return false;
+    const hour = Number(dateTime.slice(11, 13));
+    return dateTime.slice(14, 19) === "00:00" && hour % 3 === 0;
+}
+
+function nearestGridsatStamp(dateTime) {
+    const target = Date.parse(String(dateTime).replace(" ", "T") + "Z");
+    if (Number.isNaN(target)) return null;
+    const step = 3 * 60 * 60 * 1000;
+    const lower = Math.floor(target / step);
+    const lowerT = lower * step;
+    const pick = (target - lowerT) <= (step / 2) ? lowerT : lowerT + step;
+    const when = new Date(pick);
+    const pad = (n) => String(n).padStart(2, "0");
+    return (
+        String(when.getUTCFullYear())
+        + pad(when.getUTCMonth() + 1)
+        + pad(when.getUTCDate())
+        + pad(when.getUTCHours())
+        + pad(when.getUTCMinutes())
+    );
+}
+
+function exactFixForStamp(storm, stamp) {
+    const points = storm && storm.track_points;
+    if (!points) return null;
+    for (let i = 0; i < points.length; i++) {
+        const point = points[i];
+        if (!isGridsatHour(point.date_time)) continue;
+        if (nearestGridsatStamp(point.date_time) === stamp) return point;
+    }
+    return null;
+}
+
 const loadStorms = async () => {
     const response = await fetch(STORMS_URL);
     if (!response.ok) {
@@ -298,9 +389,8 @@ const getGridLayerMaxWind = (track_points, settings) => new GridLayer({
     ...settings
 });
 
-// Frame for the GridSat hour nearest the selected track point. bounds are the
-// resampled geographic edges from frames.json, unmodified. Other storms have
-// no frames, so the layer is absent unless one of the four is selected.
+// Local frame for the GridSat hour nearest the selected track point. bounds
+// are the resampled geographic edges from frames.json, unmodified.
 const nearestGridsatFrame = (frames, sid, dateTime) => {
     if (!frames || !sid || !dateTime) return null;
     const target = Date.parse(dateTime.replace(" ", "T") + "Z");
@@ -323,23 +413,43 @@ const nearestGridsatFrame = (frames, sid, dateTime) => {
     return best;
 };
 
-const getGridsatLayer = (stormInfo, frames, selectedPoint) => {
+const getGridsatLayer = (stormInfo, frames, selectedPoint, catalog) => {
     if (!stormInfo || !selectedPoint) return null;
-    const frame = nearestGridsatFrame(frames, stormInfo.id, selectedPoint.date_time);
-    if (!frame) return null;
+    if (GRIDSAT_LOCAL_SIDS.has(stormInfo.id)) {
+        const frame = nearestGridsatFrame(frames, stormInfo.id, selectedPoint.date_time);
+        if (!frame) return null;
+        return new BitmapLayer({
+            id: "gridsat-" + frame.image,
+            image: process.env.PUBLIC_URL + "/hurricane/gridsat/" + frame.image,
+            bounds: frame.bounds,
+            pickable: false,
+        });
+    }
+    const stamp = nearestGridsatStamp(selectedPoint.date_time);
+    if (!stamp) return null;
+    const fix = exactFixForStamp(stormInfo, stamp);
+    if (!fix) return null;
+    const bounds = catalogBounds(fix.latitude, fix.longitude);
+    if (!bounds) return null;
+    const url = GRIDSAT_CATALOG + stormInfo.id + "/" + stamp + ".jpg";
+    if (catalog.miss[url]) return null;
     return new BitmapLayer({
-        id: "gridsat-" + frame.image,
-        image: process.env.PUBLIC_URL + "/hurricane/gridsat/" + frame.image,
-        bounds: frame.bounds,
+        id: "gridsat-" + stormInfo.id + "-" + stamp,
+        image: url,
+        bounds,
         pickable: false,
+        onError: () => {
+            catalog.report(url);
+            return true;
+        },
     });
 };
 
-const getStormLayers = (storms, setHoverInfo, onChange, showMaxWindPoly, showWindPoly, stormInfo, selectedPoint, scatterplotSettings, lineSettings, gridsatFrames) => {
+const getStormLayers = (storms, setHoverInfo, onChange, showMaxWindPoly, showWindPoly, stormInfo, selectedPoint, scatterplotSettings, lineSettings, gridsatFrames, catalog) => {
     const track_points = Object.values(storms).flatMap(storm => storm["track_points"]);
     const selectedPointActual = stormInfo ? stormInfo.track_points[selectedPoint] : null;
     const layers = [];
-    const gridsat = getGridsatLayer(stormInfo, gridsatFrames, selectedPointActual);
+    const gridsat = getGridsatLayer(stormInfo, gridsatFrames, selectedPointActual, catalog);
     if (gridsat) layers.push(gridsat);
     layers.push(
         getScatterplotLayer(track_points, setHoverInfo, onChange, selectedPointActual, scatterplotSettings),
@@ -381,6 +491,8 @@ const getNewViewPort = (track_points) => {
 }
 
 class Hurricane extends Component {
+    gridsatMissed = {};
+
     state = {
         height: 0,
         width: 0,
@@ -449,6 +561,7 @@ class Hurricane extends Component {
         only6Hour: false,
         hoverInfo: {},
         gridsatFrames: [],
+        gridsatMiss: {},
         stormInfo: null,
         stormSheetCollapsed: false,
         selectedPoint: 0,
@@ -621,7 +734,10 @@ class Hurricane extends Component {
         let layers;
         if (view.plotType === PLOT_TYPES.STORM) {
             layers = getStormLayers(data, hoverInfo => this.setState({hoverInfo}), this.onChange,
-                view.showMaxWindPoly, view.showWindPoly, view.stormInfo, view.selectedPoint, view.scatterplotSettings, view.lineSettings, view.gridsatFrames);
+                view.showMaxWindPoly, view.showWindPoly, view.stormInfo, view.selectedPoint, view.scatterplotSettings, view.lineSettings, view.gridsatFrames, {
+                    miss: view.gridsatMiss || {},
+                    report: (url) => this.noteGridsatMiss(url),
+                });
         } else if (view.plotType === PLOT_TYPES.HEATMAP) {
             layers = getHeatmapLayer(data, view.heatmapSettings);
         } else if (view.plotType === PLOT_TYPES.GRID) {
@@ -731,7 +847,17 @@ class Hurricane extends Component {
         }
     }
 
+    noteGridsatMiss = (url) => {
+        if (this._unmounted || this.gridsatMissed[url]) return;
+        this.gridsatMissed[url] = true;
+        this.setState(prev => {
+            const gridsatMiss = { ...prev.gridsatMiss, [url]: true };
+            return { gridsatMiss, ...this.layersFor({ ...prev, gridsatMiss }) };
+        });
+    };
+
     componentWillUnmount() {
+        this._unmounted = true;
         clearTimeout(this.resizeTimer);
         window.removeEventListener('resize', this.handleResize);
         window.removeEventListener('keydown', this.handleKeyDown);

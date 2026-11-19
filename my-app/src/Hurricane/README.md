@@ -146,41 +146,54 @@ the next candidate on image load error.
 
 ### GridSat-B1 map frames (`data/buildGridsatWindow.py`)
 
-Four storms draw an infrared frame on the map, under the track, while that
-storm is selected. There is one JPEG for each distinct GridSat hour on the
-track (00, 03, 06, 09, 12, 15, 18, and 21 UTC). Two track points in the same
-hour share that image. The map shows the frame nearest the selected point, so
-stepping changes the image when the nearest hour changes. No other storm has
-a frame. The panel GIF is unchanged.
+While a storm is selected, the map draws the infrared frame for the GridSat
+hour nearest the selected point (00, 03, 06, 09, 12, 15, 18, and 21 UTC).
+Two track points in the same hour share that image. Stepping changes the
+image when the nearest hour changes. The panel GIF is unchanged.
 
 The frames are GridSat-B1 `irwin_cdr` (Knapp and coauthors, 2011,
 *Bulletin of the American Meteorological Society*,
-doi:10.1175/2011BAMS3039.1; dataset doi:10.7289/V59P2ZKR):
+doi:10.1175/2011BAMS3039.1; dataset doi:10.7289/V59P2ZKR). One citation in
+the sources panel covers them.
+
+Four storms still use the JPEGs committed under `public/hurricane/gridsat/`.
+`frames.json` stores each image name and the resampled geographic bounds,
+and the `BitmapLayer` uses those bounds unchanged:
 
 - Hurricane Sandy `2012296N14283`, 2012-10-21 18:00 through 2012-10-31 12:00.
 - Hurricane Matthew `2016273N13300`, 2016-09-28 12:00 through 2016-10-10 00:00.
 - Hurricane Hugo `1989254N13340`, 1989-09-10 12:00 through 1989-09-25 12:00.
 - Hurricane Melissa `2025294N14290`, 2025-10-21 06:00 through 2025-11-01 06:00.
 
-Each crop is 301 by 301 cells of the file's 0.07° grid, about 1,100 km from
-the center. The window is resampled onto EPSG:3857 and colored like the
-HURSAT JPEGs (190–300 K, `turbo_r`). `public/hurricane/gridsat/frames.json`
-stores the SID, the track time, the GridSat file time, the image name, and
-the resampled geographic bounds. The map's `BitmapLayer` uses those bounds
-unchanged.
+Every other storm is placed by the page. The bounds are the fixed 301 by 301,
+0.07° window (latitude from −70°, longitude from −180°), spaced evenly in
+EPSG:3857. The layer requests one object:
 
-The global NetCDF is deleted after each crop. A JPEG already written is kept,
-so a rerun continues at the next missing hour. 1978–1979 and times after the
-latest public file are outside GridSat-B1. On the 2026-11-18 check the latest
-public file was `GRIDSAT-B1.2026.10.31.21.v02r01.nc`.
+`https://makoa.link/hurricane-gridsat/{sid}/{YYYYMMDDHHMM}.jpg`
+
+A missing object omits the layer. The page does not load a catalog frame
+list. Those JPEGs are not in the Vite build and are not under
+`public/hurricane/gridsat/`.
+
+The crop job groups fixes by hour and downloads each
+`GRIDSAT-B1.{YYYY}.{MM}.{DD}.{HH}.v02r01.nc` once from the NOAA Open Data
+bucket. The NCEI `access/{year}/` folder is the fallback only when that
+object 404s. Longitude is wrapped into −180..180. A 301-cell window that
+crosses the date line is read from both edges and joined. A fill window
+writes no JPEG. An hour whose windows are all fill is recorded empty. A 404
+is recorded absent. A finished hour is skipped when every expected JPEG is
+present and starts and ends with JPEG markers. The NetCDF is deleted after
+its crops. The scratch manifest stays in `--out`, outside the repo. The
+script's default `--out` is `public/hurricane/gridsat/`; do not use that for
+this catalog. This does not upload to S3.
 
 ```bash
 cd src/Hurricane/data
 uv run --with netCDF4 --with numpy --with pillow --with matplotlib \
-    python buildGridsatWindow.py
+    python buildGridsatWindow.py \
+    --dates 2023-10-20,1992-09-25 \
+    --out /tmp/makoa-gridsat-slice1
 ```
-
-This does not upload to S3.
 
 ## How the frontend uses it
 
