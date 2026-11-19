@@ -10,12 +10,16 @@ this process. The date-line join and the fill hour run in a subprocess:
 
 from __future__ import annotations
 
+import fcntl
 import gzip
 import importlib.util
 import json
 import math
+import os
 import subprocess
+import sys
 import textwrap
+import time
 from pathlib import Path
 
 import pytest
@@ -480,6 +484,253 @@ def test_complete_hour_skips_the_download(tmp_path, gridsat, monkeypatch):
 
     monkeypatch.setattr(gridsat, "fetch", fail)
     gridsat.main(["--dates", "1992-09-25", "--out", str(out), "--storms", str(storms)])
+
+
+def test_worker_count_is_one_through_eight(gridsat):
+    assert gridsat.parse_args(["--dates", "1992-09-25"]).workers == 1
+    assert gridsat.parse_args(["--dates", "1992-09-25", "--workers", "8"]).workers == 8
+    with pytest.raises(SystemExit):
+        gridsat.parse_args(["--dates", "1992-09-25", "--workers", "0"])
+    with pytest.raises(SystemExit):
+        gridsat.parse_args(["--dates", "1992-09-25", "--workers", "9"])
+
+
+def test_claim_hour_hands_each_name_once(tmp_path, gridsat):
+    directory = tmp_path / "claims"
+    names = ["hour-a.nc", "hour-b.nc"]
+    gridsat.prepare_claims(str(directory), names)
+    assert gridsat.claim_hour(str(directory), names) == "hour-a.nc"
+    assert gridsat.claim_hour(str(directory), names) == "hour-b.nc"
+    assert gridsat.claim_hour(str(directory), names) is None
+
+
+_CLAIM_CHILD = textwrap.dedent(
+    """
+    import importlib.util, sys
+    script, directory = sys.argv[1:]
+    spec = importlib.util.spec_from_file_location("buildGridsatWindow", script)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    names = mod.read_claim_names(directory)
+    got = []
+    while True:
+        name = mod.claim_hour(directory, names)
+        if name is None:
+            break
+        got.append(name)
+    for name in got:
+        print(name)
+    """
+)
+
+
+def test_two_processes_claim_different_hours(tmp_path, gridsat):
+    """Two processes drain one list. A name is claimed once."""
+    directory = tmp_path / "claims"
+    names = [f"hour-{index:02d}.nc" for index in range(20)]
+    gridsat.prepare_claims(str(directory), names)
+    procs = [
+        subprocess.Popen(
+            [sys.executable, "-c", _CLAIM_CHILD, str(SCRIPT), str(directory)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        for _ in range(2)
+    ]
+    claimed = []
+    for proc in procs:
+        stdout, stderr = proc.communicate(timeout=30)
+        assert proc.returncode == 0, stderr
+        claimed.extend(line for line in stdout.splitlines() if line)
+    assert sorted(claimed) == names
+    assert len(claimed) == len(set(claimed))
+
+
+_RECORD_CHILD = textwrap.dedent(
+    """
+    import importlib.util, sys
+    script, path, name, ready = sys.argv[1:]
+    spec = importlib.util.spec_from_file_location("buildGridsatWindow", script)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    if ready != "-":
+        open(ready, "w").close()
+    mod.write_hour_record(path, name, {"status": "complete", "frames": [name + ".jpg"]})
+    """
+)
+
+
+def test_two_hour_records_both_survive(tmp_path):
+    """Concurrent writers each add one hour, and a blocked writer keeps the other."""
+    path = tmp_path / "manifest.json"
+    procs = [
+        subprocess.Popen(
+            [sys.executable, "-c", _RECORD_CHILD, str(SCRIPT), str(path), name, "-"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        for name in ("hour-a.nc", "hour-b.nc")
+    ]
+    for proc in procs:
+        _stdout, stderr = proc.communicate(timeout=30)
+        assert proc.returncode == 0, stderr
+    body = json.loads(path.read_text())
+    assert body["hours"]["hour-a.nc"]["frames"] == ["hour-a.nc.jpg"]
+    assert body["hours"]["hour-b.nc"]["frames"] == ["hour-b.nc.jpg"]
+
+    locked = tmp_path / "locked.json"
+    ready = tmp_path / "ready"
+    lock_fd = os.open(str(locked) + ".lock", os.O_CREAT | os.O_RDWR, 0o644)
+    fcntl.flock(lock_fd, fcntl.LOCK_EX)
+    proc = subprocess.Popen(
+        [sys.executable, "-c", _RECORD_CHILD, str(SCRIPT), str(locked), "hour-b.nc", str(ready)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        deadline = time.time() + 10
+        while not ready.exists():
+            if proc.poll() is not None:
+                raise AssertionError("writer exited before the lock")
+            if time.time() > deadline:
+                raise AssertionError("writer did not start")
+            time.sleep(0.01)
+        time.sleep(0.5)
+        locked.write_text(json.dumps({
+            "hours": {"hour-a.nc": {"status": "complete", "frames": ["a.jpg"]}}
+        }) + "\n")
+    finally:
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        os.close(lock_fd)
+        if proc.poll() is None and not ready.exists():
+            proc.kill()
+    _stdout, stderr = proc.communicate(timeout=30)
+    assert proc.returncode == 0, stderr
+    body = json.loads(locked.read_text())
+    assert body["hours"]["hour-a.nc"]["frames"] == ["a.jpg"]
+    assert body["hours"]["hour-b.nc"]["frames"] == ["hour-b.nc.jpg"]
+
+
+def _two_complete_hours(tmp_path):
+    """Two finished hours. An empty source dir means a miss cannot download."""
+    storms_path = tmp_path / "storms.json.gz"
+    out = tmp_path / "out"
+    source = tmp_path / "source"
+    source.mkdir()
+    points = {
+        "1992269S05087": ("1992-09-25 00:00:00", -5.0, 88.0),
+        "1992268N11193": ("1992-09-25 03:00:00", 12.5, 186.0),
+    }
+    payload = {}
+    manifest_hours = {}
+    for sid, (when, lat, lon) in points.items():
+        payload[sid] = {
+            "id": sid,
+            "name": "TEST",
+            "track_points": [{
+                "date_time": when,
+                "latitude": lat,
+                "longitude": lon,
+            }],
+        }
+        stamp = when.replace("-", "").replace(":", "").replace(" ", "")[:12]
+        rel = f"{sid}/{stamp}.jpg"
+        _jpeg(out / rel)
+        name = (
+            "GRIDSAT-B1."
+            + when[0:4] + "." + when[5:7] + "." + when[8:10] + "."
+            + when[11:13] + ".v02r01.nc"
+        )
+        manifest_hours[name] = {"status": "complete", "source": "nodd", "frames": [rel]}
+    _write_storms(storms_path, payload)
+    (out / "manifest.json").write_text(json.dumps({"hours": manifest_hours}) + "\n")
+    return storms_path, out, source, manifest_hours
+
+
+def _forbid_popen(gridsat, monkeypatch):
+    def fail(*_args, **_kwargs):
+        raise AssertionError("started another process")
+
+    monkeypatch.setattr(gridsat.subprocess, "Popen", fail)
+
+
+def test_one_worker_does_not_start_a_process(tmp_path, gridsat, monkeypatch):
+    storms_path, out, source, manifest_hours = _two_complete_hours(tmp_path)
+    _forbid_popen(gridsat, monkeypatch)
+    gridsat.main([
+        "--dates", "1992-09-25",
+        "--out", str(out),
+        "--storms", str(storms_path),
+        "--source-dir", str(source),
+        "--workers", "1",
+    ])
+    body = json.loads((out / "manifest.json").read_text())
+    assert set(body["hours"]) == set(manifest_hours)
+
+
+def test_one_hour_stays_in_this_process(tmp_path, gridsat, monkeypatch):
+    """Eight workers and one hour still run in this process."""
+    storms = tmp_path / "storms.json.gz"
+    sid = "1992269S05087"
+    _write_storms(storms, _one_storm(sid, "1992-09-25 00:00:00", -5.0, 88.0))
+    out = tmp_path / "out"
+    source = tmp_path / "source"
+    source.mkdir()
+    rel = f"{sid}/199209250000.jpg"
+    _jpeg(out / rel)
+    name = "GRIDSAT-B1.1992.09.25.00.v02r01.nc"
+    (out / "manifest.json").write_text(json.dumps({
+        "hours": {name: {"status": "complete", "source": "nodd", "frames": [rel]}}
+    }))
+    _forbid_popen(gridsat, monkeypatch)
+    gridsat.main([
+        "--dates", "1992-09-25",
+        "--out", str(out),
+        "--storms", str(storms),
+        "--source-dir", str(source),
+        "--workers", "8",
+    ])
+    body = json.loads((out / "manifest.json").read_text())
+    assert body["hours"][name]["frames"] == [rel]
+    assert body["hours"][name]["status"] == "complete"
+
+
+def test_two_workers_keep_both_hour_records(tmp_path):
+    """Two processes skip two finished hours, and both records remain."""
+    storms_path, out, source, manifest_hours = _two_complete_hours(tmp_path)
+    proc = subprocess.run(
+        [
+            sys.executable, str(SCRIPT),
+            "--dates", "1992-09-25",
+            "--out", str(out),
+            "--storms", str(storms_path),
+            "--source-dir", str(source),
+            "--workers", "2",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    log = tmp_path / "workers.log"
+    log.write_text(proc.stdout + "\n" + proc.stderr)
+    assert proc.returncode == 0, proc.stderr[-2000:]
+    claimed = [
+        line.split()[-1]
+        for line in proc.stdout.splitlines()
+        if line.startswith("claim ")
+    ]
+    assert sorted(claimed) == sorted(manifest_hours)
+    assert len(claimed) == len(set(claimed))
+    assert "open " not in proc.stdout
+    body = json.loads((out / "manifest.json").read_text())
+    assert set(body["hours"]) == set(manifest_hours)
+    for name, record in manifest_hours.items():
+        assert body["hours"][name]["status"] == "complete"
+        assert body["hours"][name]["frames"] == record["frames"]
 
 
 def test_date_line_join_and_fill(tmp_path):

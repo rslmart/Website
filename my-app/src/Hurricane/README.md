@@ -187,6 +187,17 @@ its crops. The scratch manifest stays in `--out`, outside the repo. The
 script's default `--out` is `public/hurricane/gridsat/`; do not use that for
 this catalog. This does not upload to S3.
 
+`--workers` accepts 1 through 8 and defaults to 1. A later slice uses 4 to 8
+processes on the remaining hours. Each process claims the next hour from a
+shared index under a lock, so two processes never take the same hour. It
+downloads that file, crops it, and deletes the NetCDF before it claims
+another. With `--workers 1`, or when only one hour is left, this process
+does that hour itself and does not start another. A process does not use
+threads, and it opens one NetCDF at a time. The manifest write reads the
+file again under a lock and replaces that hour's record only, so one
+process cannot drop another's. Slice 1 already fetched 2023-10-20 and
+1992-09-25; do not download those days again.
+
 ```bash
 cd src/Hurricane/data
 uv run --with netCDF4 --with numpy --with pillow --with matplotlib \

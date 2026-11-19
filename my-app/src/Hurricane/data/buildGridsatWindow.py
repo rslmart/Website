@@ -12,6 +12,13 @@ approved upload, are https://makoa.link/hurricane-gridsat/{sid}/{stamp}.jpg.
 They are not part of the Vite build. Sandy, Matthew, Hugo, and Melissa keep
 the frames already committed under public/hurricane/gridsat/.
 
+--workers is 1 through 8 and defaults to 1. Later slices use 4 to 8
+processes. Each process claims a different hour, downloads it, crops it,
+and deletes the NetCDF. One process does the hour itself when --workers
+is 1 or only one hour remains. Do not download 2023-10-20 or 1992-09-25
+again. The scratch manifest for the slice that already ran is
+/tmp/makoa-gridsat-slice1.
+
     uv run --with netCDF4 --with numpy --with pillow --with matplotlib \
         python buildGridsatWindow.py \
         --dates 2023-10-20,1992-09-25 \
@@ -19,12 +26,15 @@ the frames already committed under public/hurricane/gridsat/.
 """
 
 import argparse
+import fcntl
 import gzip
 import json
 import math
 import os
 import re
+import shutil
 import subprocess
+import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -277,12 +287,78 @@ def load_manifest(path):
     return hours if isinstance(hours, dict) else {}
 
 
-def write_manifest(path, hours):
-    tmp = path + ".part"
+class _Lock:
+    """Exclusive lock held for a read-modify-write of one shared file."""
+
+    def __init__(self, path):
+        self.path = path
+        self.fd = None
+
+    def __enter__(self):
+        self.fd = os.open(self.path, os.O_CREAT | os.O_RDWR, 0o644)
+        fcntl.flock(self.fd, fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        try:
+            fcntl.flock(self.fd, fcntl.LOCK_UN)
+        finally:
+            os.close(self.fd)
+            self.fd = None
+        return False
+
+
+def _replace_file(path, text):
+    tmp = f"{path}.{os.getpid()}.part"
     with open(tmp, "w") as fp:
-        json.dump({"hours": hours}, fp, indent=2)
-        fp.write("\n")
+        fp.write(text)
+        fp.flush()
+        os.fsync(fp.fileno())
     os.replace(tmp, path)
+
+
+def write_hour_record(path, name, record):
+    """Replace one hour's record.
+
+    The lock is held across the read and the replace. The record just read
+    is what gets written, so a stale copy from earlier in this process
+    cannot drop an hour another process has already recorded.
+    """
+    with _Lock(path + ".lock"):
+        hours = load_manifest(path)
+        hours[name] = record
+        _replace_file(path, json.dumps({"hours": hours}, indent=2) + "\n")
+
+
+def prepare_claims(directory, names):
+    """One claim list for this run. The index starts at the first hour."""
+    os.makedirs(directory, exist_ok=True)
+    _replace_file(os.path.join(directory, "names.json"), json.dumps(list(names)))
+    _replace_file(os.path.join(directory, "next"), "0\n")
+
+
+def read_claim_names(directory):
+    with open(os.path.join(directory, "names.json")) as fp:
+        names = json.load(fp)
+    if not isinstance(names, list) or not all(isinstance(item, str) for item in names):
+        raise SystemExit(f"bad claim list {directory}")
+    return names
+
+
+def claim_hour(directory, names):
+    """Take the next hour, or None when every hour has been taken.
+
+    The index advances under the lock. Two processes cannot leave with the
+    same hour.
+    """
+    next_path = os.path.join(directory, "next")
+    with _Lock(os.path.join(directory, "lock")):
+        with open(next_path) as fp:
+            index = int(fp.read().strip() or "0")
+        if index >= len(names):
+            return None
+        _replace_file(next_path, f"{index + 1}\n")
+        return names[index]
 
 
 def frames_ready(out, frames):
@@ -508,9 +584,9 @@ def crop_fix(np, nc, ds, fix):
     }
 
 
-def process_hour(name, fixes, out, source_dir, manifest, manifest_path, recheck_absent):
+def process_hour(name, fixes, out, source_dir, manifest_path, recheck_absent):
     """Download one file, crop every fix, delete the NetCDF, record the hour."""
-    record = manifest.get(name) or {}
+    record = load_manifest(manifest_path).get(name) or {}
     status = record.get("status")
     if status == "complete" and frames_ready(out, record.get("frames") or []):
         print(f"skip complete {name} {len(record['frames'])}", flush=True)
@@ -538,8 +614,7 @@ def process_hour(name, fixes, out, source_dir, manifest, manifest_path, recheck_
         except NotFound:
             if os.path.exists(nc_path):
                 os.remove(nc_path)
-            manifest[name] = {"status": "absent", "frames": []}
-            write_manifest(manifest_path, manifest)
+            write_hour_record(manifest_path, name, {"status": "absent", "frames": []})
             print(f"absent {name}", flush=True)
             return "absent"
 
@@ -582,13 +657,13 @@ def process_hour(name, fixes, out, source_dir, manifest, manifest_path, recheck_
             os.remove(nc_path)
 
     if any_scene:
-        manifest[name] = {"status": "complete", "source": source, "frames": frames}
+        write_hour_record(
+            manifest_path, name, {"status": "complete", "source": source, "frames": frames}
+        )
         print(f"complete {name} {len(frames)} {source}", flush=True)
-        write_manifest(manifest_path, manifest)
         return "complete"
-    manifest[name] = {"status": "empty", "source": source, "frames": []}
+    write_hour_record(manifest_path, name, {"status": "empty", "source": source, "frames": []})
     print(f"empty {name} {source}", flush=True)
-    write_manifest(manifest_path, manifest)
     return "empty"
 
 
@@ -605,7 +680,19 @@ def parse_args(argv=None):
         action="store_true",
         help="Try hours recorded absent again. They are skipped otherwise.",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="Processes that claim hours, from 1 to 8. Default 1.",
+    )
+    parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--claim", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
+    if args.workers < 1 or args.workers > 8:
+        raise SystemExit("--workers must be from 1 to 8")
+    if args.worker and not args.claim:
+        raise SystemExit("--worker requires --claim")
     dates = None
     if args.dates:
         dates = {_check_day(part.strip()) for part in args.dates.split(",") if part.strip()}
@@ -619,28 +706,106 @@ def parse_args(argv=None):
     return args
 
 
+def _worker_argv(args, claim_dir):
+    argv = [
+        sys.executable,
+        os.path.abspath(__file__),
+        "--worker",
+        "--claim", claim_dir,
+        "--out", args.out,
+        "--storms", args.storms,
+    ]
+    if args.dates:
+        argv.extend(["--dates", ",".join(sorted(args.dates))])
+    if args.from_date:
+        argv.extend(["--from-date", args.from_date])
+    if args.to_date:
+        argv.extend(["--to-date", args.to_date])
+    if args.source_dir:
+        argv.extend(["--source-dir", args.source_dir])
+    if args.recheck_absent:
+        argv.append("--recheck-absent")
+    return argv
+
+
+def _start_workers(args, names):
+    """Hand the hours to N processes. This process does not take an hour."""
+    claim_dir = tempfile.mkdtemp(prefix="gridsat-claim-")
+    procs = []
+    try:
+        prepare_claims(claim_dir, names)
+        command = _worker_argv(args, claim_dir)
+        for _ in range(min(args.workers, len(names))):
+            procs.append(subprocess.Popen(command))
+        failed = False
+        for proc in procs:
+            if proc.wait() != 0:
+                failed = True
+        if failed:
+            raise SystemExit("a gridsat worker failed")
+    finally:
+        for proc in procs:
+            if proc.poll() is None:
+                proc.kill()
+                proc.wait()
+        shutil.rmtree(claim_dir, ignore_errors=True)
+
+
+def _print_summary(names, manifest_path):
+    manifest = load_manifest(manifest_path)
+    counts = {"complete": 0, "empty": 0, "absent": 0}
+    frame_count = 0
+    for name in names:
+        record = manifest.get(name) or {}
+        status = record.get("status")
+        if status not in counts:
+            continue
+        counts[status] += 1
+        if status == "complete":
+            frame_count += len(record.get("frames") or [])
+    print(
+        f"summary hours={len(names)} complete={counts['complete']} "
+        f"empty={counts['empty']} absent={counts['absent']} frames={frame_count}",
+        flush=True,
+    )
+    print(f"wrote {manifest_path}", flush=True)
+
+
+def _serve_claims(args, hours, manifest_path):
+    """Claim hours until the list is exhausted. One NetCDF at a time."""
+    names = read_claim_names(args.claim)
+    while True:
+        name = claim_hour(args.claim, names)
+        if name is None:
+            return
+        fixes = hours.get(name)
+        if fixes is None:
+            raise SystemExit(f"claimed hour is not in this selection: {name}")
+        print(f"claim {os.getpid()} {name}", flush=True)
+        process_hour(
+            name, fixes, args.out, args.source_dir, manifest_path, args.recheck_absent
+        )
+
+
 def main(argv=None):
     args = parse_args(argv)
     os.makedirs(args.out, exist_ok=True)
     hours = load_hours(args.storms, args.dates, args.from_date, args.to_date)
     manifest_path = os.path.join(args.out, "manifest.json")
-    manifest = load_manifest(manifest_path)
-    counts = {"complete": 0, "empty": 0, "absent": 0}
-    frame_count = 0
-    for name in sorted(hours):
-        status = process_hour(
-            name, hours[name], args.out, args.source_dir,
-            manifest, manifest_path, args.recheck_absent,
-        )
-        counts[status] = counts.get(status, 0) + 1
-        if status == "complete":
-            frame_count += len(manifest[name].get("frames") or [])
-    print(
-        f"summary hours={len(hours)} complete={counts['complete']} "
-        f"empty={counts['empty']} absent={counts['absent']} frames={frame_count}",
-        flush=True,
-    )
-    print(f"wrote {manifest_path}", flush=True)
+    if args.worker:
+        _serve_claims(args, hours, manifest_path)
+        return
+    names = sorted(hours)
+    # One process remains the path for a single hour, and for --workers 1.
+    if args.workers == 1 or len(names) <= 1:
+        for name in names:
+            process_hour(
+                name, hours[name], args.out, args.source_dir,
+                manifest_path, args.recheck_absent,
+            )
+    else:
+        _start_workers(args, names)
+    _print_summary(names, manifest_path)
 
 
 if __name__ == "__main__":
