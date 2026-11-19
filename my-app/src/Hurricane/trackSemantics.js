@@ -2,18 +2,17 @@
 // Spur tracks duplicate a main track. Missing wind is null, not 0 kt, and
 // is not a Saffir-Simpson category.
 
-// Discrete Saffir–Simpson bins, weakest first. Lightness rises at every step
-// so stronger wind is lighter on the dark basemap. Neighbours alternate blue
-// and gold: those hues stay apart under deuteranopia, which is what the
-// category-legend test checks (CIE76 after a Machado 2009 simulation).
+// Discrete Saffir–Simpson bins, weakest first. These are the palette the map
+// used before the colour-blind trial: blue, cyan, pale yellow, yellow, orange,
+// red, and purple.
 export const WIND_CATEGORIES = [
-    { min: 0, label: "< 34 kt (TD)", color: [82, 132, 208] },
-    { min: 34, label: "34–63 kt (TS)", color: [167, 154, 39] },
-    { min: 64, label: "64–82 kt (Cat 1)", color: [132, 172, 240] },
-    { min: 83, label: "83–95 kt (Cat 2)", color: [213, 191, 63] },
-    { min: 96, label: "96–112 kt (Cat 3)", color: [190, 207, 244] },
-    { min: 113, label: "113–136 kt (Cat 4)", color: [254, 222, 82] },
-    { min: 137, label: "≥ 137 kt (Cat 5)", color: [232, 238, 249] },
+    { min: 0, label: "< 34 kt (TD)", color: [94, 186, 255] },
+    { min: 34, label: "34–63 kt (TS)", color: [0, 250, 244] },
+    { min: 64, label: "64–82 kt (Cat 1)", color: [255, 247, 149] },
+    { min: 83, label: "83–95 kt (Cat 2)", color: [255, 216, 33] },
+    { min: 96, label: "96–112 kt (Cat 3)", color: [255, 143, 32] },
+    { min: 113, label: "113–136 kt (Cat 4)", color: [255, 96, 96] },
+    { min: 137, label: "≥ 137 kt (Cat 5)", color: [196, 100, 217] },
 ];
 
 const SAFFIR_SIMPSON = [...WIND_CATEGORIES].reverse().map((entry) => [entry.min, entry.color]);

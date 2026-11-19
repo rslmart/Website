@@ -28,7 +28,8 @@ function HelpPanel({ open, onOpen, onClose, fabPosition = { top: 20, left: 70 } 
         >
             <p style={{ marginTop: 8, color: "var(--color-text-muted)" }}>
                 Explore every tropical cyclone in the IBTrACS record with track data and
-                infrared satellite imagery. Pan and zoom the map like any web map; scroll or pinch to zoom.
+                infrared satellite imagery. Pan with W, A, S, and D. Scroll or pinch to zoom.
+                Arrow keys step through a selected storm and do not move the map.
             </p>
 
             <h3 style={sectionTitle}>Display modes</h3>
@@ -61,7 +62,7 @@ function HelpPanel({ open, onOpen, onClose, fabPosition = { top: 20, left: 70 } 
             <ul style={list}>
                 <li style={li}>Opens the storm at the bottom-left on a wide screen, or in a sheet at the bottom on a phone. The phone sheet can collapse to one row.</li>
                 <li style={li}>The panel shows the name, season, a wind (kt) and pressure (mb) chart, and an <strong>infrared satellite image</strong> for the selected point — HURSAT-B1 for 1978–2015, RAMMB/CIRA for 2016 and later. If an exact frame is missing, a nearby one is shown.</li>
-                <li style={li}>Use the <strong>Select Point</strong> slider, the <strong>&lt;</strong> / <strong>&gt;</strong> buttons, or the arrow keys to step through the storm. Arrow keys do nothing while a form field is focused. The image and the highlighted chart point update together.</li>
+                <li style={li}>Use the <strong>Select Point</strong> slider, the <strong>&lt;</strong> / <strong>&gt;</strong> buttons, or the arrow keys to step through the storm. W, A, S, and D pan the map. Neither does anything while a form field is focused. The image and the highlighted chart point update together.</li>
                 <li style={li}>Close it with the <strong>×</strong> in its corner.</li>
             </ul>
 

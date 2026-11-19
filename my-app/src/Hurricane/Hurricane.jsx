@@ -801,25 +801,56 @@ class Hurricane extends Component {
         this.resizeTimer = setTimeout(this.updateDimensions, 100);
     };
 
-    // Step through the selected storm's track points with the arrow keys while the
-    // detail panel is open. Skip when a form control is focused so its own arrow-key
-    // behavior (sliders, number inputs) still works.
+    // Arrow keys step the selected storm. WASD pans the map. Arrow keys do not
+    // pan. Skip both while a form control is focused.
     handleKeyDown = (evt) => {
-        if (!this.state.stormInfo) return;
         const tag = evt.target && evt.target.tagName;
-        if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+        if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || (evt.target && evt.target.isContentEditable)) {
+            return;
+        }
+        const pan = { w: [0, 1], a: [-1, 0], s: [0, -1], d: [1, 0] }[evt.key && evt.key.toLowerCase()];
+        if (pan) {
+            evt.preventDefault();
+            evt.stopPropagation();
+            this.panByKey(pan[0], pan[1]);
+            return;
+        }
+        if (evt.key !== 'ArrowRight' && evt.key !== 'ArrowLeft' && evt.key !== 'ArrowUp' && evt.key !== 'ArrowDown') {
+            return;
+        }
+        evt.preventDefault();
+        evt.stopPropagation();
+        if (!this.state.stormInfo) return;
         if (evt.key === 'ArrowRight' || evt.key === 'ArrowUp') {
-            evt.preventDefault();
             this.onChange({ target: { name: 'forwardSelectedPoint' } });
-        } else if (evt.key === 'ArrowLeft' || evt.key === 'ArrowDown') {
-            evt.preventDefault();
+        } else {
             this.onChange({ target: { name: 'backwardSelectedPoint' } });
         }
     };
 
+    // About 100 screen pixels per keypress, matching the map controller's old arrow step.
+    panByKey(east, north) {
+        const view = this.state.viewState || {};
+        const zoom = Number(view.zoom);
+        const latitude = Number(view.latitude) || 0;
+        const longitude = Number(view.longitude) || 0;
+        const safeZoom = Number.isFinite(zoom) ? zoom : 3;
+        const degrees = 100 * 360 / (512 * 2 ** safeZoom);
+        const nextLatitude = Math.max(-85, Math.min(85, latitude + degrees * north));
+        const cos = Math.cos(nextLatitude * Math.PI / 180);
+        const nextLongitude = longitude + degrees * east / Math.max(0.2, Math.abs(cos));
+        this.setState({
+            viewState: {
+                ...view,
+                latitude: nextLatitude,
+                longitude: nextLongitude,
+            },
+        });
+    }
+
     async componentDidMount() {
         window.addEventListener('resize', this.handleResize);
-        window.addEventListener('keydown', this.handleKeyDown);
+        window.addEventListener('keydown', this.handleKeyDown, true);
         this.updateDimensions();
         try {
             const [storms, meta, gridsatFrames] = await Promise.all([
@@ -860,7 +891,7 @@ class Hurricane extends Component {
         this._unmounted = true;
         clearTimeout(this.resizeTimer);
         window.removeEventListener('resize', this.handleResize);
-        window.removeEventListener('keydown', this.handleKeyDown);
+        window.removeEventListener('keydown', this.handleKeyDown, true);
     }
 
     getToolTip = (object) => {
@@ -902,7 +933,7 @@ class Hurricane extends Component {
                 <HomeButton />
                 <DeckGL
                     viewState={this.state.viewState}
-                    controller={true}
+                    controller={{ keyboard: false }}
                     onViewStateChange={({ viewState }) => this.setState({ viewState })}
                     layers={this.state.layers}
                     getTooltip={({object}) => this.getToolTip(object)}
@@ -912,6 +943,7 @@ class Hurricane extends Component {
                         mapboxAccessToken={import.meta.env.VITE_MAPBOX_TOKEN}
                         mapStyle={MAP_STYLE}
                         attributionControl={false}
+                        keyboard={false}
                         onLoad={isolateMapControls}
                     >
                         {/* On phones the Controls button covers the
